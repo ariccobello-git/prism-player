@@ -52,8 +52,9 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.flow.first
 
-private const val SPLASH_MS = 7_000
-private const val TOTAL_SECONDS = SPLASH_MS / 1000f
+private const val SPLASH_MS = 10_000
+/** Animation length in animation-seconds (the 10 s intro plays the 7 s timeline slowed down, so the hit lands at 5.3 s). */
+private const val TOTAL_SECONDS = 7f
 private val Spectrum = listOf(
     Color(0xFFFF4D5E), // red
     Color(0xFFFF9F43), // orange
