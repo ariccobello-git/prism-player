@@ -129,4 +129,5 @@
     <string name="np_live">LIVE</string>
     <string name="np_info">Stream info</string>
     <string name="np_close">Close</string>
+    <string name="version_label">Version %1$s</string>
 </resources>

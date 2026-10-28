@@ -81,7 +81,18 @@ jobs:
 
       - name: Unit tests, lint and debug APK
         shell: bash
-        run: ./gradlew --no-daemon --stacktrace --continue testDebugUnitTest lintDebug assembleDebug 2>&1 | tee build.log
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          # The build label shown in the app: the release tag when there is one, otherwise the short commit.
+          LABEL="${INPUT_TAG}"
+          if [ -z "${LABEL}" ] && [ "${REF_TYPE}" = "tag" ]; then LABEL="${REF_NAME}"; fi
+          if [ -z "${LABEL}" ]; then LABEL="${COMMIT:0:7}"; fi
+          ./gradlew --no-daemon --stacktrace --continue -PprismVersion="${LABEL}" testDebugUnitTest lintDebug assembleDebug 2>&1 | tee build.log
 
       # The job log is not readable from outside GitHub, so compile errors and failed tests are repeated
       # as one annotation that shows up in the run's check summary.

@@ -178,6 +178,11 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
                             size = 20.sp,
                             color = PrismColors.Accent,
                         )
+                        PrismText(
+                            text = stringResource(R.string.version_label, dev.red74.prismplayer.BuildConfig.BUILD_LABEL),
+                            size = 16.sp,
+                            color = PrismColors.TextSecondary,
+                        )
                     }
                     Spacer(Modifier.height(22.dp))
                     Box(

@@ -5,6 +5,10 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+// Shown on the opening screen so the installed build can be matched to a release. CI passes the release tag
+// (or the short commit) with -PprismVersion; a local build shows "dev".
+val prismVersion: String = (project.findProperty("prismVersion") as String?)?.takeIf { it.isNotBlank() } ?: "dev"
+
 android {
     namespace = "dev.red74.prismplayer"
     compileSdk = 35
@@ -16,6 +20,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "BUILD_LABEL", "\"$prismVersion\"")
     }
 
     buildTypes {
@@ -44,6 +49,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     lint {
