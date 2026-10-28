@@ -1,11 +1,14 @@
 package dev.red74.prismplayer.ui
 
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -69,6 +72,8 @@ object PrismColors {
     val TextPrimary = Color(0xFFF4F6FF)
     val TextSecondary = Color(0xFFB4BBD6)
     val Danger = Color(0xFFFF7C8A)
+    val Ok = Color(0xFF6FE3B0)
+    val Warn = Color(0xFFFFC857)
 }
 
 @Composable
@@ -197,11 +202,26 @@ fun GlassButton(
     focusRequester: FocusRequester? = null,
     emphasized: Boolean = false,
     danger: Boolean = false,
+    tint: Color? = null,
+    subtitleColor: Color = PrismColors.TextSecondary,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(targetValue = if (focused) 1.05f else 1f, label = "glassButtonScale")
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    // iOS-like feel: focus lifts the button with a slight overshoot, a press squeezes it back.
+    val scale by animateFloatAsState(
+        targetValue = when {
+            pressed -> 0.96f
+            focused -> 1.06f
+            else -> 1f
+        },
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
+        label = "glassButtonScale",
+    )
     val shape = RoundedCornerShape(20.dp)
     val fill = when {
+        tint != null && focused -> Brush.linearGradient(listOf(tint.copy(alpha = 0.55f), tint.copy(alpha = 0.30f)))
+        tint != null -> Brush.linearGradient(listOf(tint.copy(alpha = 0.26f), tint.copy(alpha = 0.10f)))
         focused && danger -> Brush.linearGradient(
             listOf(PrismColors.Danger.copy(alpha = 0.6f), PrismColors.Danger.copy(alpha = 0.35f)),
         )
@@ -215,7 +235,6 @@ fun GlassButton(
             listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f)),
         )
     }
-    val interaction = remember { MutableInteractionSource() }
 
     Column(
         modifier
@@ -229,7 +248,11 @@ fun GlassButton(
             .background(fill)
             .border(
                 width = if (focused) 3.dp else 1.dp,
-                color = if (focused) Color.White else Color.White.copy(alpha = 0.22f),
+                color = when {
+                    focused -> Color.White
+                    tint != null -> tint.copy(alpha = 0.85f)
+                    else -> Color.White.copy(alpha = 0.22f)
+                },
                 shape = shape,
             )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
@@ -238,7 +261,7 @@ fun GlassButton(
     ) {
         PrismText(text = text, size = 22.sp, weight = FontWeight.SemiBold, maxLines = 1)
         if (subtitle != null) {
-            PrismText(text = subtitle, size = 16.sp, color = PrismColors.TextSecondary, maxLines = 1)
+            PrismText(text = subtitle, size = 16.sp, color = subtitleColor, maxLines = 1)
         }
     }
 }

@@ -64,6 +64,14 @@ fun ChannelsScreen(
                     )
                 }
 
+                if (state.truncated) {
+                    PrismText(
+                        text = stringResource(R.string.channels_truncated, state.channels.size),
+                        size = 18.sp,
+                        color = PrismColors.Warn,
+                    )
+                }
+
                 when {
                     state.loading -> PrismText(
                         text = stringResource(R.string.channels_loading),

@@ -12,7 +12,7 @@
     <string name="action_delete_confirm">Confirm?</string>
     <string name="notice_added">Playlist saved</string>
     <string name="notice_removed">Playlist removed</string>
-    <string name="notice_paired">Playlist received from your phone</string>
+    <string name="notice_paired">Playlist received. If it needs a VPN, turn it on and press Verify.</string>
     <string name="notice_save_failed">Could not save the playlist on this device</string>
 
     <string name="import_title">Add playlist</string>
@@ -66,4 +66,16 @@
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Playback error (%1$s)</string>
     <string name="player_hint">◀ ▶ change format · ▲ ▼ change channel · OK menu · Back exit</string>
+    <string name="status_unverified">Not verified</string>
+    <string name="status_ok">OK · %1$d entries</string>
+    <string name="status_failed">Not reachable</string>
+    <string name="status_checking">Checking…</string>
+    <string name="action_verify">Verify</string>
+    <string name="action_retry">Retry</string>
+    <string name="action_verify_all">Verify all lists</string>
+    <string name="notice_verify_ok">Playlist verified</string>
+    <string name="notice_verify_failed">Check failed. If the list needs a VPN, turn it on and try again.</string>
+    <string name="notice_verify_all_ok">All playlists verified</string>
+    <string name="notice_verify_some_failed">Some playlists could not be reached</string>
+    <string name="channels_truncated">Very large list: showing the first %1$d entries.</string>
 </resources>

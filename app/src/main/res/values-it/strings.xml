@@ -12,7 +12,7 @@
     <string name="action_delete_confirm">Confermi?</string>
     <string name="notice_added">Playlist salvata</string>
     <string name="notice_removed">Playlist rimossa</string>
-    <string name="notice_paired">Playlist ricevuta dal telefono</string>
+    <string name="notice_paired">Lista ricevuta. Se serve la VPN, attivala e premi Verifica.</string>
     <string name="notice_save_failed">Impossibile salvare la playlist su questo dispositivo</string>
 
     <string name="import_title">Aggiungi playlist</string>
@@ -66,4 +66,16 @@
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Errore di riproduzione (%1$s)</string>
     <string name="player_hint">◀ ▶ cambia formato · ▲ ▼ cambia canale · OK menu · Indietro esci</string>
+    <string name="status_unverified">Da verificare</string>
+    <string name="status_ok">OK · %1$d voci</string>
+    <string name="status_failed">Non raggiungibile</string>
+    <string name="status_checking">Verifica in corso…</string>
+    <string name="action_verify">Verifica</string>
+    <string name="action_retry">Riprova</string>
+    <string name="action_verify_all">Verifica tutte le liste</string>
+    <string name="notice_verify_ok">Lista verificata</string>
+    <string name="notice_verify_failed">Verifica non riuscita. Se la lista richiede la VPN, attivala e riprova.</string>
+    <string name="notice_verify_all_ok">Tutte le liste verificate</string>
+    <string name="notice_verify_some_failed">Alcune liste non sono raggiungibili</string>
+    <string name="channels_truncated">Lista molto grande: mostro le prime %1$d voci.</string>
 </resources>

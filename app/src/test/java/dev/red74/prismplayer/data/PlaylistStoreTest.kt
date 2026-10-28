@@ -125,4 +125,22 @@ class PlaylistStoreTest {
         intruder.load()
         assertTrue(intruder.items.value.isEmpty())
     }
+
+    @Test
+    fun newPlaylistsStartUnverifiedAndKeepTheirStatusAcrossReloads() = runBlocking {
+        val store = newStore()
+        store.load()
+        val saved = store.add("List", "http://example.com/a.m3u")
+        assertEquals(PlaylistStatus.UNVERIFIED, saved.status)
+
+        store.updateStatus(saved.id, PlaylistStatus.OK, 1234)
+        assertEquals(PlaylistStatus.OK, store.find(saved.id)!!.status)
+        assertEquals(1234, store.find(saved.id)!!.channelCount)
+
+        // A later failure turns the list red but keeps the last known size.
+        store.updateStatus(saved.id, PlaylistStatus.FAILED, 0)
+        val reloaded = newStore().also { it.load() }.find(saved.id)!!
+        assertEquals(PlaylistStatus.FAILED, reloaded.status)
+        assertEquals(1234, reloaded.channelCount)
+    }
 }

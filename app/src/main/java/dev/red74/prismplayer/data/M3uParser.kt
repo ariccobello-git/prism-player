@@ -1,5 +1,7 @@
 package dev.red74.prismplayer.data
 
+import java.io.BufferedReader
+import java.io.StringReader
 import java.net.URI
 
 /**
@@ -11,55 +13,71 @@ import java.net.URI
  * - Only http/https entries are kept; `file:`, `content:` and other schemes are dropped.
  */
 object M3uParser {
-    const val MAX_CHANNELS = 20_000
+    /** Safety cap on parsed entries (memory on a TV stick); a longer list is cut here and flagged as truncated. */
+    const val MAX_CHANNELS = 300_000
 
     private val groupTitle = Regex("""group-title="([^"]*)"""", RegexOption.IGNORE_CASE)
     private val absoluteUrl = Regex("""^[a-zA-Z][a-zA-Z0-9+.\-]*://""")
 
-    fun parse(text: String, sourceUrl: String): List<Channel> {
-        val lines = text.lineSequence()
-            .map { it.trim().removePrefix("﻿") }
-            .filter { it.isNotEmpty() }
-            .toList()
-        if (lines.isEmpty()) return emptyList()
+    /**
+     * Outcome of a streaming parse. [count] is the number of valid entries seen; [channels] holds them only
+     * when the caller asked to keep them (verification just counts, so it never holds a big list in memory).
+     */
+    class Result(val channels: List<Channel>, val count: Int, val truncated: Boolean)
 
-        val isHlsPlaylist = lines.any {
-            it.startsWith("#EXT-X-TARGETDURATION", ignoreCase = true) ||
-                it.startsWith("#EXT-X-STREAM-INF", ignoreCase = true) ||
-                it.startsWith("#EXT-X-MEDIA-SEQUENCE", ignoreCase = true)
-        }
-        if (isHlsPlaylist) {
-            return listOf(Channel(name = PlaylistUrl.displayLabel(sourceUrl), url = sourceUrl))
-        }
+    fun parse(text: String, sourceUrl: String): List<Channel> =
+        parse(BufferedReader(StringReader(text)), sourceUrl, keepChannels = true).channels
 
+    /** Reads line by line, so the size of the playlist is limited by the entry cap, never by a byte count. */
+    fun parse(reader: BufferedReader, sourceUrl: String, keepChannels: Boolean): Result {
         val channels = ArrayList<Channel>()
+        val groups = HashMap<String, String>()
+        var count = 0
+        var truncated = false
         var pendingName: String? = null
         var pendingGroup: String? = null
 
-        for (line in lines) {
+        while (true) {
+            val raw = reader.readLine() ?: break
+            val line = raw.trim().removePrefix("\uFEFF")
+            if (line.isEmpty()) continue
+
             when {
+                line.startsWith("#EXT-X-TARGETDURATION", ignoreCase = true) ||
+                    line.startsWith("#EXT-X-STREAM-INF", ignoreCase = true) ||
+                    line.startsWith("#EXT-X-MEDIA-SEQUENCE", ignoreCase = true) -> {
+                    // A single HLS playlist is one stream pointing at the playlist URL itself.
+                    val single = Channel(name = PlaylistUrl.displayLabel(sourceUrl), url = sourceUrl)
+                    return Result(listOf(single), 1, false)
+                }
                 line.startsWith("#EXTINF", ignoreCase = true) -> {
                     val info = parseExtInf(line)
                     pendingName = info.first
-                    pendingGroup = info.second
+                    pendingGroup = info.second?.let { groups.getOrPut(it) { it } }
                 }
                 line.startsWith("#EXTGRP:", ignoreCase = true) -> {
-                    pendingGroup = line.substringAfter(':').trim().ifEmpty { null }
+                    pendingGroup = line.substringAfter(':').trim().ifEmpty { null }?.let { groups.getOrPut(it) { it } }
                 }
                 line.startsWith("#") -> Unit
                 else -> {
                     val resolved = resolve(sourceUrl, line)
                     if (resolved != null) {
-                        val name = pendingName ?: fallbackName(resolved, channels.size + 1)
-                        channels += Channel(name = name, url = resolved, group = pendingGroup)
-                        if (channels.size >= MAX_CHANNELS) break
+                        count++
+                        if (keepChannels) {
+                            val name = pendingName ?: fallbackName(resolved, count)
+                            channels += Channel(name = name, url = resolved, group = pendingGroup)
+                        }
+                        if (count >= MAX_CHANNELS) {
+                            truncated = true
+                            break
+                        }
                     }
                     pendingName = null
                     pendingGroup = null
                 }
             }
         }
-        return channels
+        return Result(channels, count, truncated)
     }
 
     /** Returns (display name, group) from an `#EXTINF` line. The name starts after the first comma outside quotes. */

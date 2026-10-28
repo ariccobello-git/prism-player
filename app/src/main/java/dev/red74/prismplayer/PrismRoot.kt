@@ -73,6 +73,7 @@ private fun PrismNavigation(
     val channelsState by viewModel.channels.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val aspect by viewModel.aspect.collectAsStateWithLifecycle()
+    val verifying by viewModel.verifying.collectAsStateWithLifecycle()
 
     if (confirmExit) {
         ExitScreen(
@@ -85,8 +86,11 @@ private fun PrismNavigation(
     when (val screen = stack.last()) {
         Screen.Home -> HomeScreen(
             playlists = playlists,
+            verifying = verifying,
             notice = notice,
             onOpen = { id -> push(Screen.Channels(id)) },
+            onVerify = viewModel::verifyPlaylist,
+            onVerifyAll = viewModel::verifyAll,
             onDelete = viewModel::removePlaylist,
             onAddUrl = { push(Screen.Import) },
             onPair = { push(Screen.Pair) },

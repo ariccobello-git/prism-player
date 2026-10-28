@@ -48,8 +48,11 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
+import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import dev.red74.prismplayer.R
@@ -352,8 +355,20 @@ private fun createPlayer(context: Context): ExoPlayer {
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(10_000)
         .setReadTimeoutMs(15_000)
-    return ExoPlayer.Builder(context)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(context).setDataSourceFactory(httpFactory))
+    // IPTV panels often serve raw MPEG-TS (output=mpegts). These standard Media3 flags make such streams start
+    // and keep sync more reliably, and decoder fallback retries with another decoder when one fails.
+    val extractors = DefaultExtractorsFactory()
+        .setTsExtractorFlags(
+            DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
+                DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
+                DefaultTsPayloadReaderFactory.FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS,
+        )
+        .setConstantBitrateSeekingEnabled(true)
+    val renderers = DefaultRenderersFactory(context)
+        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+        .setEnableDecoderFallback(true)
+    return ExoPlayer.Builder(context, renderers)
+        .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractors).setDataSourceFactory(httpFactory))
         .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
         .build()
 }

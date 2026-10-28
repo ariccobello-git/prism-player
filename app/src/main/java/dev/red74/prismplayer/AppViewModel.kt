@@ -6,19 +6,18 @@ import androidx.lifecycle.viewModelScope
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.FetchException
 import dev.red74.prismplayer.data.M3uParser
+import dev.red74.prismplayer.data.PlaylistStatus
 import dev.red74.prismplayer.data.PlaylistUrl
 import dev.red74.prismplayer.data.SavedPlaylist
 import dev.red74.prismplayer.player.AspectMode
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
-enum class Notice { ADDED, REMOVED, PAIRED, SAVE_FAILED }
+enum class Notice { ADDED, REMOVED, PAIRED, SAVE_FAILED, VERIFY_OK, VERIFY_FAILED, VERIFY_ALL_OK, VERIFY_SOME_FAILED }
 
 enum class LoadError { NETWORK, HTTP, TOO_LARGE, EMPTY, UNKNOWN }
 
@@ -30,6 +29,8 @@ data class ChannelsState(
     val error: LoadError? = null,
     val httpCode: Int? = null,
     val lastIndex: Int = 0,
+    /** The list had more entries than the app keeps in memory; only the first ones are shown. */
+    val truncated: Boolean = false,
 )
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -92,9 +93,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         loadJob?.cancel()
         _channels.value = ChannelsState(playlistId = id, playlistName = playlist.name, loading = true)
         loadJob = viewModelScope.launch {
-            val result = container.fetcher.fetch(playlist.url)
-            val text = result.getOrNull()
-            if (text == null) {
+            val result = loadPlaylist(playlist, keepChannels = true)
+            val parsed = result.getOrNull()
+            if (parsed == null) {
                 val failure = result.exceptionOrNull() as? FetchException
                 _channels.update {
                     it.copy(
@@ -108,17 +109,66 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         httpCode = failure?.httpCode,
                     )
                 }
+                recordStatus(id, PlaylistStatus.FAILED, 0)
                 return@launch
             }
-            val parsed = withContext(Dispatchers.Default) { M3uParser.parse(text, playlist.url) }
-            _channels.update {
-                if (parsed.isEmpty()) {
-                    it.copy(loading = false, error = LoadError.EMPTY)
-                } else {
-                    it.copy(loading = false, channels = parsed, error = null)
+            if (parsed.count == 0) {
+                _channels.update { it.copy(loading = false, error = LoadError.EMPTY) }
+                recordStatus(id, PlaylistStatus.FAILED, 0)
+            } else {
+                _channels.update {
+                    it.copy(loading = false, channels = parsed.channels, error = null, truncated = parsed.truncated)
                 }
+                recordStatus(id, PlaylistStatus.OK, parsed.count)
             }
         }
+    }
+
+    private suspend fun loadPlaylist(playlist: SavedPlaylist, keepChannels: Boolean): Result<M3uParser.Result> =
+        container.fetcher.fetch(playlist.url) { reader -> M3uParser.parse(reader, playlist.url, keepChannels) }
+
+    private suspend fun recordStatus(id: String, status: PlaylistStatus, count: Int) {
+        runCatching { store.updateStatus(id, status, count) }
+    }
+
+    /** Playlists being checked right now (the UI shows a spinner label on them). */
+    private val _verifying = MutableStateFlow<Set<String>>(emptySet())
+    val verifying: StateFlow<Set<String>> = _verifying.asStateFlow()
+
+    /**
+     * Downloads the list and counts its entries without keeping them, then stores the verdict.
+     * Saving a playlist never does this by itself: the user starts it (for example after turning the VPN on).
+     */
+    fun verifyPlaylist(id: String) {
+        val playlist = store.find(id) ?: return
+        if (id in _verifying.value) return
+        _verifying.update { it + id }
+        viewModelScope.launch {
+            val ok = checkOne(playlist)
+            _verifying.update { it - id }
+            _notice.value = if (ok) Notice.VERIFY_OK else Notice.VERIFY_FAILED
+        }
+    }
+
+    fun verifyAll() {
+        val targets = store.items.value.filter { it.id !in _verifying.value }
+        if (targets.isEmpty()) return
+        _verifying.update { it + targets.map { target -> target.id } }
+        viewModelScope.launch {
+            var failed = 0
+            for (target in targets) {
+                if (!checkOne(target)) failed++
+                _verifying.update { it - target.id }
+            }
+            _notice.value = if (failed == 0) Notice.VERIFY_ALL_OK else Notice.VERIFY_SOME_FAILED
+        }
+    }
+
+    private suspend fun checkOne(playlist: SavedPlaylist): Boolean {
+        val parsed = loadPlaylist(playlist, keepChannels = false).getOrNull()
+        val ok = parsed != null && parsed.count > 0
+        recordStatus(playlist.id, if (ok) PlaylistStatus.OK else PlaylistStatus.FAILED, parsed?.count ?: 0)
+        return ok
     }
 
     fun reloadPlaylist() {

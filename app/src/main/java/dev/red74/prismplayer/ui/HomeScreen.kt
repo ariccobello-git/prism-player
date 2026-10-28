@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.red74.prismplayer.Notice
 import dev.red74.prismplayer.R
+import dev.red74.prismplayer.data.PlaylistStatus
 import dev.red74.prismplayer.data.PlaylistUrl
 import dev.red74.prismplayer.data.SavedPlaylist
 import kotlinx.coroutines.delay
@@ -34,8 +35,11 @@ import kotlinx.coroutines.delay
 @Composable
 fun HomeScreen(
     playlists: List<SavedPlaylist>,
+    verifying: Set<String>,
     notice: Notice?,
     onOpen: (String) -> Unit,
+    onVerify: (String) -> Unit,
+    onVerifyAll: () -> Unit,
     onDelete: (String) -> Unit,
     onAddUrl: () -> Unit,
     onPair: () -> Unit,
@@ -95,6 +99,13 @@ fun HomeScreen(
                         onClick = onPair,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    if (playlists.isNotEmpty()) {
+                        GlassButton(
+                            text = stringResource(R.string.action_verify_all),
+                            onClick = onVerifyAll,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
 
@@ -128,7 +139,9 @@ fun HomeScreen(
                         items(playlists, key = { it.id }) { playlist ->
                             PlaylistRow(
                                 playlist = playlist,
+                                checking = playlist.id in verifying,
                                 onOpen = { onOpen(playlist.id) },
+                                onVerify = { onVerify(playlist.id) },
                                 onDelete = { onDelete(playlist.id) },
                             )
                         }
@@ -160,14 +173,42 @@ private fun noticeText(notice: Notice): String = when (notice) {
     Notice.REMOVED -> stringResource(R.string.notice_removed)
     Notice.PAIRED -> stringResource(R.string.notice_paired)
     Notice.SAVE_FAILED -> stringResource(R.string.notice_save_failed)
+    Notice.VERIFY_OK -> stringResource(R.string.notice_verify_ok)
+    Notice.VERIFY_FAILED -> stringResource(R.string.notice_verify_failed)
+    Notice.VERIFY_ALL_OK -> stringResource(R.string.notice_verify_all_ok)
+    Notice.VERIFY_SOME_FAILED -> stringResource(R.string.notice_verify_some_failed)
 }
 
 @Composable
 private fun PlaylistRow(
     playlist: SavedPlaylist,
+    checking: Boolean,
     onOpen: () -> Unit,
+    onVerify: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val failed = playlist.status == PlaylistStatus.FAILED && !checking
+    val statusLabel: String
+    val statusColor: androidx.compose.ui.graphics.Color
+    when {
+        checking -> {
+            statusLabel = stringResource(R.string.status_checking)
+            statusColor = PrismColors.Accent
+        }
+        playlist.status == PlaylistStatus.OK -> {
+            statusLabel = stringResource(R.string.status_ok, playlist.channelCount)
+            statusColor = PrismColors.Ok
+        }
+        playlist.status == PlaylistStatus.FAILED -> {
+            statusLabel = stringResource(R.string.status_failed)
+            statusColor = PrismColors.Danger
+        }
+        else -> {
+            statusLabel = stringResource(R.string.status_unverified)
+            statusColor = PrismColors.Warn
+        }
+    }
+
     var confirming by remember { mutableStateOf(false) }
     LaunchedEffect(confirming) {
         if (confirming) {
@@ -183,10 +224,21 @@ private fun PlaylistRow(
     ) {
         GlassButton(
             text = playlist.name,
-            subtitle = PlaylistUrl.displayLabel(playlist.url),
+            subtitle = PlaylistUrl.displayLabel(playlist.url) + " · " + statusLabel,
+            subtitleColor = statusColor,
+            tint = if (failed) PrismColors.Danger else null,
             onClick = onOpen,
             modifier = Modifier.weight(1f),
         )
+        if (playlist.status != PlaylistStatus.OK && !checking) {
+            GlassButton(
+                text = stringResource(
+                    if (playlist.status == PlaylistStatus.FAILED) R.string.action_retry else R.string.action_verify,
+                ),
+                onClick = onVerify,
+                emphasized = playlist.status == PlaylistStatus.UNVERIFIED,
+            )
+        }
         Box {
             GlassButton(
                 text = stringResource(

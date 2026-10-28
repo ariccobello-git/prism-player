@@ -1,8 +1,8 @@
 package dev.red74.prismplayer.data
 
-import java.io.ByteArrayOutputStream
+import java.io.BufferedReader
 import java.io.IOException
-import java.io.InputStream
+import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
@@ -15,9 +15,13 @@ class FetchException(val kind: Kind, val httpCode: Int? = null) : IOException(ki
 
 class PlaylistFetcher {
 
-    suspend fun fetch(url: String): Result<String> = withContext(Dispatchers.IO) {
+    /**
+     * Streams the playlist into [consume] line by line, so a list of any size never has to fit in memory
+     * (and there is no byte limit). The result is whatever [consume] returns.
+     */
+    suspend fun <T> fetch(url: String, consume: (BufferedReader) -> T): Result<T> = withContext(Dispatchers.IO) {
         try {
-            Result.success(download(url))
+            Result.success(download(url, consume))
         } catch (e: FetchException) {
             Result.failure(e)
         } catch (e: Exception) {
@@ -26,7 +30,7 @@ class PlaylistFetcher {
         }
     }
 
-    private fun download(startUrl: String): String {
+    private fun <T> download(startUrl: String, consume: (BufferedReader) -> T): T {
         var current = startUrl
         repeat(MAX_REDIRECTS + 1) {
             val connection = URL(current).openConnection() as HttpURLConnection
@@ -49,7 +53,9 @@ class PlaylistFetcher {
                     }
                     current = next.toString()
                 } else if (code in 200..299) {
-                    return readLimited(connection.inputStream)
+                    return connection.inputStream.use { input ->
+                        consume(BufferedReader(InputStreamReader(input, Charsets.UTF_8), READ_BUFFER_CHARS))
+                    }
                 } else {
                     throw FetchException(FetchException.Kind.HTTP, code)
                 }
@@ -60,25 +66,9 @@ class PlaylistFetcher {
         throw FetchException(FetchException.Kind.REDIRECT)
     }
 
-    private fun readLimited(stream: InputStream): String {
-        stream.use { input ->
-            val out = ByteArrayOutputStream()
-            val buffer = ByteArray(16 * 1024)
-            var total = 0
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                total += read
-                if (total > MAX_BYTES) throw FetchException(FetchException.Kind.TOO_LARGE)
-                out.write(buffer, 0, read)
-            }
-            return out.toByteArray().decodeToString()
-        }
-    }
-
     private companion object {
         const val MAX_REDIRECTS = 5
-        const val MAX_BYTES = 64 * 1024 * 1024
+        const val READ_BUFFER_CHARS = 64 * 1024
         const val CONNECT_TIMEOUT_MS = 10_000
         const val READ_TIMEOUT_MS = 60_000
         const val USER_AGENT = "PrismPlayer/0.1 (Android TV)"

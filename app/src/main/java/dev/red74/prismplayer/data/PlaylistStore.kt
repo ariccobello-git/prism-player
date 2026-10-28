@@ -62,6 +62,23 @@ class PlaylistStore(
         }
     }
 
+    /** Records the outcome of a check. A missing playlist (deleted meanwhile) is ignored. */
+    suspend fun updateStatus(id: String, status: PlaylistStatus, channelCount: Int) = withContext(Dispatchers.IO) {
+        synchronized(lock) {
+            val current = readLocked()
+            if (current.none { it.id == id }) return@synchronized
+            val updated = current.map {
+                if (it.id != id) it else it.copy(
+                    status = status,
+                    channelCount = if (status == PlaylistStatus.OK) channelCount else it.channelCount,
+                    checkedAtEpochMs = clock(),
+                )
+            }
+            writeLocked(updated)
+            _items.value = updated
+        }
+    }
+
     fun find(id: String): SavedPlaylist? = _items.value.firstOrNull { it.id == id }
 
     private fun readLocked(): List<SavedPlaylist> {

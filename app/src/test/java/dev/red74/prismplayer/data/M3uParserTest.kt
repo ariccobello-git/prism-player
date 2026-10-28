@@ -1,6 +1,7 @@
 package dev.red74.prismplayer.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -109,5 +110,24 @@ class M3uParserTest {
             repeat(M3uParser.MAX_CHANNELS + 50) { append("http://a.example.com/").append(it).append('\n') }
         }
         assertEquals(M3uParser.MAX_CHANNELS, M3uParser.parse(text, source).size)
+    }
+
+    @Test
+    fun streamingCountsWithoutKeepingEntries() {
+        val text = "#EXTM3U\n#EXTINF:-1 group-title=\"G\",One\nhttp://a/1\n#EXTINF:-1,Two\nhttp://a/2\n"
+        val counted = M3uParser.parse(java.io.BufferedReader(java.io.StringReader(text)), source, keepChannels = false)
+        assertEquals(2, counted.count)
+        assertTrue(counted.channels.isEmpty())
+        assertFalse(counted.truncated)
+    }
+
+    @Test
+    fun oversizedListIsTruncatedNotRejected() {
+        val text = buildString {
+            repeat(M3uParser.MAX_CHANNELS + 10) { append("http://a.example.com/").append(it).append('\n') }
+        }
+        val result = M3uParser.parse(java.io.BufferedReader(java.io.StringReader(text)), source, keepChannels = false)
+        assertEquals(M3uParser.MAX_CHANNELS, result.count)
+        assertTrue(result.truncated)
     }
 }
