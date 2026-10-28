@@ -78,9 +78,9 @@ class PlaylistFetcher {
 
     private companion object {
         const val MAX_REDIRECTS = 5
-        const val MAX_BYTES = 8 * 1024 * 1024
+        const val MAX_BYTES = 64 * 1024 * 1024
         const val CONNECT_TIMEOUT_MS = 10_000
-        const val READ_TIMEOUT_MS = 15_000
+        const val READ_TIMEOUT_MS = 60_000
         const val USER_AGENT = "PrismPlayer/0.1 (Android TV)"
     }
 }
