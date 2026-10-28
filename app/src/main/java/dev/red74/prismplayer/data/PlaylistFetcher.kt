@@ -92,7 +92,7 @@ class PlaylistFetcher {
                 connection.readTimeout = READ_TIMEOUT_MS
                 connection.instanceFollowRedirects = false
                 connection.requestMethod = "GET"
-                connection.setRequestProperty("User-Agent", agent)
+                if (agent.isNotEmpty()) connection.setRequestProperty("User-Agent", agent)
                 connection.setRequestProperty("Accept", "*/*")
                 connection.setRequestProperty("Connection", "close")
 

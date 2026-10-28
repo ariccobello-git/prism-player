@@ -70,4 +70,25 @@ object PlaylistUrl {
     fun displayLabel(url: String): String =
         (runCatching { URI(url).host }.getOrNull() ?: runCatching { java.net.URL(url).host }.getOrNull())
             ?.takeIf { it.isNotBlank() } ?: "—"
+
+    /**
+     * Xtream-style `get.php` links: other spellings of the same request that panels accept when they refuse the
+     * original one (404 on an odd `output`/`type`). Empty for any other kind of link.
+     */
+    fun alternatives(url: String): List<String> {
+        val at = url.indexOf("get.php?")
+        if (at < 0) return emptyList()
+        val head = url.substring(0, at + 8)
+        val pairs = url.substring(at + 8).split('&').filter { it.isNotEmpty() }
+        fun build(change: (String) -> String?): String =
+            head + pairs.mapNotNull(change).joinToString("&")
+        val variants = linkedSetOf(
+            build { if (it.startsWith("output=", true)) null else it },
+            build { if (it.startsWith("output=", true)) "output=ts" else it },
+            build { if (it.startsWith("output=", true)) "output=m3u8" else it },
+            build { if (it.startsWith("type=", true)) "type=m3u" else if (it.startsWith("output=", true)) null else it },
+        )
+        variants.remove(url)
+        return variants.toList()
+    }
 }

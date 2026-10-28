@@ -70,4 +70,14 @@ class PlaylistUrlTest {
         assertEquals("", PlaylistUrl.withDefaultScheme("   "))
         assertEquals("ftp://example.com/a", PlaylistUrl.withDefaultScheme("ftp://example.com/a"))
     }
+
+    @Test
+    fun getPhpLinksHaveOtherSpellings() {
+        val url = "http://panel.example:8080/get.php?username=u&password=p&type=m3u_plus&output=mpegts"
+        val alts = PlaylistUrl.alternatives(url)
+        org.junit.Assert.assertTrue(alts.contains("http://panel.example:8080/get.php?username=u&password=p&type=m3u_plus"))
+        org.junit.Assert.assertTrue(alts.contains("http://panel.example:8080/get.php?username=u&password=p&type=m3u_plus&output=ts"))
+        org.junit.Assert.assertFalse(alts.contains(url))
+        org.junit.Assert.assertTrue(PlaylistUrl.alternatives("http://x.example/list.m3u").isEmpty())
+    }
 }

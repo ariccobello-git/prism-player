@@ -13,6 +13,7 @@ import dev.red74.prismplayer.data.FetchException
 import dev.red74.prismplayer.data.HttpAgent
 import dev.red74.prismplayer.data.M3uParser
 import dev.red74.prismplayer.data.PlaylistStatus
+import dev.red74.prismplayer.data.PlaylistUrl
 import dev.red74.prismplayer.data.PlaylistStore
 import dev.red74.prismplayer.data.PlaylistUrl
 import dev.red74.prismplayer.data.SavedPlaylist
@@ -149,8 +150,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun load(playlist: SavedPlaylist, keepChannels: Boolean): Loaded {
         var last = Loaded(null, LoadError.UNKNOWN, null)
         // Some panels refuse one identity or answer a web page to it: try the next identity for those cases only.
-        for (agent in HttpAgent.LIST_AGENTS) {
-            val result = container.fetcher.fetch(playlist.url, listOf(agent)) { reader ->
+        // If every identity is refused (HTTP error), the same request is retried in other common spellings.
+        val first = tryAgents(playlist, playlist.url, keepChannels)
+        if (first.error != LoadError.HTTP) return first
+        last = first
+        for (alt in PlaylistUrl.alternatives(playlist.url)) {
+            val again = tryAgents(playlist, alt, keepChannels, quick = true)
+            if (again.error == null) return again
+            if (again.error != LoadError.HTTP) last = again
+        }
+        return last
+    }
+
+    private suspend fun tryAgents(playlist: SavedPlaylist, url: String, keepChannels: Boolean, quick: Boolean = false): Loaded {
+        var last = Loaded(null, LoadError.UNKNOWN, null)
+        val agents = if (quick) HttpAgent.LIST_AGENTS.take(3) else HttpAgent.LIST_AGENTS
+        for (agent in agents) {
+            val result = container.fetcher.fetch(url, listOf(agent)) { reader ->
                 M3uParser.parse(reader, playlist.url, keepChannels)
             }
             val parsed = result.getOrNull()
