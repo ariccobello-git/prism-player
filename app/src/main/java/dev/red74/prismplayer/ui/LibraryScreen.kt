@@ -100,6 +100,13 @@ fun LibraryScreen(
         if ((nav.movieUrl != null || nav.showTitle != null) && nav.query.isNotEmpty()) onNav { it.copy(query = "") }
     }
 
+    // Back always goes up exactly one level: detail, then the opened category, then a search, then the list screen.
+    BackHandler(enabled = nav.query.isNotEmpty()) {
+        onNav { it.copy(query = "", itemIndex = 0, resume = false) }
+    }
+    BackHandler(enabled = nav.inCategory) {
+        onNav { it.copy(inCategory = false, resume = true, itemIndex = 0) }
+    }
     BackHandler(enabled = nav.movieUrl != null || nav.showTitle != null) {
         onNav { it.copy(movieUrl = null, showTitle = null, showGroup = null, season = -1, resume = true) }
     }
@@ -180,7 +187,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
                 onClick = {
                     onNav {
                         it.copy(
-                            tab = tab, category = 0, itemIndex = 0, movieUrl = null,
+                            tab = tab, category = 0, inCategory = false, itemIndex = 0, movieUrl = null,
                             showTitle = null, showGroup = null, season = -1, resume = false,
                         )
                     }
@@ -225,6 +232,8 @@ private fun LibraryBody(
             }
             if (catalog.live.isEmpty()) {
                 EmptyNote(R.string.library_empty)
+            } else if (query.isEmpty() && !nav.inCategory) {
+                CategoryList(catalog.live.map { it.name }, catalog.live.map { it.items.size }, nav, onNav)
             } else if (query.isEmpty()) {
                 LiveView(catalog.live, null, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
             } else if (results.isEmpty()) {
@@ -249,6 +258,8 @@ private fun LibraryBody(
                 movie != null -> MovieDetail(movie, favorites, onNav, onPlay, onToggleFavorite)
                 catalog.movies.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
+                query.isEmpty() && !nav.inCategory ->
+                    CategoryList(catalog.movies.map { it.name }, catalog.movies.map { it.items.size }, nav, onNav)
                 else -> {
                     val flat = if (query.isEmpty()) null else results
                     CategoryAndGrid(
@@ -287,6 +298,8 @@ private fun LibraryBody(
                 show != null -> ShowDetail(show, nav, favorites, onNav, onPlay, onToggleFavorite)
                 catalog.series.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
+                query.isEmpty() && !nav.inCategory ->
+                    CategoryList(catalog.series.map { it.name }, catalog.series.map { it.shows.size }, nav, onNav)
                 else -> {
                     val flat = if (query.isEmpty()) null else results
                     CategoryAndGrid(
@@ -318,37 +331,58 @@ private fun EmptyNote(text: Int) {
 
 // --- shared pieces ---------------------------------------------------------------------------------------
 
+/**
+ * First level of Live, Movies and Series: the categories of the list. OK opens one; inside it the cursor stays
+ * in that category until Back is pressed.
+ */
 @Composable
-private fun CategoryColumn(
+private fun CategoryList(
     names: List<String>,
     counts: List<Int>,
-    selected: Int,
-    onSelect: (Int) -> Unit,
-    modifier: Modifier = Modifier,
+    nav: LibraryNav,
+    onNav: NavChange,
 ) {
     val other = stringResource(R.string.category_other)
-    val state = rememberLazyListState(initialFirstVisibleItemIndex = selected.coerceIn(0, (names.size - 1).coerceAtLeast(0)))
-    LazyColumn(modifier, state = state, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        itemsIndexed(names) { index, name ->
-            GlassSurface(
-                onClick = { onSelect(index) },
-                onFocused = { onSelect(index) },
-                selected = index == selected,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    PrismText(
-                        text = name.ifBlank { other },
-                        size = 18.sp,
-                        maxLines = 1,
-                        modifier = Modifier.weight(1f),
-                    )
-                    PrismText(
-                        text = counts[index].toString(),
-                        size = 15.sp,
-                        color = PrismColors.TextSecondary,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
+    val selected = nav.category.coerceIn(0, (names.size - 1).coerceAtLeast(0))
+    val state = rememberLazyListState(initialFirstVisibleItemIndex = selected)
+    val focus = remember { FocusRequester() }
+    // Coming back from a category, the cursor lands on the category that was open.
+    LaunchedEffect(Unit) {
+        if (nav.resume) {
+            withFrameNanos { }
+            runCatching { focus.requestFocus() }
+            onNav { it.copy(resume = false) }
+        }
+    }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        LazyColumn(
+            Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(0.7f),
+            state = state,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            itemsIndexed(names) { index, name ->
+                GlassSurface(
+                    onClick = { onNav { it.copy(inCategory = true, category = index, itemIndex = 0, resume = true) } },
+                    focusRequester = if (index == selected) focus else null,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        PrismText(
+                            text = name.ifBlank { other },
+                            size = 22.sp,
+                            weight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f),
+                        )
+                        PrismText(
+                            text = counts[index].toString(),
+                            size = 18.sp,
+                            color = PrismColors.TextSecondary,
+                            modifier = Modifier.padding(start = 12.dp),
+                        )
+                    }
                 }
             }
         }
@@ -414,22 +448,11 @@ private fun LiveView(
         }
     }
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (categories != null) {
-            CategoryColumn(
-                names = categories.map { it.name },
-                counts = categories.map { it.items.size },
-                selected = category,
-                onSelect = { i -> if (i != nav.category) onNav { it.copy(category = i, itemIndex = 0) } },
-                modifier = Modifier
-                    .weight(0.22f)
-                    .fillMaxHeight(),
-            )
-        }
+    Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         val target = nav.itemIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0))
         LazyColumn(
             Modifier
-                .weight(if (categories != null) 0.42f else 0.55f)
+                .weight(0.58f)
                 .fillMaxHeight(),
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -460,7 +483,7 @@ private fun LiveView(
             isFavorite = preview?.let { FavoriteKey.of(it) in favorites } == true,
             onToggleFavorite = { preview?.let { onToggleFavorite(FavoriteKey.of(it)) } },
             modifier = Modifier
-                .weight(if (categories != null) 0.36f else 0.45f)
+                .weight(0.42f)
                 .fillMaxHeight(),
         )
     }
@@ -660,23 +683,12 @@ private fun CategoryAndGrid(
         }
     }
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (showCategories) {
-            CategoryColumn(
-                names = names,
-                counts = counts,
-                selected = category,
-                onSelect = { i -> if (i != nav.category) onNav { it.copy(category = i, itemIndex = 0) } },
-                modifier = Modifier
-                    .weight(0.24f)
-                    .fillMaxHeight(),
-            )
-        }
+    Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
             state = gridState,
             modifier = Modifier
-                .weight(if (showCategories) 0.76f else 1f)
+                .weight(1f)
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -711,7 +723,7 @@ private fun MovieDetail(
     val playFocus = remember { FocusRequester() }
     RequestFocusOnEnter(playFocus)
     val key = FavoriteKey.of(movie)
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+    Row(Modifier.fillMaxSize().confineFocus(horizontal = true), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
         Poster(movie.logo, movie.name, Modifier.width(240.dp).aspectRatio(2f / 3f))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PrismText(text = movie.name, size = 32.sp, weight = FontWeight.Bold, maxLines = 3)
@@ -748,7 +760,7 @@ private fun ShowDetail(
     RequestFocusOnEnter(seasonFocus)
     val key = FavoriteKey.ofShow(show)
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+    Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.width(240.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Poster(show.logo, show.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
             FavoriteButton(key in favorites, { onToggleFavorite(key) }, Modifier.fillMaxWidth())

@@ -65,6 +65,7 @@ import androidx.media3.ui.PlayerView
 import dev.red74.prismplayer.R
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentType
+import dev.red74.prismplayer.device.DeviceProfile
 import dev.red74.prismplayer.data.TextCleaner
 import dev.red74.prismplayer.player.AspectMode
 import dev.red74.prismplayer.player.createPlayer
@@ -75,6 +76,13 @@ private enum class PlayStatus { Loading, Ready, Ended, Error }
 private enum class Panel { None, Tracks, Episodes, Info }
 
 private const val SKIP_MS = 10_000L
+
+/** Holding Left or Right skips further and further: remotes without rewind and fast-forward keys rely on it. */
+private fun holdStep(repeatCount: Int): Long = when {
+    repeatCount >= 12 -> 60_000L
+    repeatCount >= 4 -> 30_000L
+    else -> SKIP_MS
+}
 private const val NEXT_COUNTDOWN_S = 8
 private const val LIVE_EDGE_MS = 6_000L
 
@@ -114,6 +122,7 @@ fun PlayerScreen(
     var countdown by remember { mutableIntStateOf(-1) }
 
     val player = remember { createPlayer(context) }
+    val remote = remember { DeviceProfile.get(context) }
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }
@@ -265,7 +274,7 @@ fun PlayerScreen(
         if (duration != C.TIME_UNSET) target = target.coerceAtMost(duration)
         player.seekTo(target.coerceAtLeast(0L))
         positionMs = target.coerceAtLeast(0L)
-        skipToast = if (deltaMs > 0) "+10" else "-10"
+        skipToast = (if (deltaMs > 0) "+" else "-") + (kotlin.math.abs(deltaMs) / 1000)
     }
 
     fun goLive() {
@@ -314,11 +323,11 @@ fun PlayerScreen(
                         true
                     }
                     Key.DirectionLeft -> {
-                        if (canSeek) skip(-SKIP_MS) else overlayVisible = true
+                        if (canSeek) skip(-holdStep(event.nativeKeyEvent.repeatCount)) else overlayVisible = true
                         true
                     }
                     Key.DirectionRight -> {
-                        if (canSeek) skip(SKIP_MS) else overlayVisible = true
+                        if (canSeek) skip(holdStep(event.nativeKeyEvent.repeatCount)) else overlayVisible = true
                         true
                     }
                     Key.DirectionUp -> {
@@ -510,7 +519,7 @@ fun PlayerScreen(
                         }
                     }
                     PrismText(
-                        text = stringResource(R.string.player_hint),
+                        text = stringResource(if (remote.minimalRemote) R.string.player_hint_hold else R.string.player_hint),
                         size = 15.sp,
                         color = PrismColors.TextSecondary,
                     )
@@ -618,7 +627,7 @@ private fun SidePanel(modifier: Modifier = Modifier, content: @Composable androi
             .fillMaxHeight(0.7f),
         cornerRadius = 24.dp,
     ) {
-        Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
+        Column(Modifier.padding(22.dp).confineFocus(horizontal = true), verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
     }
 }
 

@@ -9,7 +9,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -413,3 +415,21 @@ fun Poster(url: String?, title: String, modifier: Modifier = Modifier, fit: Bool
         }
     }
 }
+
+/**
+ * Keeps the D-pad inside this group: Up and Down (and Left and Right when [horizontal] is true) stop at the edge
+ * instead of jumping to a neighbouring area. Going up one level is done with the Back key. This is the rule for
+ * every list, grid and panel in the app.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+fun Modifier.confineFocus(horizontal: Boolean = false): Modifier = this
+    .focusProperties {
+        exit = { direction ->
+            val vertical = direction == androidx.compose.ui.focus.FocusDirection.Up ||
+                direction == androidx.compose.ui.focus.FocusDirection.Down
+            val sideways = direction == androidx.compose.ui.focus.FocusDirection.Left ||
+                direction == androidx.compose.ui.focus.FocusDirection.Right
+            if (vertical || (horizontal && sideways)) FocusRequester.Cancel else FocusRequester.Default
+        }
+    }
+    .focusGroup()

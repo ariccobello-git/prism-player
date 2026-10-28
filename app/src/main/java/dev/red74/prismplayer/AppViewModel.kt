@@ -52,6 +52,8 @@ enum class LibraryTab { LIVE, MOVIES, SERIES, FAVORITES }
 data class LibraryNav(
     val tab: LibraryTab = LibraryTab.LIVE,
     val category: Int = 0,
+    /** True once a category has been opened: up/down then stay inside it and Back goes up one level. */
+    val inCategory: Boolean = false,
     val query: String = "",
     val showTitle: String? = null,
     val showGroup: String? = null,

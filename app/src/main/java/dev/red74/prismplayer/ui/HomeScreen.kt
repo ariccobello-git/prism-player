@@ -80,7 +80,9 @@ fun HomeScreen(
                     .fillMaxHeight(),
             ) {
                 Column(
-                    Modifier.padding(36.dp),
+                    Modifier
+                        .padding(36.dp)
+                        .confineFocus(),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     PrismText(
@@ -129,6 +131,7 @@ fun HomeScreen(
                 LazyColumn(
                     Modifier
                         .fillMaxSize()
+                        .confineFocus()
                         .padding(28.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {

@@ -193,14 +193,34 @@ object M3uParser {
         }
         val head = if (commaAt >= 0) body.substring(0, commaAt) else body
         val name = if (commaAt >= 0) TextCleaner.cleanOrNull(body.substring(commaAt + 1)) else null
-        val values = attributes(head)
         return ExtInf(
             name = name,
-            group = TextCleaner.cleanOrNull(values["group-title"]),
-            logo = values["tvg-logo"]?.ifEmpty { null },
-            tvgId = values["tvg-id"]?.ifEmpty { null },
-            tvgName = TextCleaner.cleanOrNull(values["tvg-name"]),
+            group = TextCleaner.cleanOrNull(attrValue(head, "group-title")),
+            logo = attrValue(head, "tvg-logo")?.ifEmpty { null },
+            tvgId = attrValue(head, "tvg-id")?.ifEmpty { null },
+            tvgName = TextCleaner.cleanOrNull(attrValue(head, "tvg-name")),
         )
+    }
+
+    /**
+     * Reads one `key="value"` attribute by scanning for it. A list can have hundreds of thousands of entries and a
+     * TV stick is slow, so this avoids the regex and the map the general reader builds for every line.
+     */
+    private fun attrValue(text: String, key: String): String? {
+        var from = 0
+        while (true) {
+            val at = text.indexOf(key, from, ignoreCase = true)
+            if (at < 0) return null
+            val end = at + key.length
+            if ((at == 0 || text[at - 1].isWhitespace()) && end + 1 < text.length && text[end] == '=') {
+                val quote = text[end + 1]
+                if (quote == '"' || quote == '\'') {
+                    val close = text.indexOf(quote, end + 2)
+                    return if (close < 0) null else text.substring(end + 2, close).trim()
+                }
+            }
+            from = end
+        }
     }
 
     private fun resolve(base: String, reference: String): String? {
