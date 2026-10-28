@@ -28,6 +28,7 @@
 - **Playlist M3U/M3U8**: liste IPTV (`#EXTINF`, `group-title`, `#EXTGRP`), URL relativi, liste di soli URL e singoli flussi HLS (un link `.m3u8` diretto si riproduce così com'è).
 - **Italiano e inglese**.
 - Compatibile Android TV / Google TV: `leanback` richiesto, touchscreen non richiesto, banner e launcher TV.
+- Icona e banner a tema prisma; all'avvio una schermata glass con un raggio bianco che attraversa il prisma e si scompone nei colori, finché i dati sono caricati; l'ultimo comando Indietro dalla home chiede conferma prima di chiudere l'app.
 
 ### Telecomando
 

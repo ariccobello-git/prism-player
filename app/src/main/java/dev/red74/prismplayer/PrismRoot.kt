@@ -1,16 +1,23 @@
 package dev.red74.prismplayer
 
+import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.red74.prismplayer.data.PlaylistUrl
 import dev.red74.prismplayer.ui.ChannelsScreen
+import dev.red74.prismplayer.ui.ExitScreen
+import dev.red74.prismplayer.ui.SplashScreen
 import dev.red74.prismplayer.ui.HomeScreen
 import dev.red74.prismplayer.ui.ImportScreen
 import dev.red74.prismplayer.ui.PairScreen
@@ -24,13 +31,30 @@ private sealed interface Screen {
     data class Player(val startIndex: Int) : Screen
 }
 
-/** Tiny back-stack navigation: only the top screen is composed. */
+/** Opening animation first, then the app. */
 @Composable
 fun PrismRoot(
     appViewModel: AppViewModel = viewModel(),
     pairViewModel: PairViewModel = viewModel(),
 ) {
+    var splashDone by rememberSaveable { mutableStateOf(false) }
+    if (splashDone) {
+        PrismNavigation(appViewModel, pairViewModel)
+    } else {
+        val ready by appViewModel.ready.collectAsStateWithLifecycle()
+        SplashScreen(ready = ready, onFinished = { splashDone = true })
+    }
+}
+
+/** Tiny back-stack navigation: only the top screen is composed. */
+@Composable
+private fun PrismNavigation(
+    appViewModel: AppViewModel,
+    pairViewModel: PairViewModel,
+) {
     val viewModel = appViewModel
+    val activity = LocalContext.current as? Activity
+    var confirmExit by remember { mutableStateOf(false) }
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
 
     fun push(screen: Screen) {
@@ -42,11 +66,21 @@ fun PrismRoot(
     }
 
     BackHandler(enabled = stack.size > 1) { pop() }
+    // Last "back" on the home screen: ask before leaving.
+    BackHandler(enabled = stack.size == 1 && !confirmExit) { confirmExit = true }
 
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
     val channelsState by viewModel.channels.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val aspect by viewModel.aspect.collectAsStateWithLifecycle()
+
+    if (confirmExit) {
+        ExitScreen(
+            onConfirm = { activity?.finish() },
+            onDismiss = { confirmExit = false },
+        )
+        return
+    }
 
     when (val screen = stack.last()) {
         Screen.Home -> HomeScreen(

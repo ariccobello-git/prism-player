@@ -20,6 +20,10 @@
     <string name="import_url_label">URL della playlist</string>
     <string name="import_hint">Usa la tastiera su schermo. Puoi scrivere il link anche senza http:// (si usa http). Sono accettati solo link http e https.</string>
     <string name="action_save">Salva</string>
+    <string name="action_yes">Sì</string>
+    <string name="action_no">No</string>
+    <string name="exit_title">Vuoi chiudere l'app?</string>
+    <string name="exit_message">Premi Sì per uscire da Prism Player.</string>
     <string name="action_cancel">Annulla</string>
     <string name="action_back">Indietro</string>
     <string name="error_url_empty">Inserisci l\'URL di una playlist.</string>

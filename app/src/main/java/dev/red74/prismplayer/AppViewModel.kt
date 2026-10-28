@@ -47,10 +47,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _aspect = MutableStateFlow(container.settings.aspectMode)
     val aspect: StateFlow<AspectMode> = _aspect.asStateFlow()
 
+    private val _ready = MutableStateFlow(false)
+
+    /** True once the saved playlists have been read from storage. */
+    val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
     private var loadJob: Job? = null
 
     init {
-        viewModelScope.launch { runCatching { store.load() } }
+        viewModelScope.launch {
+            runCatching { store.load() }
+            _ready.value = true
+        }
     }
 
     /** Validates synchronously (the caller shows the error) and saves in the background when valid. */
