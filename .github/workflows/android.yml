@@ -162,6 +162,11 @@ jobs:
             echo "::error::Release tag must look like v0.1.0-debug (got: ${TAG})"
             exit 1
           fi
+          if gh release view "${TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1 || \
+             git ls-remote --exit-code --tags "https://github.com/${GITHUB_REPOSITORY}.git" "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::error::The tag ${TAG} already exists. Run the workflow again with a new release_tag (for example the next version number)."
+            exit 1
+          fi
           cp dist/app-debug.apk dist/prism-player-debug.apk
           (cd dist && sha256sum prism-player-debug.apk > prism-player-debug.apk.sha256)
           cat > notes.md <<NOTES
