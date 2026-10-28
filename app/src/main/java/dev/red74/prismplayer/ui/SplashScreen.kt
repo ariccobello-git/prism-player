@@ -1,5 +1,6 @@
 package dev.red74.prismplayer.ui
 
+import android.media.MediaPlayer
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -45,7 +48,8 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.flow.first
 
-private const val SPLASH_MS = 3_400
+private const val SPLASH_MS = 5_000
+private const val TOTAL_SECONDS = SPLASH_MS / 1000f
 private val Spectrum = listOf(
     Color(0xFFFF4D5E), // red
     Color(0xFFFF9F43), // orange
@@ -56,12 +60,55 @@ private val Spectrum = listOf(
     Color(0xFFC36BFF), // violet
 )
 
-private fun fraction(progress: Float, from: Float, length: Float): Float =
-    ((progress - from) / length).coerceIn(0f, 1f)
+private fun fraction(value: Float, from: Float, length: Float): Float =
+    ((value - from) / length).coerceIn(0f, 1f)
 
 private fun lerp(a: Float, b: Float, t: Float): Float = a + (b - a) * t
 
 private fun lerp(a: Offset, b: Offset, t: Float): Offset = Offset(lerp(a.x, b.x, t), lerp(a.y, b.y, t))
+
+private fun easeOut(x: Float): Float = 1f - (1f - x) * (1f - x) * (1f - x)
+
+// --- a small 3D engine: one triangular glass prism, rotated and drawn with perspective ------------------------
+
+private class Vec3(val x: Float, val y: Float, val z: Float)
+
+private class Face(val corners: IntArray, val isSpectrum: Boolean = false)
+
+private const val DEPTH = 0.62f
+private val PrismCorners = listOf(
+    Vec3(0f, -1f, DEPTH), Vec3(-0.9f, 0.8f, DEPTH), Vec3(0.9f, 0.8f, DEPTH), // front triangle
+    Vec3(0f, -1f, -DEPTH), Vec3(-0.9f, 0.8f, -DEPTH), Vec3(0.9f, 0.8f, -DEPTH), // back triangle
+)
+private val PrismFaces = listOf(
+    Face(intArrayOf(0, 1, 2)),
+    Face(intArrayOf(3, 4, 5)),
+    Face(intArrayOf(0, 1, 4, 3)),
+    Face(intArrayOf(0, 2, 5, 3), isSpectrum = true), // the face the light leaves through
+    Face(intArrayOf(1, 2, 5, 4)),
+)
+private val PrismEdges = listOf(0 to 1, 1 to 2, 2 to 0, 3 to 4, 4 to 5, 5 to 3, 0 to 3, 1 to 4, 2 to 5)
+
+private class Projected(val x: Float, val y: Float, val depth: Float)
+
+private fun project(point: Vec3, yaw: Float, pitch: Float, center: Offset, scale: Float): Projected {
+    val x1 = point.x * cos(yaw) + point.z * sin(yaw)
+    val z1 = -point.x * sin(yaw) + point.z * cos(yaw)
+    val y2 = point.y * cos(pitch) - z1 * sin(pitch)
+    val z2 = point.y * sin(pitch) + z1 * cos(pitch)
+    val perspective = CAMERA_DISTANCE / (CAMERA_DISTANCE - z2)
+    return Projected(center.x + x1 * scale * perspective, center.y + y2 * scale * perspective, z2)
+}
+
+private const val CAMERA_DISTANCE = 5f
+
+/** Spins in with a long ease-out, settles at a three-quarter view and then sways a little. */
+private fun yawAt(seconds: Float): Float {
+    val rest = Math.toRadians(-32.0).toFloat()
+    val spin = easeOut(fraction(seconds, 0f, 1.7f))
+    val sway = Math.toRadians(3.0).toFloat() * sin(seconds * 1.7f) * fraction(seconds, 1.7f, 0.5f)
+    return rest + Math.toRadians(420.0).toFloat() * (1f - spin) + sway
+}
 
 /**
  * Opening screen: a white beam reaches a glass prism and leaves it split into the spectrum,
@@ -74,6 +121,21 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
 
     // The beam animation is not interruptible; back is ignored for these few seconds.
     BackHandler(enabled = true) { }
+
+    val context = LocalContext.current
+    DisposableEffect(Unit) {
+        // Original synthesized sting, 5 s, timed to the animation (impact when the light leaves the prism).
+        val player = runCatching {
+            MediaPlayer.create(context, R.raw.prism_intro)?.apply {
+                setVolume(0.85f, 0.85f)
+                start()
+            }
+        }.getOrNull()
+        onDispose {
+            runCatching { player?.stop() }
+            runCatching { player?.release() }
+        }
+    }
 
     LaunchedEffect(Unit) {
         progress.animateTo(1f, tween(durationMillis = SPLASH_MS, easing = LinearEasing))
@@ -99,7 +161,7 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
                     )
                     Spacer(Modifier.height(18.dp))
                     Column(
-                        Modifier.graphicsLayer { alpha = fraction(progress.value, 0.55f, 0.25f) },
+                        Modifier.graphicsLayer { alpha = fraction(progress.value * TOTAL_SECONDS, 3.0f, 1.2f) },
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         PrismText(
@@ -135,71 +197,92 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
 @Composable
 private fun PrismScene(progress: () -> Float, modifier: Modifier = Modifier) {
     Canvas(modifier) {
-        val p = progress()
+        val seconds = progress() * TOTAL_SECONDS
         val w = size.width
         val h = size.height
-        val s = h * 0.9f
-        val cx = w * 0.40f
-        val cy = h * 0.5f
+        val center = Offset(w * 0.42f, h * 0.5f)
+        val scale = h * 0.40f
+        val yaw = yawAt(seconds)
+        val pitch = Math.toRadians(-14.0).toFloat()
+        val appear = fraction(seconds, 0f, 0.4f)
 
-        val apex = Offset(cx, cy - s * 0.5f)
-        val left = Offset(cx - s * 0.48f, cy + s * 0.4f)
-        val right = Offset(cx + s * 0.48f, cy + s * 0.4f)
+        val pts = PrismCorners.map { project(it, yaw, pitch, center, scale) }
 
-        // Where the white beam enters the left face and where the bent beam leaves the right face.
-        val entryY = cy + s * 0.04f
-        val entryT = (entryY - apex.y) / (left.y - apex.y)
-        val entry = Offset(lerp(apex.x, left.x, entryT), entryY)
-        val exitY = entryY + s * 0.11f
-        val exitT = (exitY - apex.y) / (right.y - apex.y)
-        val exit = Offset(lerp(apex.x, right.x, exitT), exitY)
-
-        // 1) the prism fades in
-        val prismAlpha = fraction(p, 0f, 0.1f)
-        val body = Path().apply {
-            moveTo(apex.x, apex.y)
-            lineTo(left.x, left.y)
-            lineTo(right.x, right.y)
-            close()
+        // 1) faces, far to near, as translucent glass; the exit face turns into a spectrum after the impact
+        val disperse = fraction(seconds, 2.3f, 0.6f)
+        val ordered = PrismFaces.sortedBy { face -> face.corners.map { pts[it].depth }.average() }
+        for (face in ordered) {
+            val path = Path()
+            face.corners.forEachIndexed { i, index ->
+                if (i == 0) path.moveTo(pts[index].x, pts[index].y) else path.lineTo(pts[index].x, pts[index].y)
+            }
+            path.close()
+            val facing = face.corners.map { pts[it].depth }.average() > 0.0
+            drawPath(path, Color.White.copy(alpha = appear * if (facing) 0.20f else 0.10f))
+            if (face.isSpectrum && disperse > 0f) {
+                val left = face.corners.minOf { pts[it].x }
+                val right = face.corners.maxOf { pts[it].x }
+                drawPath(
+                    path,
+                    Brush.horizontalGradient(
+                        colors = Spectrum.map { it.copy(alpha = 0.67f * disperse) },
+                        startX = left,
+                        endX = right,
+                    ),
+                )
+            }
         }
-        drawPath(
-            path = body,
-            brush = Brush.linearGradient(
-                listOf(Color.White.copy(alpha = 0.26f * prismAlpha), Color.White.copy(alpha = 0.05f * prismAlpha)),
-                start = apex,
-                end = right,
-            ),
-        )
-        drawPath(
-            path = body,
-            color = Color.White.copy(alpha = 0.92f * prismAlpha),
-            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
-        )
 
-        // 2) the white beam travels from the left edge to the prism
-        val beamP = fraction(p, 0.08f, 0.24f)
-        if (beamP > 0f) {
-            val start = Offset(0f, entryY)
-            val end = lerp(start, entry, beamP)
+        // 2) glass edges: near ones bright, far ones faint
+        for ((from, to) in PrismEdges) {
+            val near = (pts[from].depth + pts[to].depth) / 2f > 0f
+            drawLine(
+                color = Color.White.copy(alpha = appear * if (near) 0.95f else 0.35f),
+                start = Offset(pts[from].x, pts[from].y),
+                end = Offset(pts[to].x, pts[to].y),
+                strokeWidth = 3.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
+        }
+
+        // where the white beam enters (left face) and where it leaves (right face), in 3D
+        fun onEdge(a: Int, b: Int, u: Float): Projected {
+            val p = PrismCorners[a]
+            val q = PrismCorners[b]
+            val pointOnEdge = Vec3(lerp(p.x, q.x, u), lerp(p.y, q.y, u), 0f)
+            return project(pointOnEdge, yaw, pitch, center, scale)
+        }
+        val entry = onEdge(0, 1, 0.55f).let { Offset(it.x, it.y) }
+        val exit = onEdge(0, 2, 0.68f).let { Offset(it.x, it.y) }
+
+        // 3) the white beam travels in from the left edge
+        val beam = fraction(seconds, 0.9f, 1.0f)
+        if (beam > 0f) {
+            val start = Offset(0f, entry.y)
+            val end = lerp(start, Offset(entry.x, entry.y), beam)
             drawLine(Color.White.copy(alpha = 0.22f), start, end, strokeWidth = 18.dp.toPx(), cap = StrokeCap.Round)
             drawLine(Color.White, start, end, strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round)
         }
 
-        // 3) inside the glass the beam bends towards the base
-        val innerP = fraction(p, 0.32f, 0.14f)
-        if (innerP > 0f) {
-            val end = lerp(entry, exit, innerP)
-            drawLine(Color.White.copy(alpha = 0.9f), entry, end, strokeWidth = 4.dp.toPx(), cap = StrokeCap.Round)
+        // 4) inside the glass it bends towards the base
+        val inner = fraction(seconds, 1.9f, 0.4f)
+        if (inner > 0f) {
+            drawLine(
+                color = Color.White.copy(alpha = 0.9f),
+                start = entry,
+                end = lerp(entry, exit, inner),
+                strokeWidth = 4.dp.toPx(),
+                cap = StrokeCap.Round,
+            )
         }
 
-        // 4) it leaves the prism split into the spectrum and fans out
-        val fanP = fraction(p, 0.46f, 0.38f)
-        if (fanP > 0f) {
-            val eased = 1f - (1f - fanP) * (1f - fanP)
+        // 5) it leaves split into the seven colours, fanning out
+        val fan = fraction(seconds, 2.3f, 1.5f)
+        if (fan > 0f) {
+            val eased = 1f - (1f - fan) * (1f - fan)
             val reach = (w - exit.x) * 1.05f * eased
             Spectrum.forEachIndexed { index, color ->
-                val degrees = 4f + index * 4.6f * eased
-                val radians = degrees * PI.toFloat() / 180f
+                val radians = (4f + index * 4.6f * eased) * PI.toFloat() / 180f
                 val end = Offset(exit.x + cos(radians) * reach, exit.y + sin(radians) * reach)
                 drawLine(color.copy(alpha = 0.22f), exit, end, strokeWidth = 16.dp.toPx(), cap = StrokeCap.Round)
                 drawLine(color, exit, end, strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round)

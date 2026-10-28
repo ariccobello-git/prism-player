@@ -1,5 +1,16 @@
 package dev.red74.prismplayer.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.red74.prismplayer.Notice
@@ -138,6 +150,7 @@ fun HomeScreen(
                     } else {
                         items(playlists, key = { it.id }) { playlist ->
                             PlaylistRow(
+                                modifier = Modifier.animateItem(),
                                 playlist = playlist,
                                 checking = playlist.id in verifying,
                                 onOpen = { onOpen(playlist.id) },
@@ -150,18 +163,27 @@ fun HomeScreen(
             }
         }
 
-        if (notice != null) {
-            GlassPanel(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 36.dp),
-                cornerRadius = 22.dp,
-            ) {
-                PrismText(
-                    text = noticeText(notice),
-                    size = 20.sp,
-                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 14.dp),
-                )
+        // The toast rises with a spring and sinks away, like an iOS banner.
+        AnimatedContent(
+            targetState = notice,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 36.dp),
+            transitionSpec = {
+                val spring = spring<IntOffset>(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow)
+                (slideInVertically(spring) { it } + fadeIn(tween(220)) + scaleIn(tween(300), initialScale = 0.9f)) togetherWith
+                    (slideOutVertically(spring) { it } + fadeOut(tween(200)) + scaleOut(tween(250), targetScale = 0.95f))
+            },
+            label = "notice",
+        ) { shown ->
+            if (shown != null) {
+                GlassPanel(cornerRadius = 22.dp) {
+                    PrismText(
+                        text = noticeText(shown),
+                        size = 20.sp,
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 14.dp),
+                    )
+                }
             }
         }
     }
@@ -181,6 +203,7 @@ private fun noticeText(notice: Notice): String = when (notice) {
 
 @Composable
 private fun PlaylistRow(
+    modifier: Modifier = Modifier,
     playlist: SavedPlaylist,
     checking: Boolean,
     onOpen: () -> Unit,
@@ -218,7 +241,7 @@ private fun PlaylistRow(
     }
 
     Row(
-        Modifier.fillMaxWidth(),
+        modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
