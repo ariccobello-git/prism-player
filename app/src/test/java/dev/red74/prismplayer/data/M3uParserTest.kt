@@ -22,7 +22,7 @@ class M3uParserTest {
         val channels = M3uParser.parse(text, source)
 
         assertEquals(2, channels.size)
-        assertEquals(Channel("Channel One", "http://example.com/one.m3u8", "News"), channels[0])
+        assertEquals(Channel("Channel One", "http://example.com/one.m3u8", "News", logo = "http://x/l.png", tvgId = "a"), channels[0])
         assertEquals(Channel("Rock, Roll & Co", "https://example.com/two.ts", "Music, Live"), channels[1])
     }
 
