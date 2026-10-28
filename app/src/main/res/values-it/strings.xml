@@ -130,4 +130,5 @@
     <string name="np_info">Info sul flusso</string>
     <string name="np_close">Chiudi</string>
     <string name="version_label">Versione %1$s</string>
+    <string name="np_format">Formato</string>
 </resources>

@@ -92,6 +92,14 @@ fun LibraryScreen(
     RequestFocusOnEnter(retryFocus, key = state.error)
     RequestFocusOnEnter(tabFocus, key = state.loading)
 
+    // A search never survives leaving the screen or opening an item: coming back finds the field empty.
+    LaunchedEffect(Unit) {
+        if (nav.query.isNotEmpty()) onNav { it.copy(query = "", itemIndex = 0, resume = false) }
+    }
+    LaunchedEffect(nav.movieUrl, nav.showTitle) {
+        if ((nav.movieUrl != null || nav.showTitle != null) && nav.query.isNotEmpty()) onNav { it.copy(query = "") }
+    }
+
     BackHandler(enabled = nav.movieUrl != null || nav.showTitle != null) {
         onNav { it.copy(movieUrl = null, showTitle = null, showGroup = null, season = -1, resume = true) }
     }
@@ -253,7 +261,7 @@ private fun LibraryBody(
                         entry = { c, i ->
                             val item = flat?.get(i) ?: catalog.movies[c].items[i]
                             GridEntry(item.name, item.logo, FavoriteKey.of(item) in favorites) {
-                                onNav { it.copy(movieUrl = item.url, itemIndex = i, resume = true) }
+                                onNav { it.copy(movieUrl = item.url, itemIndex = if (flat == null) i else 0, resume = true) }
                             }
                         },
                     )
@@ -291,7 +299,7 @@ private fun LibraryBody(
                         entry = { c, i ->
                             val item = flat?.get(i) ?: catalog.series[c].shows[i]
                             GridEntry(item.title, item.logo, FavoriteKey.ofShow(item) in favorites) {
-                                onNav { it.copy(showTitle = item.title, showGroup = item.group, season = -1, itemIndex = i, resume = true) }
+                                onNav { it.copy(showTitle = item.title, showGroup = item.group, season = -1, itemIndex = if (flat == null) i else 0, resume = true) }
                             }
                         },
                     )
@@ -299,7 +307,7 @@ private fun LibraryBody(
             }
         }
 
-        LibraryTab.FAVORITES -> FavoritesView(catalog, query, nav, favorites, onNav, onPlay)
+        LibraryTab.FAVORITES -> FavoritesView(catalog, query, nav, favorites, onNav, onPlay, onToggleFavorite)
     }
 }
 
@@ -371,7 +379,7 @@ private fun FavoriteButton(isFavorite: Boolean, onClick: () -> Unit, modifier: M
         text = stringResource(if (isFavorite) R.string.fav_remove else R.string.fav_add),
         onClick = onClick,
         modifier = modifier,
-        tint = if (isFavorite) PrismColors.Warn else null,
+        tint = if (isFavorite) PrismColors.Favorite else null,
     )
 }
 
@@ -432,11 +440,12 @@ private fun LiveView(
                     nowNext = epg.nowNext(channel, nowMs),
                     nowMs = nowMs,
                     isFavorite = FavoriteKey.of(channel) in favorites,
+                    onToggleFavorite = { onToggleFavorite(FavoriteKey.of(channel)) },
                     focusRequester = if (index == target) rowFocus else null,
                     onFocused = { preview = channel },
                     onClick = {
                         fullscreen = true
-                        onNav { it.copy(itemIndex = index, resume = true) }
+                        onNav { it.copy(itemIndex = if (flat == null) index else 0, resume = flat == null) }
                         onPlay(list, index, flat == null)
                     },
                 )
@@ -463,15 +472,17 @@ private fun ChannelRow(
     nowNext: NowNext,
     nowMs: Long,
     isFavorite: Boolean,
+    onToggleFavorite: () -> Unit,
     focusRequester: FocusRequester?,
     onFocused: () -> Unit,
     onClick: () -> Unit,
 ) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
     GlassSurface(
         onClick = onClick,
         onFocused = onFocused,
         focusRequester = focusRequester,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.weight(1f),
         focusScale = 1.02f,
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -496,8 +507,9 @@ private fun ChannelRow(
                     }
                 }
             }
-            if (isFavorite) PrismText(text = "★", size = 22.sp, color = PrismColors.Warn)
         }
+    }
+    StarButton(isFavorite, onToggleFavorite)
     }
 }
 
@@ -675,7 +687,7 @@ private fun CategoryAndGrid(
                 GlassSurface(
                     onClick = item.onClick,
                     focusRequester = if (index == target) itemFocus else null,
-                    tint = if (item.favorite) PrismColors.Warn else null,
+                    tint = if (item.favorite) PrismColors.Favorite else null,
                     contentPadding = PaddingValues(6.dp),
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -790,6 +802,7 @@ private fun FavoritesView(
     favorites: Set<String>,
     onNav: NavChange,
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
+    onToggleFavorite: (String) -> Unit,
 ) {
     // The hashes are computed off the main thread: a big list has hundreds of thousands of entries.
     val entries by produceState(emptyList<Entry>(), catalog, favorites, query) {
@@ -811,6 +824,7 @@ private fun FavoritesView(
     RequestFocusOnEnter(firstFocus, key = entries.size)
     LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(entries) { index, entry ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             GlassSurface(
                 onClick = {
                     val channel = entry.channel
@@ -822,7 +836,7 @@ private fun FavoritesView(
                         }
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.weight(1f),
                 focusRequester = if (index == 0) firstFocus else null,
                 focusScale = 1.02f,
             ) {
@@ -830,6 +844,14 @@ private fun FavoritesView(
                     Poster(entry.logo, entry.title, Modifier.size(56.dp), fit = entry.channel?.type == dev.red74.prismplayer.data.ContentType.LIVE)
                     PrismText(text = entry.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
                 }
+            }
+            StarButton(
+                favorite = true,
+                onToggle = {
+                    val key = entry.channel?.let { FavoriteKey.of(it) } ?: entry.show?.let { FavoriteKey.ofShow(it) }
+                    if (key != null) onToggleFavorite(key)
+                },
+            )
             }
         }
     }

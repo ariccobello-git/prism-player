@@ -204,14 +204,14 @@ object M3uParser {
     }
 
     private fun resolve(base: String, reference: String): String? {
-        val candidate = reference.replace(" ", "%20")
-        val resolved = if (absoluteUrl.containsMatchIn(candidate)) {
-            candidate
-        } else {
-            runCatching { URI(base).resolve(candidate).toString() }.getOrNull() ?: return null
+        val candidate = if (reference.indexOf(' ') >= 0) reference.replace(" ", "%20") else reference
+        // The common case (an absolute http link) needs no URI parsing, which is slow and strict about odd characters.
+        if (candidate.startsWith("http://", ignoreCase = true) || candidate.startsWith("https://", ignoreCase = true)) {
+            return candidate
         }
-        val scheme = runCatching { URI(resolved).scheme?.lowercase() }.getOrNull()
-        return if (scheme == "http" || scheme == "https") resolved else null
+        if (absoluteUrl.containsMatchIn(candidate)) return null
+        val resolved = runCatching { URI(base).resolve(candidate).toString() }.getOrNull() ?: return null
+        return if (resolved.startsWith("http://", ignoreCase = true) || resolved.startsWith("https://", ignoreCase = true)) resolved else null
     }
 
     private fun fallbackName(url: String, position: Int): String {

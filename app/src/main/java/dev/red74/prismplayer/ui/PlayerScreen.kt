@@ -412,31 +412,49 @@ fun PlayerScreen(
                         ),
                     ),
             ) {
-                Column(
+                // Top: what is playing on the left; audio and subtitles, format and info on one line on the right.
+                Row(
                     Modifier
                         .align(Alignment.TopStart)
+                        .fillMaxWidth()
                         .padding(40.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalAlignment = Alignment.Top,
                 ) {
-                    PrismText(
-                        text = if (isSeries) (current.seriesTitle ?: current.name) else current.name,
-                        size = 34.sp,
-                        weight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                    if (isSeries && current.season > 0) {
+                    Column(Modifier.weight(1f)) {
                         PrismText(
-                            text = stringResource(R.string.season_n, current.season) + " · " + current.episode,
-                            size = 20.sp,
-                            color = PrismColors.TextSecondary,
+                            text = if (isSeries) (current.seriesTitle ?: current.name) else current.name,
+                            size = 34.sp,
+                            weight = FontWeight.Bold,
                             maxLines = 1,
                         )
-                    } else {
-                        current.group?.let {
-                            PrismText(text = it, size = 20.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                        if (isSeries && current.season > 0) {
+                            PrismText(
+                                text = stringResource(R.string.season_n, current.season) + " · " + current.episode,
+                                size = 20.sp,
+                                color = PrismColors.TextSecondary,
+                                maxLines = 1,
+                            )
+                        } else {
+                            current.group?.let {
+                                PrismText(text = it, size = 20.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                            }
                         }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        GlassButton(
+                            text = stringResource(R.string.np_audio_subs),
+                            onClick = { panel = Panel.Tracks },
+                        )
+                        GlassButton(
+                            text = stringResource(R.string.np_format),
+                            onClick = { changeAspect(aspect.next()) },
+                        )
+                        InfoButton(onClick = { panel = Panel.Info })
                     }
                 }
 
+                // Bottom: the timeline and then every transport control on a single line.
                 Column(
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -463,15 +481,17 @@ fun PlayerScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        GlassButton(
-                            text = stringResource(if (isPlaying) R.string.player_pause else R.string.player_play),
-                            onClick = ::togglePlay,
+                        if (canSeek) {
+                            TransportButton(icon = TransportIcon.REWIND, onClick = { skip(-SKIP_MS) })
+                        }
+                        TransportButton(
+                            icon = if (isPlaying) TransportIcon.PAUSE else TransportIcon.PLAY,
+                            onClick = { if (isPlaying) player.pause() else player.play() },
                             focusRequester = playFocus,
-                            emphasized = true,
+                            selected = true,
                         )
                         if (canSeek) {
-                            GlassButton(text = "⟲ 10", onClick = { skip(-SKIP_MS) })
-                            GlassButton(text = "10 ⟳", onClick = { skip(SKIP_MS) })
+                            TransportButton(icon = TransportIcon.FAST_FORWARD, onClick = { skip(SKIP_MS) })
                         }
                         if (isSeries) {
                             GlassButton(
@@ -488,18 +508,6 @@ fun PlayerScreen(
                             GlassButton(text = stringResource(R.string.player_previous), onClick = { changeChannel(-1) })
                             GlassButton(text = stringResource(R.string.player_next), onClick = { changeChannel(+1) })
                         }
-                        GlassButton(
-                            text = stringResource(R.string.np_audio_subs),
-                            onClick = { panel = Panel.Tracks },
-                        )
-                        GlassButton(
-                            text = stringResource(R.string.player_format, aspectLabel(aspect)),
-                            onClick = { changeAspect(aspect.next()) },
-                        )
-                        GlassButton(
-                            text = stringResource(R.string.np_info),
-                            onClick = { panel = Panel.Info },
-                        )
                     }
                     PrismText(
                         text = stringResource(R.string.player_hint),

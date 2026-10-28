@@ -74,6 +74,8 @@ object PrismColors {
     val Danger = Color(0xFFFF7C8A)
     val Ok = Color(0xFF6FE3B0)
     val Warn = Color(0xFFFFC857)
+    /** Warm terracotta orange used for favourites. */
+    val Favorite = Color(0xFFD97757)
 }
 
 @Composable
