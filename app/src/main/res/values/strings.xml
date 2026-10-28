@@ -131,4 +131,5 @@
     <string name="np_close">Close</string>
     <string name="version_label">Version %1$s</string>
     <string name="np_format">Format</string>
+    <string name="player_hint_hold">Hold ◀ ▶ to skip faster · ▲ ▼ change channel · OK controls · Back close</string>
 </resources>
