@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Prism Player</string>
+    <string name="built_by">Built by Red-74</string>
+
+    <string name="home_tagline">Le tue playlist, sul grande schermo.</string>
+    <string name="action_add_url">Aggiungi URL playlist</string>
+    <string name="action_pair">Abbina dal telefono</string>
+    <string name="playlists_title">Le tue playlist</string>
+    <string name="playlists_empty">Nessuna playlist. Aggiungi un URL con il telecomando o abbina il telefono.</string>
+    <string name="action_delete">Elimina</string>
+    <string name="action_delete_confirm">Confermi?</string>
+    <string name="notice_added">Playlist salvata</string>
+    <string name="notice_removed">Playlist rimossa</string>
+    <string name="notice_paired">Playlist ricevuta dal telefono</string>
+    <string name="notice_save_failed">Impossibile salvare la playlist su questo dispositivo</string>
+
+    <string name="import_title">Aggiungi playlist</string>
+    <string name="import_name_label">Nome (facoltativo)</string>
+    <string name="import_url_label">URL della playlist</string>
+    <string name="import_hint">Usa la tastiera su schermo. Sono accettati solo link http e https.</string>
+    <string name="action_save">Salva</string>
+    <string name="action_cancel">Annulla</string>
+    <string name="action_back">Indietro</string>
+    <string name="error_url_empty">Inserisci l\'URL di una playlist.</string>
+    <string name="error_url_too_long">L\'URL è troppo lungo.</string>
+    <string name="error_url_format">L\'URL non è valido. Controlla errori di battitura o spazi.</string>
+    <string name="error_url_scheme">L\'URL deve iniziare con http:// o https://</string>
+
+    <string name="pair_title">Abbina il telefono</string>
+    <string name="pair_step_1">1. Inquadra il QR con la fotocamera del telefono.</string>
+    <string name="pair_step_2">2. Scrivi o incolla il link della playlist nella pagina che si apre.</string>
+    <string name="pair_step_3">3. La playlist compare qui sulla TV.</string>
+    <string name="pair_code_label">Codice</string>
+    <string name="pair_expires_in">Scade tra %1$s</string>
+    <string name="pair_manual">Niente fotocamera? Apri %1$s sul telefono e inserisci il codice.</string>
+    <string name="pair_security_note">Codice monouso valido 3 minuti. I link delle playlist salvate non escono mai dalla TV.</string>
+    <string name="pair_new_code">Nuovo codice</string>
+    <string name="pair_starting">Avvio dell\'abbinamento…</string>
+    <string name="pair_expired">Il codice è scaduto o non è più valido.</string>
+    <string name="pair_done">Playlist ricevuta.</string>
+    <string name="pair_no_network">Nessuna rete locale trovata. Collega la TV a Wi-Fi o Ethernet.</string>
+    <string name="pair_failed">Impossibile avviare l\'abbinamento. Riprova.</string>
+
+    <string name="channels_loading">Caricamento della playlist…</string>
+    <string name="channels_retry">Riprova</string>
+    <string name="load_error_network">Server non raggiungibile. Controlla la connessione e il link.</string>
+    <string name="load_error_http">Il server ha rifiutato la richiesta (HTTP %1$d).</string>
+    <string name="load_error_too_large">La playlist è troppo grande da caricare.</string>
+    <string name="load_error_empty">Nessuna voce riproducibile in questa playlist.</string>
+    <string name="load_error_unknown">Errore durante il caricamento della playlist.</string>
+
+    <string name="player_format">Formato: %1$s</string>
+    <string name="aspect_auto">Auto</string>
+    <string name="aspect_16_9">16:9</string>
+    <string name="aspect_4_3">4:3</string>
+    <string name="aspect_fit_screen">Adatta allo schermo</string>
+    <string name="player_previous">Precedente</string>
+    <string name="player_next">Successivo</string>
+    <string name="player_play">Riproduci</string>
+    <string name="player_pause">Pausa</string>
+    <string name="player_buffering">Buffering…</string>
+    <string name="player_error">Errore di riproduzione (%1$s)</string>
+    <string name="player_hint">◀ ▶ cambia formato · ▲ ▼ cambia canale · OK menu · Indietro esci</string>
+</resources>

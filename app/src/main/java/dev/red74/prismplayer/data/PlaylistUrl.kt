@@ -1,0 +1,39 @@
+package dev.red74.prismplayer.data
+
+import java.net.URI
+import java.net.URISyntaxException
+
+/** Validation of user-supplied playlist links. Only absolute http/https URLs with a host are accepted. */
+object PlaylistUrl {
+    const val MAX_LENGTH = 2048
+
+    enum class Reason { EMPTY, TOO_LONG, BAD_FORMAT, UNSUPPORTED_SCHEME }
+
+    sealed interface Result {
+        data class Valid(val url: String, val host: String) : Result
+        data class Invalid(val reason: Reason) : Result
+    }
+
+    fun validate(raw: String): Result {
+        val candidate = raw.trim()
+        if (candidate.isEmpty()) return Result.Invalid(Reason.EMPTY)
+        if (candidate.length > MAX_LENGTH) return Result.Invalid(Reason.TOO_LONG)
+        if (candidate.any { it.isWhitespace() || it.isISOControl() }) {
+            return Result.Invalid(Reason.BAD_FORMAT)
+        }
+        val uri = try {
+            URI(candidate)
+        } catch (e: URISyntaxException) {
+            return Result.Invalid(Reason.BAD_FORMAT)
+        }
+        val scheme = uri.scheme?.lowercase()
+        if (scheme != "http" && scheme != "https") return Result.Invalid(Reason.UNSUPPORTED_SCHEME)
+        val host = uri.host
+        if (host.isNullOrBlank()) return Result.Invalid(Reason.BAD_FORMAT)
+        return Result.Valid(candidate, host)
+    }
+
+    /** What the UI may show for a saved link: the host only, never the path or query (which often hold tokens). */
+    fun displayLabel(url: String): String =
+        runCatching { URI(url).host }.getOrNull()?.takeIf { it.isNotBlank() } ?: "—"
+}

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Prism Player</string>
+    <string name="built_by">Built by Red-74</string>
+
+    <string name="home_tagline">Your playlists, on the big screen.</string>
+    <string name="action_add_url">Add playlist URL</string>
+    <string name="action_pair">Pair with phone</string>
+    <string name="playlists_title">Your playlists</string>
+    <string name="playlists_empty">No playlists yet. Add a URL with the remote or pair your phone.</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_delete_confirm">Confirm?</string>
+    <string name="notice_added">Playlist saved</string>
+    <string name="notice_removed">Playlist removed</string>
+    <string name="notice_paired">Playlist received from your phone</string>
+    <string name="notice_save_failed">Could not save the playlist on this device</string>
+
+    <string name="import_title">Add playlist</string>
+    <string name="import_name_label">Name (optional)</string>
+    <string name="import_url_label">Playlist URL</string>
+    <string name="import_hint">Use the on-screen keyboard. Only http and https links are accepted.</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_back">Back</string>
+    <string name="error_url_empty">Enter a playlist URL.</string>
+    <string name="error_url_too_long">The URL is too long.</string>
+    <string name="error_url_format">The URL is not valid. Check for typos or spaces.</string>
+    <string name="error_url_scheme">The URL must start with http:// or https://</string>
+
+    <string name="pair_title">Pair with your phone</string>
+    <string name="pair_step_1">1. Scan the QR code with your phone camera.</string>
+    <string name="pair_step_2">2. Type or paste your playlist link on the page that opens.</string>
+    <string name="pair_step_3">3. The playlist appears here on the TV.</string>
+    <string name="pair_code_label">Code</string>
+    <string name="pair_expires_in">Expires in %1$s</string>
+    <string name="pair_manual">No camera? Open %1$s on your phone and enter the code.</string>
+    <string name="pair_security_note">Single-use code, valid for 3 minutes. Saved playlist links never leave the TV.</string>
+    <string name="pair_new_code">New code</string>
+    <string name="pair_starting">Starting pairing…</string>
+    <string name="pair_expired">The code has expired or is no longer valid.</string>
+    <string name="pair_done">Playlist received.</string>
+    <string name="pair_no_network">No local network found. Connect the TV to Wi-Fi or Ethernet.</string>
+    <string name="pair_failed">Could not start pairing. Try again.</string>
+
+    <string name="channels_loading">Loading playlist…</string>
+    <string name="channels_retry">Try again</string>
+    <string name="load_error_network">Could not reach the server. Check the connection and the link.</string>
+    <string name="load_error_http">The server refused the request (HTTP %1$d).</string>
+    <string name="load_error_too_large">The playlist is too large to load.</string>
+    <string name="load_error_empty">No playable entries were found in this playlist.</string>
+    <string name="load_error_unknown">Something went wrong while loading the playlist.</string>
+
+    <string name="player_format">Format: %1$s</string>
+    <string name="aspect_auto">Auto</string>
+    <string name="aspect_16_9">16:9</string>
+    <string name="aspect_4_3">4:3</string>
+    <string name="aspect_fit_screen">Fit to screen</string>
+    <string name="player_previous">Previous</string>
+    <string name="player_next">Next</string>
+    <string name="player_play">Play</string>
+    <string name="player_pause">Pause</string>
+    <string name="player_buffering">Buffering…</string>
+    <string name="player_error">Playback error (%1$s)</string>
+    <string name="player_hint">◀ ▶ change format · ▲ ▼ change channel · OK menu · Back exit</string>
+</resources>
