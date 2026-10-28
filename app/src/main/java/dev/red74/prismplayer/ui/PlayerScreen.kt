@@ -602,7 +602,7 @@ private fun Timeline(
 // --- panels ---------------------------------------------------------------------------------------------------
 
 @Composable
-private fun SidePanel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun SidePanel(modifier: Modifier = Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     GlassPanel(
         modifier
             .padding(end = 40.dp)
@@ -635,7 +635,7 @@ private fun channelLabel(count: Int): String = when (count) {
 }
 
 @Composable
-private fun TracksPanel(tracks: Tracks, player: Player, focus: FocusRequester, onClose: () -> Unit) {
+private fun androidx.compose.foundation.layout.ColumnScope.TracksPanel(tracks: Tracks, player: Player, focus: FocusRequester, onClose: () -> Unit) {
     val audio = ArrayList<TrackChoice>()
     val subs = ArrayList<TrackChoice>()
     var anyTextSelected = false
@@ -700,7 +700,7 @@ private fun TrackRow(choice: TrackChoice, focus: FocusRequester?, onClose: () ->
 }
 
 @Composable
-private fun EpisodesPanel(channels: List<Channel>, current: Int, focus: FocusRequester, onPick: (Int) -> Unit) {
+private fun androidx.compose.foundation.layout.ColumnScope.EpisodesPanel(channels: List<Channel>, current: Int, focus: FocusRequester, onPick: (Int) -> Unit) {
     PrismText(text = stringResource(R.string.np_episodes), size = 24.sp, weight = FontWeight.Bold)
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
         itemsIndexed(channels) { i, episode ->
@@ -722,7 +722,7 @@ private fun EpisodesPanel(channels: List<Channel>, current: Int, focus: FocusReq
 }
 
 @Composable
-private fun InfoPanel(player: Player, focus: FocusRequester, onClose: () -> Unit) {
+private fun androidx.compose.foundation.layout.ColumnScope.InfoPanel(player: Player, focus: FocusRequester, onClose: () -> Unit) {
     PrismText(text = stringResource(R.string.np_info), size = 24.sp, weight = FontWeight.Bold)
     val exo = player as? androidx.media3.exoplayer.ExoPlayer
     val video = exo?.videoFormat
