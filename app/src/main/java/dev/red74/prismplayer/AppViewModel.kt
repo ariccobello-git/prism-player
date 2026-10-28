@@ -15,7 +15,6 @@ import dev.red74.prismplayer.data.M3uParser
 import dev.red74.prismplayer.data.PlaylistStatus
 import dev.red74.prismplayer.data.PlaylistUrl
 import dev.red74.prismplayer.data.PlaylistStore
-import dev.red74.prismplayer.data.PlaylistUrl
 import dev.red74.prismplayer.data.SavedPlaylist
 import dev.red74.prismplayer.data.XmltvParser
 import dev.red74.prismplayer.player.AspectMode
