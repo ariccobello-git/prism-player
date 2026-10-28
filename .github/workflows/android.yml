@@ -176,10 +176,14 @@ jobs:
           - Install on Android TV with the Downloader app (see README).
           - SHA-256 is in prism-player-debug.apk.sha256.
           NOTES
-          gh release create "${TAG}" \
+          echo "::notice::Creating release ${TAG}"
+          if ! gh release create "${TAG}" \
             dist/prism-player-debug.apk dist/prism-player-debug.apk.sha256 \
             --repo "${GITHUB_REPOSITORY}" \
             --target "${GITHUB_SHA}" \
             --prerelease \
             --title "Prism Player ${TAG}" \
-            --notes-file notes.md
+            --notes-file notes.md 2> release-error.txt; then
+            echo "::error::gh release create failed for ${TAG}: $(tr '\n' ' ' < release-error.txt)"
+            exit 1
+          fi
