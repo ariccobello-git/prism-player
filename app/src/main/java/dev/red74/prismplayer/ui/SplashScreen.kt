@@ -126,8 +126,12 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
     DisposableEffect(Unit) {
         // Original synthesized sting, 5 s, timed to the animation (impact when the light leaves the prism).
         val player = runCatching {
-            MediaPlayer.create(context, R.raw.prism_intro)?.apply {
-                setVolume(0.85f, 0.85f)
+            val attributes = android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build()
+            MediaPlayer.create(context, R.raw.prism_intro, attributes, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE)?.apply {
+                setVolume(1f, 1f)
                 start()
             }
         }.getOrNull()
