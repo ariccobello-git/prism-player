@@ -168,6 +168,6 @@ class CatalogAndGuideTest {
         assertEquals(1, store.items.value.size)
         assertTrue(store.contains("http://a.example/get.php?u=1"))
         folder.deleteRecursively()
-        Unit
+        }
     }
 }
