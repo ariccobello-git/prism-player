@@ -31,6 +31,10 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -48,7 +52,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.flow.first
 
-private const val SPLASH_MS = 5_000
+private const val SPLASH_MS = 7_000
 private const val TOTAL_SECONDS = SPLASH_MS / 1000f
 private val Spectrum = listOf(
     Color(0xFFFF4D5E), // red
@@ -105,26 +109,27 @@ private const val CAMERA_DISTANCE = 5f
 /** Spins in with a long ease-out, settles at a three-quarter view and then sways a little. */
 private fun yawAt(seconds: Float): Float {
     val rest = Math.toRadians(-32.0).toFloat()
-    val spin = easeOut(fraction(seconds, 0f, 1.7f))
-    val sway = Math.toRadians(3.0).toFloat() * sin(seconds * 1.7f) * fraction(seconds, 1.7f, 0.5f)
+    val spin = easeOut(fraction(seconds, 0f, 2.6f))
+    val sway = Math.toRadians(3.0).toFloat() * sin(seconds * 1.7f) * fraction(seconds, 2.6f, 0.5f)
     return rest + Math.toRadians(420.0).toFloat() * (1f - spin) + sway
 }
 
 /**
- * Opening screen: a white beam reaches a glass prism and leaves it split into the spectrum,
+ * Opening screen: deep space, a white beam reaches a glass prism and leaves it split into a wide spectrum,
  * while a progress bar fills. It ends when the animation has finished and the app data is [ready].
  */
 @Composable
 fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
     val progress = remember { Animatable(0f) }
     val readyNow by rememberUpdatedState(ready)
+    val sky = remember { StarSky() }
 
-    // The beam animation is not interruptible; back is ignored for these few seconds.
+    // The animation is not interruptible; back is ignored for these few seconds.
     BackHandler(enabled = true) { }
 
     val context = LocalContext.current
     DisposableEffect(Unit) {
-        // Original synthesized sting, 5 s, timed to the animation (impact when the light leaves the prism).
+        // Original synthesized orchestral fanfare, 7 s, timed to the animation (the hit is when the light enters the glass).
         val player = runCatching {
             val attributes = android.media.AudioAttributes.Builder()
                 .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
@@ -147,78 +152,181 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
         onFinished()
     }
 
-    PrismBackground {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            GlassPanel(Modifier.size(width = 960.dp, height = 560.dp)) {
-                Column(
-                    Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 40.dp, vertical = 28.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    PrismScene(
-                        progress = { progress.value },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(300.dp),
-                    )
-                    Spacer(Modifier.height(18.dp))
-                    Column(
-                        Modifier.graphicsLayer { alpha = fraction(progress.value * TOTAL_SECONDS, 3.0f, 1.2f) },
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        PrismText(
-                            text = stringResource(R.string.app_name).uppercase(),
-                            size = 44.sp,
-                            weight = FontWeight.Bold,
-                        )
-                        PrismText(
-                            text = stringResource(R.string.built_by),
-                            size = 20.sp,
-                            color = PrismColors.Accent,
-                        )
-                        PrismText(
-                            text = stringResource(R.string.version_label, dev.red74.prismplayer.BuildConfig.BUILD_LABEL),
-                            size = 16.sp,
-                            color = PrismColors.TextSecondary,
-                        )
-                    }
-                    Spacer(Modifier.height(22.dp))
-                    Box(
-                        Modifier
-                            .size(width = 420.dp, height = 6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(Color.White.copy(alpha = 0.15f))
-                            .drawBehind {
-                                drawRect(
-                                    brush = Brush.horizontalGradient(listOf(PrismColors.Accent, PrismColors.AccentAlt)),
-                                    size = Size(size.width * progress.value, size.height),
-                                )
-                            },
-                    )
-                }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF02030A)),
+    ) {
+        SpaceAndPrism(sky = sky, progress = { progress.value }, modifier = Modifier.fillMaxSize())
+        Column(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 44.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Column(
+                Modifier.graphicsLayer { alpha = fraction(progress.value * TOTAL_SECONDS, 4.6f, 1.4f) },
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                PrismText(
+                    text = stringResource(R.string.app_name).uppercase(),
+                    size = 48.sp,
+                    weight = FontWeight.Bold,
+                )
+                PrismText(
+                    text = stringResource(R.string.built_by),
+                    size = 20.sp,
+                    color = PrismColors.Accent,
+                )
+                PrismText(
+                    text = stringResource(R.string.version_label, dev.red74.prismplayer.BuildConfig.BUILD_LABEL),
+                    size = 16.sp,
+                    color = PrismColors.TextSecondary,
+                )
             }
+            Spacer(Modifier.height(18.dp))
+            Box(
+                Modifier
+                    .size(width = 420.dp, height = 5.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color.White.copy(alpha = 0.14f))
+                    .drawBehind {
+                        drawRect(
+                            brush = Brush.horizontalGradient(listOf(PrismColors.Accent, PrismColors.AccentAlt)),
+                            size = Size(size.width * progress.value, size.height),
+                        )
+                    },
+            )
         }
     }
 }
 
+/** Fixed star field and Milky Way band, generated once (normalized 0..1 coordinates) so drawing stays cheap. */
+private class StarSky {
+    private val random = java.util.Random(74)
+    private fun cloud(count: Int, band: Boolean): FloatArray {
+        val out = FloatArray(count * 2)
+        for (i in 0 until count) {
+            var x = random.nextFloat()
+            var y = random.nextFloat()
+            if (band) {
+                // a diagonal galactic band with a gaussian cross-section
+                val along = random.nextFloat()
+                val across = random.nextGaussian().toFloat() * 0.07f
+                x = along * 1.2f - 0.1f - across * 0.55f
+                y = 0.95f - along * 0.9f + across * 0.85f
+            }
+            out[i * 2] = x
+            out[i * 2 + 1] = y
+        }
+        return out
+    }
+    val dust = cloud(1500, true)
+    val faint = cloud(380, false)
+    val medium = cloud(110, false)
+    val bright = cloud(22, false)
+    val tints = listOf(Color(0xFFFFF1DC), Color(0xFFDCE8FF), Color(0xFFFFE0C4), Color(0xFFFFFFFF))
+}
+
+private fun DrawScope.drawPoints(cloud: FloatArray, color: Color, widthPx: Float) {
+    val w = size.width
+    val h = size.height
+    val points = ArrayList<Offset>(cloud.size / 2)
+    var i = 0
+    while (i < cloud.size) {
+        points.add(Offset(cloud[i] * w, cloud[i + 1] * h))
+        i += 2
+    }
+    drawPoints(points, PointMode.Points, color, widthPx, StrokeCap.Round)
+}
+
 @Composable
-private fun PrismScene(progress: () -> Float, modifier: Modifier = Modifier) {
+private fun SpaceAndPrism(sky: StarSky, progress: () -> Float, modifier: Modifier = Modifier) {
     Canvas(modifier) {
         val seconds = progress() * TOTAL_SECONDS
         val w = size.width
         val h = size.height
-        val center = Offset(w * 0.42f, h * 0.5f)
-        val scale = h * 0.40f
+        val dp = density
+
+        // --- deep space: soft nebulae and galactic glow -----------------------------------------------------------
+        val reveal = fraction(seconds, 0f, 1.2f)
+        drawRect(
+            Brush.radialGradient(
+                listOf(Color(0xFF16204A).copy(alpha = 0.55f * reveal), Color.Transparent),
+                center = Offset(w * 0.72f, h * 0.28f), radius = w * 0.55f,
+            ),
+        )
+        drawRect(
+            Brush.radialGradient(
+                listOf(Color(0xFF3A1650).copy(alpha = 0.40f * reveal), Color.Transparent),
+                center = Offset(w * 0.18f, h * 0.78f), radius = w * 0.45f,
+            ),
+        )
+        drawRect(
+            Brush.radialGradient(
+                listOf(Color(0xFF0E3A52).copy(alpha = 0.30f * reveal), Color.Transparent),
+                center = Offset(w * 0.5f, h * 0.55f), radius = w * 0.6f,
+            ),
+        )
+        // Milky Way band: dense faint dust
+        drawPoints(sky.dust, Color(0xFFBFD0FF).copy(alpha = 0.28f * reveal), 1.2f * dp)
+        drawPoints(sky.dust, Color(0xFFFFE9D0).copy(alpha = 0.10f * reveal), 2.6f * dp)
+        // stars, three magnitudes; the bright ones twinkle slowly
+        drawPoints(sky.faint, Color.White.copy(alpha = 0.55f * reveal), 1.5f * dp)
+        val twinkle = 0.65f + 0.35f * sin(seconds * 2.3f)
+        val twinkle2 = 0.65f + 0.35f * sin(seconds * 1.7f + 2f)
+        drawPoints(sky.medium, Color(0xFFE8EEFF).copy(alpha = 0.85f * reveal * twinkle), 2.6f * dp)
+        drawPoints(sky.bright, Color.White.copy(alpha = reveal * twinkle2), 4.2f * dp)
+        // soft halos and 4-point glints on the brightest stars
+        var k = 0
+        while (k < sky.bright.size) {
+            val c = Offset(sky.bright[k] * w, sky.bright[k + 1] * h)
+            val tint = sky.tints[(k / 2) % sky.tints.size]
+            drawCircle(
+                Brush.radialGradient(listOf(tint.copy(alpha = 0.35f * reveal * twinkle2), Color.Transparent), center = c, radius = 16.dp.toPx()),
+                radius = 16.dp.toPx(), center = c, blendMode = BlendMode.Plus,
+            )
+            val arm = 9.dp.toPx() * twinkle2
+            drawLine(Color.White.copy(alpha = 0.5f * reveal), Offset(c.x - arm, c.y), Offset(c.x + arm, c.y), 1.dp.toPx())
+            drawLine(Color.White.copy(alpha = 0.5f * reveal), Offset(c.x, c.y - arm), Offset(c.x, c.y + arm), 1.dp.toPx())
+            k += 2
+        }
+        // vignette to push attention to the centre
+        drawRect(
+            Brush.radialGradient(
+                listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)),
+                center = Offset(w * 0.5f, h * 0.5f), radius = w * 0.75f,
+            ),
+        )
+
+        // --- the prism ----------------------------------------------------------------------------------------------
+        val center = Offset(w * 0.40f, h * 0.43f)
+        val scale = h * 0.21f
         val yaw = yawAt(seconds)
         val pitch = Math.toRadians(-14.0).toFloat()
-        val appear = fraction(seconds, 0f, 0.4f)
-
+        val appear = fraction(seconds, 0.2f, 0.9f)
         val pts = PrismCorners.map { project(it, yaw, pitch, center, scale) }
 
-        // 1) faces, far to near, as translucent glass; the exit face turns into a spectrum after the impact
-        val disperse = fraction(seconds, 2.3f, 0.6f)
+        val beamIn = fraction(seconds, 1.6f, 1.4f)         // beam reaches the glass
+        val inner = fraction(seconds, 3.0f, 0.7f)          // inside the glass
+        val fan = fraction(seconds, 3.7f, 1.9f)            // spectrum opens
+        val fanEase = easeOut(fan)
+        val hit = fraction(seconds, 3.0f, 0.3f) * (1f - fraction(seconds, 3.3f, 1.8f) * 0.5f)
+
+        // glass body: contact shadow + glow cast by the light
+        drawOval(
+            Brush.radialGradient(
+                listOf(Color.Black.copy(alpha = 0.55f * appear), Color.Transparent),
+                center = Offset(center.x, center.y + scale * 1.25f), radius = scale * 1.1f,
+            ),
+            topLeft = Offset(center.x - scale * 1.1f, center.y + scale * 1.05f), size = Size(scale * 2.2f, scale * 0.4f),
+        )
+        drawCircle(
+            Brush.radialGradient(listOf(Color(0xFF9FC4FF).copy(alpha = 0.16f * appear + 0.25f * hit), Color.Transparent), center = center, radius = scale * 2.1f),
+            radius = scale * 2.1f, center = center, blendMode = BlendMode.Plus,
+        )
+
+        val disperse = fraction(seconds, 3.7f, 0.9f)
         val ordered = PrismFaces.sortedBy { face -> face.corners.map { pts[it].depth }.average() }
         for (face in ordered) {
             val path = Path()
@@ -226,84 +334,126 @@ private fun PrismScene(progress: () -> Float, modifier: Modifier = Modifier) {
                 if (i == 0) path.moveTo(pts[index].x, pts[index].y) else path.lineTo(pts[index].x, pts[index].y)
             }
             path.close()
-            val facing = face.corners.map { pts[it].depth }.average() > 0.0
-            drawPath(path, Color.White.copy(alpha = appear * if (facing) 0.20f else 0.10f))
+            val depthAvg = face.corners.map { pts[it].depth }.average().toFloat()
+            val facing = depthAvg > 0f
+            val top = face.corners.minOf { pts[it].y }
+            val bottom = face.corners.maxOf { pts[it].y }
+            val left = face.corners.minOf { pts[it].x }
+            val right = face.corners.maxOf { pts[it].x }
+            // glass: bluish-white body, lighter at one end, with a darker core in the thickness
+            val base = if (facing) 0.30f else 0.12f
+            drawPath(
+                path,
+                Brush.linearGradient(
+                    listOf(Color(0xFFE6F1FF).copy(alpha = appear * (base + 0.14f)), Color(0xFF6C9BE0).copy(alpha = appear * base * 0.7f), Color(0xFFBFD8FF).copy(alpha = appear * (base + 0.05f))),
+                    start = Offset(left, top), end = Offset(right, bottom),
+                ),
+            )
+            // internal caustic: the light travelling through the glass
+            if (inner > 0f) {
+                drawPath(path, Color.White.copy(alpha = 0.18f * hit.coerceAtLeast(0f)), blendMode = BlendMode.Plus)
+            }
             if (face.isSpectrum && disperse > 0f) {
-                val left = face.corners.minOf { pts[it].x }
-                val right = face.corners.maxOf { pts[it].x }
                 drawPath(
                     path,
                     Brush.horizontalGradient(
-                        colors = Spectrum.map { it.copy(alpha = 0.67f * disperse) },
-                        startX = left,
-                        endX = right,
+                        colors = Spectrum.map { it.copy(alpha = 0.55f * disperse) },
+                        startX = left, endX = right,
                     ),
+                    blendMode = BlendMode.Plus,
                 )
             }
+            // specular streak on the faces that look at us
+            if (facing) {
+                val streak = Path().apply {
+                    moveTo(left + (right - left) * 0.15f, top + (bottom - top) * 0.10f)
+                    lineTo(left + (right - left) * 0.32f, top + (bottom - top) * 0.10f)
+                    lineTo(left + (right - left) * 0.12f, bottom - (bottom - top) * 0.10f)
+                    lineTo(left + (right - left) * 0.02f, bottom - (bottom - top) * 0.10f)
+                    close()
+                }
+                drawPath(streak, Color.White.copy(alpha = 0.16f * appear), blendMode = BlendMode.Plus)
+            }
         }
 
-        // 2) glass edges: near ones bright, far ones faint
+        // bevelled edges: soft halo + crisp core, near brighter than far
         for ((from, to) in PrismEdges) {
             val near = (pts[from].depth + pts[to].depth) / 2f > 0f
-            drawLine(
-                color = Color.White.copy(alpha = appear * if (near) 0.95f else 0.35f),
-                start = Offset(pts[from].x, pts[from].y),
-                end = Offset(pts[to].x, pts[to].y),
-                strokeWidth = 3.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
+            val a = Offset(pts[from].x, pts[from].y)
+            val b = Offset(pts[to].x, pts[to].y)
+            drawLine(Color(0xFFBFD8FF).copy(alpha = appear * if (near) 0.28f else 0.10f), a, b, 9.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+            drawLine(Color.White.copy(alpha = appear * if (near) 0.95f else 0.35f), a, b, if (near) 2.4.dp.toPx() else 1.4.dp.toPx(), StrokeCap.Round)
         }
 
-        // where the white beam enters (left face) and where it leaves (right face), in 3D
-        fun onEdge(a: Int, b: Int, u: Float): Projected {
+        fun onEdge(a: Int, b: Int, u: Float): Offset {
             val p = PrismCorners[a]
             val q = PrismCorners[b]
-            val pointOnEdge = Vec3(lerp(p.x, q.x, u), lerp(p.y, q.y, u), 0f)
-            return project(pointOnEdge, yaw, pitch, center, scale)
+            val pr = project(Vec3(lerp(p.x, q.x, u), lerp(p.y, q.y, u), 0f), yaw, pitch, center, scale)
+            return Offset(pr.x, pr.y)
         }
-        val entry = onEdge(0, 1, 0.55f).let { Offset(it.x, it.y) }
-        val exit = onEdge(0, 2, 0.68f).let { Offset(it.x, it.y) }
+        val entry = onEdge(0, 1, 0.55f)
+        val exit = onEdge(0, 2, 0.68f)
 
-        // 3) the white beam travels in from the left edge
-        val beam = fraction(seconds, 0.9f, 1.0f)
-        if (beam > 0f) {
-            val start = Offset(0f, entry.y)
-            val end = lerp(start, Offset(entry.x, entry.y), beam)
-            drawLine(Color.White.copy(alpha = 0.22f), start, end, strokeWidth = 18.dp.toPx(), cap = StrokeCap.Round)
-            drawLine(Color.White, start, end, strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round)
-        }
-
-        // 4) inside the glass it bends towards the base
-        val inner = fraction(seconds, 1.9f, 0.4f)
-        if (inner > 0f) {
-            drawLine(
-                color = Color.White.copy(alpha = 0.9f),
-                start = entry,
-                end = lerp(entry, exit, inner),
-                strokeWidth = 4.dp.toPx(),
-                cap = StrokeCap.Round,
+        // --- white beam: layered glow, with a faint lens flare where it touches the glass ------------------------
+        if (beamIn > 0f) {
+            val start = Offset(-20f, entry.y + (h * 0.04f) * (1f - beamIn))
+            val end = lerp(start, entry, beamIn)
+            drawLine(Color(0xFFBFD8FF).copy(alpha = 0.10f), start, end, 38.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+            drawLine(Color(0xFFDDEBFF).copy(alpha = 0.22f), start, end, 18.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+            drawLine(Color.White.copy(alpha = 0.55f), start, end, 8.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+            drawLine(Color.White, start, end, 3.5.dp.toPx(), StrokeCap.Round)
+            // the leading tip glows
+            drawCircle(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f), Color.Transparent), center = end, radius = 22.dp.toPx()),
+                radius = 22.dp.toPx(), center = end, blendMode = BlendMode.Plus,
             )
         }
-
-        // 5) it leaves split into the seven colours, fanning out
-        val fan = fraction(seconds, 2.3f, 1.5f)
-        if (fan > 0f) {
-            val eased = 1f - (1f - fan) * (1f - fan)
-            val reach = (w - exit.x) * 1.05f * eased
-            Spectrum.forEachIndexed { index, color ->
-                val radians = (4f + index * 4.6f * eased) * PI.toFloat() / 180f
-                val end = Offset(exit.x + cos(radians) * reach, exit.y + sin(radians) * reach)
-                drawLine(color.copy(alpha = 0.22f), exit, end, strokeWidth = 16.dp.toPx(), cap = StrokeCap.Round)
-                drawLine(color, exit, end, strokeWidth = 5.dp.toPx(), cap = StrokeCap.Round)
-            }
+        if (hit > 0f) {
+            val flare = 70.dp.toPx() * hit
             drawCircle(
-                brush = Brush.radialGradient(
-                    listOf(Color.White.copy(alpha = 0.85f * eased), Color.Transparent),
-                    center = exit,
-                    radius = 26.dp.toPx(),
-                ),
-                radius = 26.dp.toPx(),
-                center = exit,
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.8f * hit), Color(0xFF9FC4FF).copy(alpha = 0.25f * hit), Color.Transparent), center = entry, radius = flare),
+                radius = flare, center = entry, blendMode = BlendMode.Plus,
+            )
+            drawLine(Color.White.copy(alpha = 0.5f * hit), Offset(entry.x - flare * 1.6f, entry.y), Offset(entry.x + flare * 1.6f, entry.y), 1.5.dp.toPx(), blendMode = BlendMode.Plus)
+        }
+        // inside the glass the beam bends towards the base
+        if (inner > 0f) {
+            val tip = lerp(entry, exit, inner)
+            drawLine(Color.White.copy(alpha = 0.35f), entry, tip, 12.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+            drawLine(Color.White.copy(alpha = 0.95f), entry, tip, 3.dp.toPx(), StrokeCap.Round)
+        }
+
+        // --- the spectrum: seven wide luminous bands fanning out, plus bloom -------------------------------------
+        if (fan > 0f) {
+            val reach = (w - exit.x) * 1.35f * fanEase
+            val spread = 5.0f * (PI.toFloat() / 180f)   // angular step between band centres, radians at full opening
+            val first = 3f * (PI.toFloat() / 180f)
+            val bandHalf = spread * 0.52f * fanEase
+            Spectrum.forEachIndexed { index, color ->
+                val centre = first + index * spread * fanEase
+                val a1 = centre - bandHalf
+                val a2 = centre + bandHalf
+                val p1 = Offset(exit.x + cos(a1) * reach, exit.y + sin(a1) * reach)
+                val p2 = Offset(exit.x + cos(a2) * reach, exit.y + sin(a2) * reach)
+                val tip = Offset(exit.x + cos(centre) * reach, exit.y + sin(centre) * reach)
+                val band = Path().apply { moveTo(exit.x, exit.y); lineTo(p1.x, p1.y); lineTo(p2.x, p2.y); close() }
+                // soft wide glow, then the saturated band, then a bright thin core
+                drawPath(
+                    band,
+                    Brush.linearGradient(listOf(color.copy(alpha = 0.55f), color.copy(alpha = 0.30f), color.copy(alpha = 0.0f)), start = exit, end = tip),
+                    blendMode = BlendMode.Plus,
+                )
+                drawLine(
+                    Brush.linearGradient(listOf(Color.White.copy(alpha = 0.9f), color.copy(alpha = 0.95f), color.copy(alpha = 0.15f)), start = exit, end = tip),
+                    exit, tip, 4.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus,
+                )
+                drawLine(color.copy(alpha = 0.18f), exit, tip, 30.dp.toPx() * fanEase, StrokeCap.Round, blendMode = BlendMode.Plus)
+            }
+            // bloom where the light leaves the glass
+            val bloom = 90.dp.toPx() * (0.6f + 0.4f * fanEase)
+            drawCircle(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.95f * fanEase), Color(0xFFFFF0D0).copy(alpha = 0.35f * fanEase), Color.Transparent), center = exit, radius = bloom),
+                radius = bloom, center = exit, blendMode = BlendMode.Plus,
             )
         }
     }
