@@ -45,10 +45,16 @@ class PairViewModel(application: Application) : AndroidViewModel(application) {
     private var server: PairingServer? = null
     private var ticker: Job? = null
 
+    // Set on the server thread as soon as a playlist is accepted, so the ticker cannot mistake the
+    // burned code for an expired one and shut the server down before the phone gets its answer.
+    @Volatile
+    private var received = false
+
     /** Starts (or restarts) pairing. Any earlier code is invalidated by [PairingManager.newSession]. */
     fun start() {
         stopServer()
         ticker?.cancel()
+        received = false
         _state.value = PairUiState.Starting
 
         val ip = LocalNetwork.localIpv4()
@@ -69,7 +75,7 @@ class PairViewModel(application: Application) : AndroidViewModel(application) {
         val address = "http://$ip:${candidate.listeningPort}"
         manager.newSession()
         ticker = viewModelScope.launch {
-            while (isActive) {
+            while (isActive && !received) {
                 val session = manager.current()
                 val remaining = manager.remainingMs()
                 if (session == null || remaining <= 0L) {
@@ -97,6 +103,7 @@ class PairViewModel(application: Application) : AndroidViewModel(application) {
 
     // Runs on a server thread; hop to the main scope before touching state.
     private fun onPlaylistReceived(name: String, url: String) {
+        received = true
         viewModelScope.launch {
             ticker?.cancel()
             _state.value = try {

@@ -71,6 +71,29 @@ class PairingServerTest {
     private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
 
     @Test
+    fun browserStyleKeepAliveSubmitWithSplitHeadersAndBodyIsAccepted() {
+        val code = manager.newSession().code
+        val body = form(code, "https://example.com/list.m3u")
+        java.net.Socket("127.0.0.1", port).use { socket ->
+            socket.soTimeout = 5_000
+            val out = socket.getOutputStream()
+            out.write(
+                ("POST /submit HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nConnection: keep-alive\r\n" +
+                    "Content-Type: application/x-www-form-urlencoded\r\nContent-Length: ${body.length}\r\n\r\n")
+                    .toByteArray(),
+            )
+            out.flush()
+            Thread.sleep(300) // headers and body arrive in separate packets, as some browsers send them
+            out.write(body.toByteArray())
+            out.flush()
+            val response = socket.getInputStream().readBytes().decodeToString() // returns only if the server closes
+            assertTrue(response.startsWith("HTTP/1.1 200"))
+            assertTrue(response.lowercase().contains("connection: close"))
+        }
+        assertEquals(listOf("My list" to "https://example.com/list.m3u"), received.toList())
+    }
+
+    @Test
     fun validCodeServesTheFormAndSecurityHeaders() {
         val code = manager.newSession().code
         val reply = get("/pair?c=$code")

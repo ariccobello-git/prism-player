@@ -94,13 +94,16 @@ class PairingServer(
 
     private fun html(status: Response.IStatus, body: String): Response {
         val response = NanoHTTPD.newFixedLengthResponse(status, "text/html; charset=utf-8", body)
+        // One request per connection: phones keep the pairing form open for a long time while typing,
+        // and a keep-alive connection reused after the server's read timeout would silently drop the POST.
+        response.closeConnection(true)
         response.addHeader("Cache-Control", "no-store")
         response.addHeader("Referrer-Policy", "no-referrer")
         response.addHeader("X-Content-Type-Options", "nosniff")
         response.addHeader("X-Frame-Options", "DENY")
         response.addHeader(
             "Content-Security-Policy",
-            "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+            "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
         )
         return response
     }

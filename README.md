@@ -66,7 +66,7 @@ Regole del codice (applicate in `PairingManager` e coperte da test):
 **Rete locale**
 
 - Il server di abbinamento è **solo in scrittura**: serve moduli statici e accetta un invio per codice valido. Non esiste alcun endpoint che elenchi, legga o esporti le playlist salvate, quindi i loro URL non transitano mai sulla rete locale. Un test automatico lo verifica.
-- Accetta solo client locali (loopback, indirizzi privati, link-local) e risponde con `Cache-Control: no-store`, `Referrer-Policy: no-referrer` e una Content-Security-Policy restrittiva. La pagina non usa JavaScript.
+- Accetta solo client locali (loopback, indirizzi privati, link-local) e risponde con `Cache-Control: no-store`, `Referrer-Policy: no-referrer` e una Content-Security-Policy restrittiva, e chiude la connessione dopo ogni risposta. La pagina non usa JavaScript.
 - Permesso Android richiesto: solo `INTERNET`.
 
 **Limiti noti (da conoscere prima dell'uso)**
