@@ -3,6 +3,7 @@ name: Android CI
 on:
   push:
     branches: [main, initial-scaffold]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -121,3 +122,46 @@ jobs:
             app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
           retention-days: 14
+
+  # Runs only for tags like v0.1.0-debug and only after the build job succeeded.
+  # The APK is attached to a public pre-release so it has a direct, login-free download link
+  # (useful for the Downloader app on Android TV).
+  release:
+    name: Publish debug APK as pre-release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download APK built by this run
+        uses: actions/download-artifact@v4
+        with:
+          name: prism-player-debug-apk
+          path: dist
+
+      - name: Create pre-release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cp dist/app-debug.apk dist/prism-player-debug.apk
+          (cd dist && sha256sum prism-player-debug.apk > prism-player-debug.apk.sha256)
+          cat > notes.md <<NOTES
+          Debug build of Prism Player, built by GitHub Actions from commit ${GITHUB_SHA}.
+
+          - Signed with the Android debug key: for testing only, not for distribution.
+          - Install on Android TV with the Downloader app (see README).
+          - SHA-256 is in prism-player-debug.apk.sha256.
+          NOTES
+          gh release create "${TAG}" \
+            dist/prism-player-debug.apk dist/prism-player-debug.apk.sha256 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --prerelease \
+            --title "Prism Player ${TAG}" \
+            --notes-file notes.md
