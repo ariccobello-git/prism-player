@@ -70,7 +70,7 @@ class PairingServer(
         if (!manager.verify(code)) return html(Response.Status.FORBIDDEN, PairPage.denied(lang))
 
         // A typo in the link must not burn the code: validate first, consume only when the input is good.
-        val validated = PlaylistUrl.validate(field("u"))
+        val validated = PlaylistUrl.validate(PlaylistUrl.withDefaultScheme(field("u")))
         if (validated !is PlaylistUrl.Result.Valid) {
             return html(Response.Status.BAD_REQUEST, PairPage.form(code, lang, showError = true))
         }

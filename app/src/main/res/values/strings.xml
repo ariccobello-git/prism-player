@@ -18,7 +18,7 @@
     <string name="import_title">Add playlist</string>
     <string name="import_name_label">Name (optional)</string>
     <string name="import_url_label">Playlist URL</string>
-    <string name="import_hint">Use the on-screen keyboard. Only http and https links are accepted.</string>
+    <string name="import_hint">Use the on-screen keyboard. You can leave out http:// (http is assumed). Only http and https links are accepted.</string>
     <string name="action_save">Save</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_back">Back</string>

@@ -20,6 +20,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,11 +37,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -69,6 +73,26 @@ object PrismColors {
 
 @Composable
 fun PrismTheme(content: @Composable () -> Unit) {
+    // The layouts are drawn for a 1280x720 dp canvas. TV sticks often report a smaller one
+    // (a 1080p stick at 320 dpi is 960x540 dp), so scale the whole UI down to fit instead of clipping text.
+    // The system font scale is ignored on purpose: on a TV it only pushes text off the screen.
+    val configuration = LocalConfiguration.current
+    val base = LocalDensity.current
+    val fit = minOf(
+        configuration.screenWidthDp / DESIGN_WIDTH_DP,
+        configuration.screenHeightDp / DESIGN_HEIGHT_DP,
+        1f,
+    ).coerceAtLeast(0.5f)
+    CompositionLocalProvider(LocalDensity provides Density(base.density * fit, fontScale = 1f)) {
+        ThemedContent(content)
+    }
+}
+
+private const val DESIGN_WIDTH_DP = 1280f
+private const val DESIGN_HEIGHT_DP = 720f
+
+@Composable
+private fun ThemedContent(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
             primary = PrismColors.Accent,

@@ -45,4 +45,12 @@ class PlaylistUrlTest {
         assertEquals("media.example.com", label)
         assertEquals("—", PlaylistUrl.displayLabel("not a url"))
     }
+
+    @Test
+    fun withDefaultSchemeAddsHttpOnlyWhenMissing() {
+        assertEquals("http://example.com:8080/a.m3u", PlaylistUrl.withDefaultScheme("  example.com:8080/a.m3u "))
+        assertEquals("https://example.com/a.m3u", PlaylistUrl.withDefaultScheme("https://example.com/a.m3u"))
+        assertEquals("", PlaylistUrl.withDefaultScheme("   "))
+        assertEquals("ftp://example.com/a", PlaylistUrl.withDefaultScheme("ftp://example.com/a"))
+    }
 }

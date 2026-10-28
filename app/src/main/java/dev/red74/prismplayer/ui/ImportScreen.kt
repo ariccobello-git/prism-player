@@ -37,13 +37,13 @@ fun ImportScreen(
     onBack: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("http://") }
+    var url by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<PlaylistUrl.Reason?>(null) }
     val urlFocus = remember { FocusRequester() }
     RequestFocusOnEnter(urlFocus)
 
     fun submit() {
-        val result = onSubmit(name, url)
+        val result = onSubmit(name, PlaylistUrl.withDefaultScheme(url))
         if (result is PlaylistUrl.Result.Invalid) error = result.reason
     }
 

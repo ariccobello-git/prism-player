@@ -32,14 +32,14 @@ internal object PairPage {
         body = """
             <h1>${t(lang, "Aggiungi una playlist", "Add a playlist")}</h1>
             <p>${t(lang, "Il link verrà inviato alla tua TV.", "The link will be sent to your TV.")}</p>
-            ${if (showError) """<p class="err">${t(lang, "Link non valido: usa un indirizzo completo che inizia con http:// o https://", "Invalid link: use a full address starting with http:// or https://")}</p>""" else ""}
+            ${if (showError) """<p class="err">${t(lang, "Link non valido: controlla l'indirizzo e riprova.", "Invalid link: check the address and try again.")}</p>""" else ""}
             <form method="post" action="/submit" autocomplete="off">
               <input type="hidden" name="c" value="${esc(code)}">
               <label for="n">${t(lang, "Nome (facoltativo)", "Name (optional)")}</label>
               <input id="n" name="n" type="text" maxlength="60">
               <label for="u">${t(lang, "Link della playlist", "Playlist link")}</label>
-              <input id="u" name="u" type="url" inputmode="url" maxlength="2048" required
-                     autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://">
+              <input id="u" name="u" type="text" inputmode="url" maxlength="2048" required
+                     autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="esempio.com/lista.m3u">
               <button type="submit">${t(lang, "Invia alla TV", "Send to TV")}</button>
             </form>
             <p class="note">${t(lang, "Nota: il link viaggia sulla tua rete locale in HTTP non cifrato. Usa solo una rete di cui ti fidi.", "Note: the link travels over your local network as unencrypted HTTP. Only use a network you trust.")}</p>

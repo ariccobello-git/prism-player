@@ -18,7 +18,7 @@
     <string name="import_title">Aggiungi playlist</string>
     <string name="import_name_label">Nome (facoltativo)</string>
     <string name="import_url_label">URL della playlist</string>
-    <string name="import_hint">Usa la tastiera su schermo. Sono accettati solo link http e https.</string>
+    <string name="import_hint">Usa la tastiera su schermo. Puoi scrivere il link anche senza http:// (si usa http). Sono accettati solo link http e https.</string>
     <string name="action_save">Salva</string>
     <string name="action_cancel">Annulla</string>
     <string name="action_back">Indietro</string>

@@ -94,6 +94,14 @@ class PairingServerTest {
     }
 
     @Test
+    fun linkWithoutSchemeIsAcceptedAsHttp() {
+        val code = manager.newSession().code
+        val reply = post("/submit", form(code, "example.com:8080/list.m3u"))
+        assertEquals(200, reply.status)
+        assertEquals(listOf("My list" to "http://example.com:8080/list.m3u"), received.toList())
+    }
+
+    @Test
     fun validCodeServesTheFormAndSecurityHeaders() {
         val code = manager.newSession().code
         val reply = get("/pair?c=$code")

@@ -14,6 +14,12 @@ object PlaylistUrl {
         data class Invalid(val reason: Reason) : Result
     }
 
+    /** Lets people type `example.com:8080/list.m3u`: when no scheme is given, plain http is assumed. */
+    fun withDefaultScheme(raw: String): String {
+        val trimmed = raw.trim()
+        return if (trimmed.isEmpty() || trimmed.contains("://")) trimmed else "http://$trimmed"
+    }
+
     fun validate(raw: String): Result {
         val candidate = raw.trim()
         if (candidate.isEmpty()) return Result.Invalid(Reason.EMPTY)
