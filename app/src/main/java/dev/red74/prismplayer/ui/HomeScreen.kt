@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,11 @@ fun HomeScreen(
 ) {
     val firstFocus = remember { FocusRequester() }
     RequestFocusOnEnter(firstFocus)
+    // Two levels side by side: the menu and the playlists. Back from the playlists goes to the menu.
+    var listFocused by remember { mutableStateOf(false) }
+    androidx.activity.compose.BackHandler(enabled = listFocused) {
+        runCatching { firstFocus.requestFocus() }
+    }
 
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -131,6 +137,7 @@ fun HomeScreen(
                 LazyColumn(
                     Modifier
                         .fillMaxSize()
+                        .onFocusChanged { listFocused = it.hasFocus }
                         .confineFocus()
                         .padding(28.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),

@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
@@ -101,11 +102,21 @@ fun LibraryScreen(
     }
 
     // Back always goes up exactly one level: detail, then the opened category, then a search, then the list screen.
-    BackHandler(enabled = nav.query.isNotEmpty()) {
+    // Levels: tab row (tabs + search) above, content below. Back from the content goes up to the tab row; Back from
+    // the tab row clears a search first and then leaves the screen. OK on a tab goes down into the content.
+    var contentFocused by remember { mutableStateOf(false) }
+    BackHandler(enabled = nav.query.isNotEmpty() && !contentFocused) {
         onNav { it.copy(query = "", itemIndex = 0, resume = false) }
     }
-    BackHandler(enabled = nav.inCategory) {
-        onNav { it.copy(inCategory = false, resume = true, itemIndex = 0) }
+    BackHandler(enabled = contentFocused) {
+        runCatching { tabFocus.requestFocus() }
+    }
+    // A request to focus the content that found nothing to focus (empty tab) must not linger.
+    LaunchedEffect(nav.resume) {
+        if (nav.resume) {
+            kotlinx.coroutines.delay(600)
+            onNav { it.copy(resume = false) }
+        }
     }
     BackHandler(enabled = nav.movieUrl != null || nav.showTitle != null) {
         onNav { it.copy(movieUrl = null, showTitle = null, showGroup = null, season = -1, resume = true) }
@@ -158,7 +169,7 @@ fun LibraryScreen(
                             )
                         }
                         TopBar(nav, onNav, tabFocus)
-                        Box(Modifier.fillMaxSize()) {
+                        Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }) {
                             LibraryBody(state.catalog, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
                         }
                     }
@@ -187,8 +198,8 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
                 onClick = {
                     onNav {
                         it.copy(
-                            tab = tab, category = 0, inCategory = false, itemIndex = 0, movieUrl = null,
-                            showTitle = null, showGroup = null, season = -1, resume = false,
+                            tab = tab, category = 0, itemIndex = 0, movieUrl = null,
+                            showTitle = null, showGroup = null, season = -1, resume = true,
                         )
                     }
                 },
@@ -230,16 +241,15 @@ private fun LibraryBody(
                         .filter { it.name.contains(query, ignoreCase = true) }.take(SEARCH_LIMIT).toList()
                 }
             }
+            val everything = remember(catalog) { catalog.live.flatMap { it.items } }
             if (catalog.live.isEmpty()) {
                 EmptyNote(R.string.library_empty)
-            } else if (query.isEmpty() && !nav.inCategory) {
-                CategoryList(catalog.live.map { it.name }, catalog.live.map { it.items.size }, nav, onNav)
             } else if (query.isEmpty()) {
-                LiveView(catalog.live, null, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
+                LiveView(everything, true, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
             } else if (results.isEmpty()) {
                 EmptyNote(R.string.search_none)
             } else {
-                LiveView(null, results, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
+                LiveView(results, false, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
             }
         }
 
@@ -258,8 +268,6 @@ private fun LibraryBody(
                 movie != null -> MovieDetail(movie, favorites, onNav, onPlay, onToggleFavorite)
                 catalog.movies.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
-                query.isEmpty() && !nav.inCategory ->
-                    CategoryList(catalog.movies.map { it.name }, catalog.movies.map { it.items.size }, nav, onNav)
                 else -> {
                     val flat = if (query.isEmpty()) null else results
                     CategoryAndGrid(
@@ -298,8 +306,6 @@ private fun LibraryBody(
                 show != null -> ShowDetail(show, nav, favorites, onNav, onPlay, onToggleFavorite)
                 catalog.series.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
-                query.isEmpty() && !nav.inCategory ->
-                    CategoryList(catalog.series.map { it.name }, catalog.series.map { it.shows.size }, nav, onNav)
                 else -> {
                     val flat = if (query.isEmpty()) null else results
                     CategoryAndGrid(
@@ -336,53 +342,31 @@ private fun EmptyNote(text: Int) {
  * in that category until Back is pressed.
  */
 @Composable
-private fun CategoryList(
-    names: List<String>,
-    counts: List<Int>,
-    nav: LibraryNav,
-    onNav: NavChange,
-) {
+private fun CategoryColumn(names: List<String>, counts: List<Int>, nav: LibraryNav, onNav: NavChange, modifier: Modifier) {
     val other = stringResource(R.string.category_other)
     val selected = nav.category.coerceIn(0, (names.size - 1).coerceAtLeast(0))
     val state = rememberLazyListState(initialFirstVisibleItemIndex = selected)
-    val focus = remember { FocusRequester() }
-    // Coming back from a category, the cursor lands on the category that was open.
-    LaunchedEffect(Unit) {
-        if (nav.resume) {
-            withFrameNanos { }
-            runCatching { focus.requestFocus() }
-            onNav { it.copy(resume = false) }
-        }
-    }
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-        LazyColumn(
-            Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(0.7f),
-            state = state,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            itemsIndexed(names) { index, name ->
-                GlassSurface(
-                    onClick = { onNav { it.copy(inCategory = true, category = index, itemIndex = 0, resume = true) } },
-                    focusRequester = if (index == selected) focus else null,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        PrismText(
-                            text = name.ifBlank { other },
-                            size = 22.sp,
-                            weight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            modifier = Modifier.weight(1f),
-                        )
-                        PrismText(
-                            text = counts[index].toString(),
-                            size = 18.sp,
-                            color = PrismColors.TextSecondary,
-                            modifier = Modifier.padding(start = 12.dp),
-                        )
-                    }
+    LazyColumn(modifier, state = state, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        itemsIndexed(names) { index, name ->
+            GlassSurface(
+                onClick = { onNav { it.copy(category = index, itemIndex = 0, resume = true) } },
+                tint = if (index == selected) PrismColors.Accent else null,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    PrismText(
+                        text = name.ifBlank { other },
+                        size = 17.sp,
+                        weight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        modifier = Modifier.weight(1f),
+                    )
+                    PrismText(
+                        text = counts[index].toString(),
+                        size = 14.sp,
+                        color = PrismColors.TextSecondary,
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
                 }
             }
         }
@@ -421,8 +405,8 @@ private fun FavoriteButton(isFavorite: Boolean, onClick: () -> Unit, modifier: M
 
 @Composable
 private fun LiveView(
-    categories: List<Category>?,
-    flat: List<Channel>?,
+    list: List<Channel>,
+    restorable: Boolean,
     nav: LibraryNav,
     epg: EpgData,
     favorites: Set<String>,
@@ -430,8 +414,6 @@ private fun LiveView(
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
     onToggleFavorite: (String) -> Unit,
 ) {
-    val category = nav.category.coerceIn(0, ((categories?.size ?: 1) - 1).coerceAtLeast(0))
-    val list: List<Channel> = flat ?: categories?.getOrNull(category)?.items.orEmpty()
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = nav.itemIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0)),
     )
@@ -440,7 +422,7 @@ private fun LiveView(
     var fullscreen by remember { mutableStateOf(false) }
     val rowFocus = remember { FocusRequester() }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(nav.resume) {
         if (nav.resume) {
             withFrameNanos { }
             runCatching { rowFocus.requestFocus() }
@@ -468,8 +450,8 @@ private fun LiveView(
                     onFocused = { preview = channel },
                     onClick = {
                         fullscreen = true
-                        onNav { it.copy(itemIndex = if (flat == null) index else 0, resume = flat == null) }
-                        onPlay(list, index, flat == null)
+                        onNav { it.copy(itemIndex = if (restorable) index else 0, resume = restorable) }
+                        onPlay(list, index, restorable)
                     },
                 )
             }
@@ -480,8 +462,6 @@ private fun LiveView(
             nowMs = nowMs,
             hasGuide = !epg.isEmpty,
             active = !fullscreen,
-            isFavorite = preview?.let { FavoriteKey.of(it) in favorites } == true,
-            onToggleFavorite = { preview?.let { onToggleFavorite(FavoriteKey.of(it)) } },
             modifier = Modifier
                 .weight(0.42f)
                 .fillMaxHeight(),
@@ -543,8 +523,6 @@ private fun PreviewPane(
     nowMs: Long,
     hasGuide: Boolean,
     active: Boolean,
-    isFavorite: Boolean,
-    onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     GlassPanel(modifier, cornerRadius = 22.dp) {
@@ -583,7 +561,6 @@ private fun PreviewPane(
                         maxLines = 1,
                     )
                 }
-                FavoriteButton(isFavorite, onToggleFavorite, Modifier.fillMaxWidth())
                 PrismText(text = stringResource(R.string.preview_hint), size = 14.sp, color = PrismColors.TextSecondary)
             }
         }
@@ -675,7 +652,7 @@ private fun CategoryAndGrid(
     val itemFocus = remember { FocusRequester() }
     val target = nav.itemIndex.coerceIn(0, (total - 1).coerceAtLeast(0))
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(nav.resume) {
         if (nav.resume) {
             withFrameNanos { }
             runCatching { itemFocus.requestFocus() }
@@ -684,11 +661,14 @@ private fun CategoryAndGrid(
     }
 
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (showCategories) {
+            CategoryColumn(names, counts, nav, onNav, Modifier.weight(0.27f).fillMaxHeight())
+        }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
             state = gridState,
             modifier = Modifier
-                .weight(1f)
+                .weight(if (showCategories) 0.73f else 1f)
                 .fillMaxHeight(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
