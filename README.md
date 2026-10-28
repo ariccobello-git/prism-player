@@ -127,6 +127,17 @@ Il workflow `.github/workflows/android.yml` parte a ogni push su `main` e `initi
 
 Il riepilogo del run riporta numero di test, dimensione e SHA-256 dell'APK. Scarica l'APK **solo da un run verde**.
 
+### Release con link diretto (anche da telefono)
+
+Gli artefatti delle Actions richiedono il login a GitHub e sono zip. Per avere un link diretto, utile per l'app **Downloader** sulla TV, il workflow può pubblicare l'APK in una **pre-release**:
+
+1. Apri *Actions → Android CI → Run workflow*.
+2. Scegli il branch e compila **release_tag** con un tag nuovo, per esempio `v0.1.0-debug` (deve iniziare con `v`; un tag già usato fa fallire il passo).
+3. A build verde compare in *Releases* una pre-release con `prism-player-debug.apk` e il relativo `.sha256`.
+4. Il link diretto ha questa forma: `https://github.com/ariccobello-git/prism-player/releases/download/<tag>/prism-player-debug.apk`
+
+In alternativa, pubblicando un tag `v*` da git, la release parte da sola. Il job di release gira solo se la build è riuscita. L'APK è una build di debug: solo per prove.
+
 ## Installare su Xiaomi TV Stick
 
 1. Sulla TV: *Impostazioni → Preferenze dispositivo → Informazioni*, tocca più volte **Build** per attivare le opzioni sviluppatore, poi abilita **Debug USB** / **Debug di rete**.

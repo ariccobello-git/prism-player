@@ -6,6 +6,12 @@ on:
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Optional: publish the built APK as a pre-release with this tag (e.g. v0.1.0-debug)"
+        required: false
+        default: ""
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -123,12 +129,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # Runs only for tags like v0.1.0-debug and only after the build job succeeded.
+  # Runs only after the build job succeeded, and only when asked for: either a tag like v0.1.0-debug
+  # is pushed, or the workflow is started by hand with the release_tag input filled in.
   # The APK is attached to a public pre-release so it has a direct, login-free download link
   # (useful for the Downloader app on Android TV).
   release:
     name: Publish debug APK as pre-release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -146,9 +153,15 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG_INPUT: ${{ inputs.release_tag }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          TAG="${TAG_INPUT:-${REF_NAME}}"
+          if ! [[ "${TAG}" =~ ^v[0-9A-Za-z._-]+$ ]]; then
+            echo "::error::Release tag must look like v0.1.0-debug (got: ${TAG})"
+            exit 1
+          fi
           cp dist/app-debug.apk dist/prism-player-debug.apk
           (cd dist && sha256sum prism-player-debug.apk > prism-player-debug.apk.sha256)
           cat > notes.md <<NOTES
@@ -161,7 +174,7 @@ jobs:
           gh release create "${TAG}" \
             dist/prism-player-debug.apk dist/prism-player-debug.apk.sha256 \
             --repo "${GITHUB_REPOSITORY}" \
-            --verify-tag \
+            --target "${GITHUB_SHA}" \
             --prerelease \
             --title "Prism Player ${TAG}" \
             --notes-file notes.md
