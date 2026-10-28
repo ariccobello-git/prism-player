@@ -10,6 +10,7 @@ import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.EpgUrl
 import dev.red74.prismplayer.data.FetchException
+import dev.red74.prismplayer.data.HttpAgent
 import dev.red74.prismplayer.data.M3uParser
 import dev.red74.prismplayer.data.PlaylistStatus
 import dev.red74.prismplayer.data.PlaylistStore
@@ -144,18 +145,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private class Loaded(val parsed: M3uParser.Result?, val error: LoadError?, val httpCode: Int?)
 
     private suspend fun load(playlist: SavedPlaylist, keepChannels: Boolean): Loaded {
-        val result = container.fetcher.fetch(playlist.url) { reader ->
-            M3uParser.parse(reader, playlist.url, keepChannels)
+        var last = Loaded(null, LoadError.UNKNOWN, null)
+        // Some panels refuse one identity or answer a web page to it: try the next identity for those cases only.
+        for (agent in HttpAgent.LIST_AGENTS) {
+            val result = container.fetcher.fetch(playlist.url, listOf(agent)) { reader ->
+                M3uParser.parse(reader, playlist.url, keepChannels)
+            }
+            val parsed = result.getOrNull()
+            if (parsed == null) {
+                val failure = result.exceptionOrNull() as? FetchException
+                last = Loaded(null, failure?.kind.toLoadError(), failure?.httpCode)
+                if (failure?.kind == FetchException.Kind.HTTP) continue
+                return last
+            }
+            if (parsed.count == 0) {
+                last = Loaded(parsed, if (parsed.sawPlaylistMarker) LoadError.EMPTY else LoadError.NOT_A_PLAYLIST, null)
+                if (!parsed.sawPlaylistMarker) continue
+                return last
+            }
+            return Loaded(parsed, null, null)
         }
-        val parsed = result.getOrNull()
-        if (parsed == null) {
-            val failure = result.exceptionOrNull() as? FetchException
-            return Loaded(null, failure?.kind.toLoadError(), failure?.httpCode)
-        }
-        if (parsed.count == 0) {
-            return Loaded(parsed, if (parsed.sawPlaylistMarker) LoadError.EMPTY else LoadError.NOT_A_PLAYLIST, null)
-        }
-        return Loaded(parsed, null, null)
+        return last
     }
 
     private fun FetchException.Kind?.toLoadError(): LoadError = when (this) {

@@ -6,31 +6,21 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.extractor.DefaultExtractorsFactory
-import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
-import dev.red74.prismplayer.data.HttpAgent
+import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
 
 /** One player setup for both the full-screen view and the small preview next to the channel list. */
 fun createPlayer(context: Context): ExoPlayer {
     val httpFactory = DefaultHttpDataSource.Factory()
-        .setUserAgent(HttpAgent.USER_AGENT)
         .setAllowCrossProtocolRedirects(true)
         .setConnectTimeoutMs(15_000)
         .setReadTimeoutMs(30_000)
-    // IPTV panels often serve raw MPEG-TS (output=mpegts). These standard Media3 flags make such streams start
-    // and keep sync more reliably, and decoder fallback retries with another decoder when one fails.
-    val extractors = DefaultExtractorsFactory()
-        .setTsExtractorFlags(
-            DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
-                DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
-                DefaultTsPayloadReaderFactory.FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS,
-        )
-        .setConstantBitrateSeekingEnabled(true)
-    val renderers = DefaultRenderersFactory(context)
-        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-        .setEnableDecoderFallback(true)
+    // Standard extractors and the library's own identity, as in the older player that handled live lists well.
+    // More load retries (8) keep a live stream alive through the short hiccups panels often have.
+    val renderers = DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+    val sources = DefaultMediaSourceFactory(httpFactory)
+        .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(8))
     return ExoPlayer.Builder(context, renderers)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractors).setDataSourceFactory(httpFactory))
+        .setMediaSourceFactory(sources)
         .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
         .build()
 }

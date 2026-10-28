@@ -27,8 +27,12 @@ class PlaylistFetcher {
      * Streams the playlist into [consume] line by line, so a list of any size never has to fit in memory
      * (and there is no byte limit). The result is whatever [consume] returns.
      */
-    suspend fun <T> fetch(url: String, consume: (BufferedReader) -> T): Result<T> =
-        fetchBytes(url) { input ->
+    suspend fun <T> fetch(
+        url: String,
+        agents: List<String> = HttpAgent.LIST_AGENTS,
+        consume: (BufferedReader) -> T,
+    ): Result<T> =
+        fetchBytes(url, agents) { input ->
             consume(BufferedReader(InputStreamReader(input, Charsets.UTF_8), READ_BUFFER_CHARS))
         }
 
@@ -36,14 +40,26 @@ class PlaylistFetcher {
      * Same download, handing over the raw bytes. A gzip-compressed body is unpacked, whether or not the server
      * declared it, because guide files are often served as `.xml.gz`.
      */
-    suspend fun <T> fetchBytes(url: String, consume: (InputStream) -> T): Result<T> = withContext(Dispatchers.IO) {
+    suspend fun <T> fetchBytes(
+        url: String,
+        agents: List<String> = HttpAgent.LIST_AGENTS,
+        consume: (InputStream) -> T,
+    ): Result<T> = withContext(Dispatchers.IO) {
         var last: FetchException? = null
-        repeat(ATTEMPTS) { attempt ->
+        // A refusal (HTTP error) is retried with the next identity; other failures use the first one twice.
+        var agentIndex = 0
+        var attempt = 0
+        while (attempt < ATTEMPTS + agents.size - 1) {
+            val agent = agents[agentIndex.coerceAtMost(agents.lastIndex)]
+            attempt++
             try {
-                return@withContext Result.success(download(url, consume))
+                return@withContext Result.success(download(url, agent, consume))
             } catch (e: FetchException) {
                 last = e
-                // An HTTP answer is final; only a network hiccup is worth one more try.
+                if (e.kind == FetchException.Kind.HTTP && agentIndex < agents.lastIndex) {
+                    agentIndex++
+                    continue
+                }
                 if (e.kind == FetchException.Kind.HTTP || e.kind == FetchException.Kind.REDIRECT ||
                     e.kind == FetchException.Kind.DNS || e.kind == FetchException.Kind.TLS
                 ) {
@@ -53,7 +69,8 @@ class PlaylistFetcher {
                 // Network exceptions often carry the host name; normalise to a URL-free error.
                 last = FetchException(classify(e))
             }
-            if (attempt < ATTEMPTS - 1) delay(RETRY_DELAY_MS)
+            if (attempt >= ATTEMPTS) break
+            delay(RETRY_DELAY_MS)
         }
         Result.failure(last ?: FetchException(FetchException.Kind.NETWORK))
     }
@@ -66,7 +83,7 @@ class PlaylistFetcher {
         else -> FetchException.Kind.NETWORK
     }
 
-    private fun <T> download(startUrl: String, consume: (InputStream) -> T): T {
+    private fun <T> download(startUrl: String, agent: String, consume: (InputStream) -> T): T {
         var current = startUrl
         repeat(MAX_REDIRECTS + 1) {
             val connection = URL(current).openConnection() as HttpURLConnection
@@ -75,7 +92,7 @@ class PlaylistFetcher {
                 connection.readTimeout = READ_TIMEOUT_MS
                 connection.instanceFollowRedirects = false
                 connection.requestMethod = "GET"
-                connection.setRequestProperty("User-Agent", HttpAgent.USER_AGENT)
+                connection.setRequestProperty("User-Agent", agent)
                 connection.setRequestProperty("Accept", "*/*")
                 connection.setRequestProperty("Connection", "close")
 
