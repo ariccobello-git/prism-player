@@ -42,7 +42,7 @@ object TextCleaner {
             Character.START_PUNCTUATION, Character.END_PUNCTUATION,
             Character.INITIAL_QUOTE_PUNCTUATION, Character.FINAL_QUOTE_PUNCTUATION,
             Character.OTHER_PUNCTUATION, Character.CURRENCY_SYMBOL -> true
-            Character.MATH_SYMBOL -> codePoint == '+'.code || codePoint == '='.code
+            Character.MATH_SYMBOL -> codePoint == '+'.code || codePoint == '='.code || codePoint == '|'.code
             else -> false
         }
     }
