@@ -16,25 +16,34 @@ object PlaylistUrl {
 
     /** Lets people type `example.com:8080/list.m3u`: when no scheme is given, plain http is assumed. */
     fun withDefaultScheme(raw: String): String {
-        val trimmed = raw.trim()
+        val trimmed = stripInvisible(raw)
         return if (trimmed.isEmpty() || trimmed.contains("://")) trimmed else "http://$trimmed"
     }
 
+    /**
+     * A link can never contain spaces or line breaks, but pasting one from a message or a web page often adds them
+     * (for example a break after the port). They are removed instead of being treated as an error.
+     */
+    fun stripInvisible(raw: String): String = raw.filterNot {
+        it.isWhitespace() || it.isISOControl() || it == '\u200B' || it == '\u200C' || it == '\u200D' ||
+            it == '\u2060' || it == '\uFEFF' || it == '\u00A0'
+    }
+
     fun validate(raw: String): Result {
-        val candidate = raw.trim()
+        val candidate = stripInvisible(raw)
         if (candidate.isEmpty()) return Result.Invalid(Reason.EMPTY)
         if (candidate.length > MAX_LENGTH) return Result.Invalid(Reason.TOO_LONG)
-        if (candidate.any { it.isWhitespace() || it.isISOControl() }) {
-            return Result.Invalid(Reason.BAD_FORMAT)
-        }
-        val uri = try {
+        val strict = try {
             URI(candidate)
         } catch (e: URISyntaxException) {
-            return Result.Invalid(Reason.BAD_FORMAT)
+            null
         }
-        val scheme = uri.scheme?.lowercase()
+        val scheme = (strict?.scheme ?: candidate.substringBefore("://", "").takeIf { candidate.contains("://") })
+            ?.lowercase()
         if (scheme != "http" && scheme != "https") return Result.Invalid(Reason.UNSUPPORTED_SCHEME)
-        val host = uri.host
+        // Real panels use odd characters (an underscore in a host name, a pipe in a query) that the strict parser
+        // refuses but every player and server accepts, so the lenient URL parser decides when the strict one fails.
+        val host = strict?.host ?: runCatching { java.net.URL(candidate).host }.getOrNull()
         if (host.isNullOrBlank()) return Result.Invalid(Reason.BAD_FORMAT)
         return Result.Valid(candidate, host)
     }
@@ -47,7 +56,7 @@ object PlaylistUrl {
 
     private fun normalized(raw: String): String {
         val candidate = raw.trim()
-        val uri = runCatching { URI(candidate) }.getOrNull() ?: return candidate
+        val uri = runCatching { URI(candidate) }.getOrNull() ?: return candidate.lowercase().trimEnd('/')
         val scheme = uri.scheme?.lowercase() ?: return candidate
         val host = uri.host?.lowercase() ?: return candidate
         val defaultPort = if (scheme == "https") 443 else 80
@@ -59,5 +68,6 @@ object PlaylistUrl {
 
     /** What the UI may show for a saved link: the host only, never the path or query (which often hold tokens). */
     fun displayLabel(url: String): String =
-        runCatching { URI(url).host }.getOrNull()?.takeIf { it.isNotBlank() } ?: "—"
+        (runCatching { URI(url).host }.getOrNull() ?: runCatching { java.net.URL(url).host }.getOrNull())
+            ?.takeIf { it.isNotBlank() } ?: "—"
 }

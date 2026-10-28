@@ -34,9 +34,26 @@ class PlaylistUrlTest {
             PlaylistUrl.Reason.TOO_LONG,
             reason("http://example.com/" + "a".repeat(PlaylistUrl.MAX_LENGTH)),
         )
-        assertEquals(PlaylistUrl.Reason.BAD_FORMAT, reason("http://exa mple.com/a"))
         assertEquals(PlaylistUrl.Reason.BAD_FORMAT, reason("http://"))
         assertEquals(PlaylistUrl.Reason.BAD_FORMAT, reason("http:///path"))
+    }
+
+    @Test
+    fun pastedLinksWithLineBreaksAndSpacesAreCleaned() {
+        // A link copied from a chat often has a break after the port.
+        val v = PlaylistUrl.validate("http://panel.example:23000\n/get.php?username=demo&password=demo-pass&type=m3u_plus&output=mpegts ")
+        assertTrue(v is PlaylistUrl.Result.Valid)
+        v as PlaylistUrl.Result.Valid
+        assertEquals("http://panel.example:23000/get.php?username=demo&password=demo-pass&type=m3u_plus&output=mpegts", v.url)
+        assertEquals("panel.example", v.host)
+        assertTrue(PlaylistUrl.validate("http://exa mple.com/a") is PlaylistUrl.Result.Valid)
+    }
+
+    @Test
+    fun oddButRealWorldCharactersAreAccepted() {
+        assertTrue(PlaylistUrl.validate("http://my_panel.example:8080/get.php?u=a|b&p=x{y}") is PlaylistUrl.Result.Valid)
+        assertEquals("my_panel.example", (PlaylistUrl.validate("http://my_panel.example/a") as PlaylistUrl.Result.Valid).host)
+        assertEquals(PlaylistUrl.Reason.BAD_FORMAT, reason("http://"))
     }
 
     @Test
