@@ -155,7 +155,8 @@ class CatalogAndGuideTest {
     }
 
     @Test
-    fun storeRefusesTheSameListTwice() = runBlocking {
+    fun storeRefusesTheSameListTwice() {
+        runBlocking {
         val folder = java.nio.file.Files.createTempDirectory("prism").toFile()
         val key = javax.crypto.KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
         val store = PlaylistStore(java.io.File(folder, "p.bin"), SecureBox { key })
