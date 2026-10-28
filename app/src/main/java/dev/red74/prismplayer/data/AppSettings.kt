@@ -13,7 +13,15 @@ class AppSettings(context: Context) {
             prefs.edit().putString(KEY_ASPECT, value.name).apply()
         }
 
+    /** Favourite keys (see [FavoriteKey]): hashes only, never playlist URLs. */
+    var favorites: Set<String>
+        get() = prefs.getStringSet(KEY_FAVORITES, emptySet()).orEmpty().toSet()
+        set(value) {
+            prefs.edit().putStringSet(KEY_FAVORITES, value.toSet()).apply()
+        }
+
     private companion object {
+        const val KEY_FAVORITES = "favorites"
         const val KEY_ASPECT = "aspect_mode"
     }
 }

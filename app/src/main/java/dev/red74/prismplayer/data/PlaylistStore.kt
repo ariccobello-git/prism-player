@@ -33,11 +33,32 @@ class PlaylistStore(
         synchronized(lock) { _items.value = readLocked() }
     }
 
+    sealed interface AddResult {
+        data class Added(val playlist: SavedPlaylist) : AddResult
+        data class Duplicate(val existing: SavedPlaylist) : AddResult
+    }
+
+    /** True when a list with the same address is already saved. Safe to call from any thread. */
+    fun contains(url: String): Boolean = _items.value.any { PlaylistUrl.sameList(it.url, url) }
+
+    /** Adds a playlist unless the same list is already saved, which is reported instead of silently merged. */
+    suspend fun addIfNew(name: String, url: String): AddResult = withContext(Dispatchers.IO) {
+        synchronized(lock) {
+            val current = readLocked()
+            current.firstOrNull { PlaylistUrl.sameList(it.url, url) }?.let { return@synchronized AddResult.Duplicate(it) }
+            val created = SavedPlaylist(id = idGenerator(), name = name, url = url, addedAtEpochMs = clock())
+            val updated = current + created
+            writeLocked(updated)
+            _items.value = updated
+            AddResult.Added(created)
+        }
+    }
+
     /** Adds a playlist; an already-saved URL is returned as is instead of being duplicated. */
     suspend fun add(name: String, url: String): SavedPlaylist = withContext(Dispatchers.IO) {
         synchronized(lock) {
             val current = readLocked()
-            current.firstOrNull { it.url == url }?.let { return@synchronized it }
+            current.firstOrNull { PlaylistUrl.sameList(it.url, url) }?.let { return@synchronized it }
             val created = SavedPlaylist(
                 id = idGenerator(),
                 name = name,
@@ -63,7 +84,13 @@ class PlaylistStore(
     }
 
     /** Records the outcome of a check. A missing playlist (deleted meanwhile) is ignored. */
-    suspend fun updateStatus(id: String, status: PlaylistStatus, channelCount: Int) = withContext(Dispatchers.IO) {
+    suspend fun updateStatus(
+        id: String,
+        status: PlaylistStatus,
+        channelCount: Int,
+        error: String = "",
+        httpCode: Int = 0,
+    ) = withContext(Dispatchers.IO) {
         synchronized(lock) {
             val current = readLocked()
             if (current.none { it.id == id }) return@synchronized
@@ -72,6 +99,8 @@ class PlaylistStore(
                     status = status,
                     channelCount = if (status == PlaylistStatus.OK) channelCount else it.channelCount,
                     checkedAtEpochMs = clock(),
+                    lastError = if (status == PlaylistStatus.FAILED) error else "",
+                    lastHttpCode = if (status == PlaylistStatus.FAILED) httpCode else 0,
                 )
             }
             writeLocked(updated)

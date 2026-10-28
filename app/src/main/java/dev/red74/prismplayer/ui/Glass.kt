@@ -204,6 +204,7 @@ fun GlassButton(
     danger: Boolean = false,
     tint: Color? = null,
     subtitleColor: Color = PrismColors.TextSecondary,
+    onFocused: () -> Unit = {},
 ) {
     var focused by remember { mutableStateOf(false) }
     val interaction = remember { MutableInteractionSource() }
@@ -239,7 +240,10 @@ fun GlassButton(
     Column(
         modifier
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocused()
+            }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -313,5 +317,97 @@ fun RequestFocusOnEnter(requester: FocusRequester, key: Any? = Unit) {
     LaunchedEffect(key) {
         withFrameNanos { }
         runCatching { requester.requestFocus() }
+    }
+}
+
+/**
+ * A focusable glass tile that can hold anything (a channel row, a poster card). It behaves like [GlassButton]:
+ * spring lift when focused, a squeeze when pressed, a white border for the focus, a tint for warnings.
+ */
+@Composable
+fun GlassSurface(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    focusRequester: FocusRequester? = null,
+    onFocused: () -> Unit = {},
+    selected: Boolean = false,
+    tint: Color? = null,
+    cornerRadius: androidx.compose.ui.unit.Dp = 18.dp,
+    contentPadding: androidx.compose.foundation.layout.PaddingValues =
+        androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+    focusScale: Float = 1.03f,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = when {
+            pressed -> 0.97f
+            focused -> focusScale
+            else -> 1f
+        },
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow),
+        label = "glassSurfaceScale",
+    )
+    val shape = RoundedCornerShape(cornerRadius)
+    val base = tint ?: PrismColors.Accent
+    val fill = when {
+        focused -> Brush.linearGradient(listOf(base.copy(alpha = 0.50f), PrismColors.AccentAlt.copy(alpha = 0.34f)))
+        tint != null -> Brush.linearGradient(listOf(tint.copy(alpha = 0.26f), tint.copy(alpha = 0.10f)))
+        selected -> Brush.linearGradient(listOf(base.copy(alpha = 0.28f), PrismColors.AccentAlt.copy(alpha = 0.18f)))
+        else -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f)))
+    }
+    Box(
+        modifier
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .onFocusChanged {
+                focused = it.isFocused
+                if (it.isFocused) onFocused()
+            }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(shape)
+            .background(fill)
+            .border(
+                width = if (focused) 3.dp else 1.dp,
+                color = when {
+                    focused -> Color.White
+                    tint != null -> tint.copy(alpha = 0.85f)
+                    else -> Color.White.copy(alpha = 0.20f)
+                },
+                shape = shape,
+            )
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(contentPadding),
+        content = content,
+    )
+}
+
+/** Poster or channel logo from the playlist; a soft gradient with the initial shows while it loads or if it is missing. */
+@Composable
+fun Poster(url: String?, title: String, modifier: Modifier = Modifier, fit: Boolean = false) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Brush.linearGradient(listOf(Color(0xFF26356B), Color(0xFF3A1F6B)))),
+        contentAlignment = androidx.compose.ui.Alignment.Center,
+    ) {
+        PrismText(
+            text = title.trim().take(1).uppercase(),
+            size = 26.sp,
+            weight = FontWeight.Bold,
+            color = PrismColors.TextSecondary,
+        )
+        if (!url.isNullOrBlank()) {
+            coil.compose.AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = if (fit) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }

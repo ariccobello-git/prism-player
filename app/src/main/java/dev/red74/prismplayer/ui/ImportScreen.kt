@@ -120,5 +120,6 @@ private fun reasonText(reason: PlaylistUrl.Reason): String = stringResource(
         PlaylistUrl.Reason.TOO_LONG -> R.string.error_url_too_long
         PlaylistUrl.Reason.BAD_FORMAT -> R.string.error_url_format
         PlaylistUrl.Reason.UNSUPPORTED_SCHEME -> R.string.error_url_scheme
+        PlaylistUrl.Reason.DUPLICATE -> R.string.error_url_duplicate
     },
 )

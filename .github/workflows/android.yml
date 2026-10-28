@@ -80,7 +80,41 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Unit tests, lint and debug APK
-        run: ./gradlew --no-daemon --stacktrace --continue testDebugUnitTest lintDebug assembleDebug
+        shell: bash
+        run: ./gradlew --no-daemon --stacktrace --continue testDebugUnitTest lintDebug assembleDebug 2>&1 | tee build.log
+
+      # The job log is not readable from outside GitHub, so compile errors and failed tests are repeated
+      # as one annotation that shows up in the run's check summary.
+      - name: Report build problems
+        if: failure()
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+          try:
+              lines = open("build.log", errors="replace").read().splitlines()
+          except OSError:
+              lines = []
+          found = []
+          for i, line in enumerate(lines):
+              low = line.lower()
+              if line.startswith("e: ") or " error: " in low or "execution failed for task" in low:
+                  found.append(line.strip()[:400])
+              elif "what went wrong" in low:
+                  found += [x.strip()[:400] for x in lines[i + 1:i + 4]]
+          for path in glob.glob("app/build/test-results/testDebugUnitTest/*.xml"):
+              for case in ET.parse(path).getroot().iter("testcase"):
+                  for bad in list(case.findall("failure")) + list(case.findall("error")):
+                      found.append("TEST %s.%s: %s" % (case.get("classname"), case.get("name"), (bad.get("message") or "")[:300]))
+          unique = []
+          for item in found:
+              if item not in unique:
+                  unique.append(item)
+          text = "\n".join(unique[:60]) or "no details found in build.log"
+          text = text.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+          print("::error title=Build problems::" + text)
+          PY
 
       - name: Summarise results
         if: always()

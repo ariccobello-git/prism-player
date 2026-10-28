@@ -27,10 +27,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.red74.prismplayer.data.PlaylistUrl
-import dev.red74.prismplayer.ui.ChannelsScreen
 import dev.red74.prismplayer.ui.ExitScreen
 import dev.red74.prismplayer.ui.HomeScreen
 import dev.red74.prismplayer.ui.ImportScreen
+import dev.red74.prismplayer.ui.LibraryScreen
 import dev.red74.prismplayer.ui.PairScreen
 import dev.red74.prismplayer.ui.PlayerScreen
 import dev.red74.prismplayer.ui.SplashScreen
@@ -40,8 +40,8 @@ private sealed interface Screen {
     data object Import : Screen
     data object Pair : Screen
     data object Exit : Screen
-    data class Channels(val playlistId: String) : Screen
-    data class Player(val startIndex: Int) : Screen
+    data class Library(val playlistId: String) : Screen
+    data object Player : Screen
 }
 
 /** Opening animation first, then the app, joined by a soft zoom-and-fade. */
@@ -103,7 +103,11 @@ private fun PrismNavigation(
     }
 
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
-    val channelsState by viewModel.channels.collectAsStateWithLifecycle()
+    val library by viewModel.library.collectAsStateWithLifecycle()
+    val nav by viewModel.nav.collectAsStateWithLifecycle()
+    val epg by viewModel.epg.collectAsStateWithLifecycle()
+    val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val queue by viewModel.queue.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val aspect by viewModel.aspect.collectAsStateWithLifecycle()
     val verifying by viewModel.verifying.collectAsStateWithLifecycle()
@@ -129,7 +133,7 @@ private fun PrismNavigation(
                 playlists = playlists,
                 verifying = verifying,
                 notice = notice,
-                onOpen = { id -> push(Screen.Channels(id)) },
+                onOpen = { id -> push(Screen.Library(id)) },
                 onVerify = viewModel::verifyPlaylist,
                 onVerifyAll = viewModel::verifyAll,
                 onDelete = viewModel::removePlaylist,
@@ -171,23 +175,31 @@ private fun PrismNavigation(
                 )
             }
 
-            is Screen.Channels -> {
+            is Screen.Library -> {
                 LaunchedEffect(screen.playlistId) { viewModel.openPlaylist(screen.playlistId) }
-                ChannelsScreen(
-                    state = channelsState,
-                    onPlay = { index -> push(Screen.Player(index)) },
+                LibraryScreen(
+                    state = library,
+                    nav = nav,
+                    epg = epg,
+                    favorites = favorites,
+                    onNav = viewModel::updateNav,
+                    onPlay = { items, index, follow ->
+                        viewModel.play(items, index, follow)
+                        push(Screen.Player)
+                    },
+                    onToggleFavorite = viewModel::toggleFavorite,
                     onRetry = viewModel::reloadPlaylist,
                     onBack = ::pop,
                 )
             }
 
-            is Screen.Player -> {
-                if (channelsState.channels.isEmpty()) {
+            Screen.Player -> {
+                if (queue.items.isEmpty()) {
                     LaunchedEffect(Unit) { pop() }
                 } else {
                     PlayerScreen(
-                        channels = channelsState.channels,
-                        startIndex = screen.startIndex,
+                        channels = queue.items,
+                        startIndex = queue.startIndex,
                         aspect = aspect,
                         onAspectChange = viewModel::setAspect,
                         onIndexChange = viewModel::setLastIndex,

@@ -80,7 +80,10 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.zxing.core)
+    implementation(libs.coil.compose)
     implementation(libs.nanohttpd)
 
     testImplementation(libs.junit)
+    // A real XmlPullParser for the guide tests (on the device the platform provides one).
+    testImplementation(libs.kxml2)
 }

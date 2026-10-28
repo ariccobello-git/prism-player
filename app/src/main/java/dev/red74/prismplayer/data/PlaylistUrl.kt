@@ -7,7 +7,7 @@ import java.net.URISyntaxException
 object PlaylistUrl {
     const val MAX_LENGTH = 2048
 
-    enum class Reason { EMPTY, TOO_LONG, BAD_FORMAT, UNSUPPORTED_SCHEME }
+    enum class Reason { EMPTY, TOO_LONG, BAD_FORMAT, UNSUPPORTED_SCHEME, DUPLICATE }
 
     sealed interface Result {
         data class Valid(val url: String, val host: String) : Result
@@ -37,6 +37,24 @@ object PlaylistUrl {
         val host = uri.host
         if (host.isNullOrBlank()) return Result.Invalid(Reason.BAD_FORMAT)
         return Result.Valid(candidate, host)
+    }
+
+    /**
+     * Same list written differently (letter case of the host, default port, a trailing slash) compares equal.
+     * The path and query are compared as typed: they usually carry the account.
+     */
+    fun sameList(a: String, b: String): Boolean = normalized(a) == normalized(b)
+
+    private fun normalized(raw: String): String {
+        val candidate = raw.trim()
+        val uri = runCatching { URI(candidate) }.getOrNull() ?: return candidate
+        val scheme = uri.scheme?.lowercase() ?: return candidate
+        val host = uri.host?.lowercase() ?: return candidate
+        val defaultPort = if (scheme == "https") 443 else 80
+        val port = if (uri.port == -1 || uri.port == defaultPort) "" else ":${uri.port}"
+        val path = (uri.rawPath ?: "").let { if (uri.rawQuery == null) it.trimEnd('/') else it }
+        val query = uri.rawQuery?.let { "?$it" }.orEmpty()
+        return "$scheme://$host$port$path$query"
     }
 
     /** What the UI may show for a saved link: the host only, never the path or query (which often hold tokens). */

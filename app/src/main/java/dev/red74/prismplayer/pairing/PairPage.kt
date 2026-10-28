@@ -46,6 +46,19 @@ internal object PairPage {
         """.trimIndent(),
     )
 
+    fun duplicate(code: String, lang: Lang): String = layout(
+        lang,
+        title = t(lang, "Lista già presente", "List already added"),
+        body = """
+            <h1>${t(lang, "Lista già presente", "List already added")}</h1>
+            <p>${t(lang, "Questa lista è già salvata sulla TV e non viene aggiunta di nuovo. Il codice resta valido: puoi inviare un altro link.", "This list is already saved on the TV and is not added again. The code is still valid: you can send another link.")}</p>
+            <form method="get" action="/pair">
+              <input type="hidden" name="c" value="${esc(code)}">
+              <button type="submit">${t(lang, "Invia un altro link", "Send another link")}</button>
+            </form>
+        """.trimIndent(),
+    )
+
     fun success(lang: Lang): String = layout(
         lang,
         title = t(lang, "Fatto", "Done"),

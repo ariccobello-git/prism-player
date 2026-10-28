@@ -195,6 +195,7 @@ private fun noticeText(notice: Notice): String = when (notice) {
     Notice.REMOVED -> stringResource(R.string.notice_removed)
     Notice.PAIRED -> stringResource(R.string.notice_paired)
     Notice.SAVE_FAILED -> stringResource(R.string.notice_save_failed)
+    Notice.DUPLICATE -> stringResource(R.string.notice_duplicate)
     Notice.VERIFY_OK -> stringResource(R.string.notice_verify_ok)
     Notice.VERIFY_FAILED -> stringResource(R.string.notice_verify_failed)
     Notice.VERIFY_ALL_OK -> stringResource(R.string.notice_verify_all_ok)
@@ -223,7 +224,8 @@ private fun PlaylistRow(
             statusColor = PrismColors.Ok
         }
         playlist.status == PlaylistStatus.FAILED -> {
-            statusLabel = stringResource(R.string.status_failed)
+            statusLabel = loadErrorShort(playlist.lastError, playlist.lastHttpCode)
+                ?: stringResource(R.string.status_failed)
             statusColor = PrismColors.Danger
         }
         else -> {

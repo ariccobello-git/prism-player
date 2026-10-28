@@ -20,6 +20,7 @@ import java.net.InetAddress
 class PairingServer(
     private val manager: PairingManager,
     private val onPlaylist: (name: String, url: String) -> Unit,
+    private val isDuplicate: (url: String) -> Boolean = { false },
     port: Int = 0,
 ) : NanoHTTPD(port) {
 
@@ -74,6 +75,8 @@ class PairingServer(
         if (validated !is PlaylistUrl.Result.Valid) {
             return html(Response.Status.BAD_REQUEST, PairPage.form(code, lang, showError = true))
         }
+        // The same list twice is refused, and the code stays valid so the right link can still be sent.
+        if (isDuplicate(validated.url)) return html(Response.Status.CONFLICT, PairPage.duplicate(code, lang))
         if (!manager.consume(code)) return html(Response.Status.FORBIDDEN, PairPage.denied(lang))
 
         val name = sanitizeName(field("n")).ifBlank { validated.host }

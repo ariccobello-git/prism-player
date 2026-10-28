@@ -16,14 +16,25 @@ object M3uParser {
     /** Safety cap on parsed entries (memory on a TV stick); a longer list is cut here and flagged as truncated. */
     const val MAX_CHANNELS = 300_000
 
-    private val groupTitle = Regex("""group-title="([^"]*)"""", RegexOption.IGNORE_CASE)
+    private val attribute = Regex("""([A-Za-z0-9_\-]+)="([^"]*)"""")
     private val absoluteUrl = Regex("""^[a-zA-Z][a-zA-Z0-9+.\-]*://""")
+    private val episodeTag = Regex("""(?i)^(.*?)[\s._\-:|]*\bS(\d{1,3})[\s._\-]*E(\d{1,4})\b""")
+    private val episodeTagAnywhere = Regex("""(?i)\bS\d{1,3}[\s._\-]*E\d{1,4}\b""")
+    private val videoFileExtensions = setOf("mp4", "mkv", "avi", "mov", "wmv", "flv", "mpg", "mpeg", "m4v")
 
     /**
      * Outcome of a streaming parse. [count] is the number of valid entries seen; [channels] holds them only
      * when the caller asked to keep them (verification just counts, so it never holds a big list in memory).
+     * [epgUrl] is the programme-guide address declared in the `#EXTM3U` header, if any, and
+     * [sawPlaylistMarker] tells an empty playlist apart from a page that is not a playlist at all.
      */
-    class Result(val channels: List<Channel>, val count: Int, val truncated: Boolean)
+    class Result(
+        val channels: List<Channel>,
+        val count: Int,
+        val truncated: Boolean,
+        val epgUrl: String? = null,
+        val sawPlaylistMarker: Boolean = true,
+    )
 
     fun parse(text: String, sourceUrl: String): List<Channel> =
         parse(BufferedReader(StringReader(text)), sourceUrl, keepChannels = true).channels
@@ -31,10 +42,13 @@ object M3uParser {
     /** Reads line by line, so the size of the playlist is limited by the entry cap, never by a byte count. */
     fun parse(reader: BufferedReader, sourceUrl: String, keepChannels: Boolean): Result {
         val channels = ArrayList<Channel>()
-        val groups = HashMap<String, String>()
+        val shared = HashMap<String, String>()
+        fun share(value: String?): String? = value?.let { shared.getOrPut(it) { it } }
         var count = 0
         var truncated = false
-        var pendingName: String? = null
+        var epgUrl: String? = null
+        var sawMarker = false
+        var pending: ExtInf? = null
         var pendingGroup: String? = null
 
         while (true) {
@@ -43,20 +57,27 @@ object M3uParser {
             if (line.isEmpty()) continue
 
             when {
+                line.startsWith("#EXTM3U", ignoreCase = true) -> {
+                    sawMarker = true
+                    val attributes = attributes(line)
+                    val declared = attributes["url-tvg"] ?: attributes["x-tvg-url"] ?: attributes["tvg-url"]
+                    epgUrl = declared?.split(',')?.map { it.trim() }
+                        ?.firstOrNull { it.startsWith("http://", true) || it.startsWith("https://", true) }
+                }
                 line.startsWith("#EXT-X-TARGETDURATION", ignoreCase = true) ||
                     line.startsWith("#EXT-X-STREAM-INF", ignoreCase = true) ||
                     line.startsWith("#EXT-X-MEDIA-SEQUENCE", ignoreCase = true) -> {
                     // A single HLS playlist is one stream pointing at the playlist URL itself.
                     val single = Channel(name = PlaylistUrl.displayLabel(sourceUrl), url = sourceUrl)
-                    return Result(listOf(single), 1, false)
+                    return Result(listOf(single), 1, false, epgUrl, true)
                 }
                 line.startsWith("#EXTINF", ignoreCase = true) -> {
-                    val info = parseExtInf(line)
-                    pendingName = info.first
-                    pendingGroup = info.second?.let { groups.getOrPut(it) { it } }
+                    sawMarker = true
+                    pending = parseExtInf(line)
+                    pendingGroup = share(pending.group)
                 }
                 line.startsWith("#EXTGRP:", ignoreCase = true) -> {
-                    pendingGroup = line.substringAfter(':').trim().ifEmpty { null }?.let { groups.getOrPut(it) { it } }
+                    pendingGroup = share(TextCleaner.cleanOrNull(line.substringAfter(':')))
                 }
                 line.startsWith("#") -> Unit
                 else -> {
@@ -64,24 +85,101 @@ object M3uParser {
                     if (resolved != null) {
                         count++
                         if (keepChannels) {
-                            val name = pendingName ?: fallbackName(resolved, count)
-                            channels += Channel(name = name, url = resolved, group = pendingGroup)
+                            channels += buildChannel(resolved, pending, pendingGroup, count, ::share)
                         }
                         if (count >= MAX_CHANNELS) {
                             truncated = true
                             break
                         }
                     }
-                    pendingName = null
+                    pending = null
                     pendingGroup = null
                 }
             }
         }
-        return Result(channels, count, truncated)
+        return Result(channels, count, truncated, epgUrl, sawMarker || count > 0)
     }
 
-    /** Returns (display name, group) from an `#EXTINF` line. The name starts after the first comma outside quotes. */
-    private fun parseExtInf(line: String): Pair<String?, String?> {
+    private class ExtInf(
+        val name: String?,
+        val group: String?,
+        val logo: String?,
+        val tvgId: String?,
+        val tvgName: String?,
+    )
+
+    private fun buildChannel(
+        url: String,
+        info: ExtInf?,
+        group: String?,
+        position: Int,
+        share: (String?) -> String?,
+    ): Channel {
+        val name = info?.name ?: info?.tvgName ?: fallbackName(url, position)
+        val type = classify(url, name)
+        var seriesTitle: String? = null
+        var season = 0
+        var episode = 0
+        if (type == ContentType.SERIES) {
+            val match = episodeTag.find(name)
+            if (match != null) {
+                seriesTitle = match.groupValues[1].trim().trimEnd('-', ':', '|', '.', '_').trim().ifEmpty { name }
+                season = match.groupValues[2].toIntOrNull() ?: 0
+                episode = match.groupValues[3].toIntOrNull() ?: 0
+            } else {
+                seriesTitle = name
+                season = 1
+            }
+            seriesTitle = share(seriesTitle)
+        }
+        return Channel(
+            name = name,
+            url = url,
+            group = group,
+            logo = info?.logo,
+            tvgId = info?.tvgId,
+            tvgName = info?.tvgName,
+            type = type,
+            seriesTitle = seriesTitle,
+            season = season,
+            episode = episode,
+        )
+    }
+
+    /** Live, film or episode: first by the path an IPTV panel uses, then by the file type and the episode tag. */
+    internal fun classify(url: String, name: String): ContentType {
+        val path = pathOf(url).lowercase()
+        return when {
+            path.contains("/series/") -> ContentType.SERIES
+            path.contains("/movie/") -> ContentType.MOVIE
+            else -> {
+                val extension = path.substringAfterLast('.', "")
+                if (extension in videoFileExtensions) {
+                    if (episodeTagAnywhere.containsMatchIn(name)) ContentType.SERIES else ContentType.MOVIE
+                } else {
+                    ContentType.LIVE
+                }
+            }
+        }
+    }
+
+    private fun pathOf(url: String): String {
+        val afterScheme = url.substringAfter("://", url)
+        val slash = afterScheme.indexOf('/')
+        if (slash < 0) return ""
+        return afterScheme.substring(slash).substringBefore('?').substringBefore('#')
+    }
+
+    private fun attributes(text: String): Map<String, String> {
+        val found = HashMap<String, String>()
+        for (match in attribute.findAll(text)) {
+            found[match.groupValues[1].lowercase()] = match.groupValues[2].trim()
+        }
+        return found
+    }
+
+    /** Parses an `#EXTINF` line. The display name starts after the first comma outside quotes. */
+    private fun parseExtInf(line: String): ExtInf {
         val body = line.substringAfter(':', "")
         var inQuotes = false
         var commaAt = -1
@@ -94,9 +192,15 @@ object M3uParser {
             }
         }
         val head = if (commaAt >= 0) body.substring(0, commaAt) else body
-        val name = if (commaAt >= 0) body.substring(commaAt + 1).trim().ifEmpty { null } else null
-        val group = groupTitle.find(head)?.groupValues?.get(1)?.trim()?.ifEmpty { null }
-        return name to group
+        val name = if (commaAt >= 0) TextCleaner.cleanOrNull(body.substring(commaAt + 1)) else null
+        val values = attributes(head)
+        return ExtInf(
+            name = name,
+            group = TextCleaner.cleanOrNull(values["group-title"]),
+            logo = values["tvg-logo"]?.ifEmpty { null },
+            tvgId = values["tvg-id"]?.ifEmpty { null },
+            tvgName = TextCleaner.cleanOrNull(values["tvg-name"]),
+        )
     }
 
     private fun resolve(base: String, reference: String): String? {

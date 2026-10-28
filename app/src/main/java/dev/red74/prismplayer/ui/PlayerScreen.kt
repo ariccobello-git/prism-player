@@ -1,38 +1,49 @@
 package dev.red74.prismplayer.ui
 
-import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
@@ -43,25 +54,38 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.extractor.DefaultExtractorsFactory
-import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
+import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.Tracks
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import dev.red74.prismplayer.R
 import dev.red74.prismplayer.data.Channel
+import dev.red74.prismplayer.data.ContentType
+import dev.red74.prismplayer.data.TextCleaner
 import dev.red74.prismplayer.player.AspectMode
+import dev.red74.prismplayer.player.createPlayer
 import kotlinx.coroutines.delay
+import java.util.Locale
 
 private enum class PlayStatus { Loading, Ready, Ended, Error }
+private enum class Panel { None, Tracks, Episodes, Info }
 
+private const val SKIP_MS = 10_000L
+private const val NEXT_COUNTDOWN_S = 8
+private const val LIVE_EDGE_MS = 6_000L
+
+/** A selectable audio or subtitle track. */
+private class TrackChoice(val label: String, val selected: Boolean, val select: () -> Unit)
+
+/**
+ * Full-screen player with Netflix-style controls: play/pause, 10-second skips, a timeline with elapsed and
+ * remaining time, episodes, audio and subtitles, next episode, and for live streams a LIVE marker that jumps back
+ * to the live edge. Left/Right skip, Up/Down zap between channels, OK shows the controls.
+ */
 @Composable
 fun PlayerScreen(
     channels: List<Channel>,
@@ -79,10 +103,25 @@ fun PlayerScreen(
     var errorName by remember { mutableStateOf<String?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
     var formatToast by remember { mutableStateOf<AspectMode?>(null) }
+    var skipToast by remember { mutableStateOf<String?>(null) }
+    var panel by remember { mutableStateOf(Panel.None) }
+    var tracks by remember { mutableStateOf(Tracks.EMPTY) }
+    var positionMs by remember { mutableLongStateOf(0L) }
+    var durationMs by remember { mutableLongStateOf(C.TIME_UNSET) }
+    var canSeek by remember { mutableStateOf(false) }
+    var liveFlag by remember { mutableStateOf(false) }
+    var behindLiveMs by remember { mutableLongStateOf(0L) }
+    var countdown by remember { mutableIntStateOf(-1) }
 
     val player = remember { createPlayer(context) }
     val rootFocus = remember { FocusRequester() }
-    val overlayFocus = remember { FocusRequester() }
+    val playFocus = remember { FocusRequester() }
+    val panelFocus = remember { FocusRequester() }
+
+    val current = channels[index]
+    val isSeries = current.type == ContentType.SERIES
+    val hasNext = isSeries && index < channels.lastIndex
+    val isLiveStream = liveFlag || current.type == ContentType.LIVE
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -100,6 +139,15 @@ fun PlayerScreen(
 
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
+            }
+
+            override fun onTracksChanged(newTracks: Tracks) {
+                tracks = newTracks
+            }
+
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                liveFlag = player.isCurrentMediaItemLive
+                canSeek = player.isCurrentMediaItemSeekable
             }
 
             override fun onPlayerError(error: PlaybackException) {
@@ -121,23 +169,60 @@ fun PlayerScreen(
     LaunchedEffect(index) {
         onIndexChange(index)
         errorName = null
+        countdown = -1
         status = PlayStatus.Loading
+        liveFlag = false
+        canSeek = false
+        positionMs = 0L
+        durationMs = C.TIME_UNSET
         player.setMediaItem(MediaItem.fromUri(channels[index].url))
         player.prepare()
         player.playWhenReady = true
     }
 
-    // Keep D-pad focus somewhere sensible: on the menu when it is open, on the video surface otherwise.
-    LaunchedEffect(overlayVisible) {
-        withFrameNanos { }
-        runCatching {
-            if (overlayVisible) overlayFocus.requestFocus() else rootFocus.requestFocus()
+    // Progress ticker while the controls are visible.
+    LaunchedEffect(overlayVisible, index) {
+        while (overlayVisible) {
+            positionMs = player.currentPosition.coerceAtLeast(0L)
+            durationMs = player.duration
+            canSeek = player.isCurrentMediaItemSeekable
+            behindLiveMs = if (player.isCurrentMediaItemLive) {
+                player.currentLiveOffset.takeIf { it != C.TIME_UNSET } ?: 0L
+            } else {
+                0L
+            }
+            delay(500)
         }
     }
 
-    LaunchedEffect(overlayVisible, interaction, errorName) {
-        if (overlayVisible && errorName == null) {
-            delay(7_000)
+    // After the end of an episode the next one starts by itself unless Back is pressed.
+    LaunchedEffect(status, index) {
+        if (status == PlayStatus.Ended && hasNext) {
+            overlayVisible = true
+            for (left in NEXT_COUNTDOWN_S downTo 1) {
+                countdown = left
+                delay(1_000)
+                if (countdown < 0) return@LaunchedEffect // cancelled with Back
+            }
+            countdown = -1
+            index += 1
+        }
+    }
+
+    LaunchedEffect(overlayVisible, panel) {
+        withFrameNanos { }
+        runCatching {
+            when {
+                panel != Panel.None -> panelFocus.requestFocus()
+                overlayVisible -> playFocus.requestFocus()
+                else -> rootFocus.requestFocus()
+            }
+        }
+    }
+
+    LaunchedEffect(overlayVisible, interaction, errorName, panel, isPlaying) {
+        if (overlayVisible && errorName == null && panel == Panel.None && isPlaying && countdown < 0) {
+            delay(5_000)
             overlayVisible = false
         }
     }
@@ -148,9 +233,20 @@ fun PlayerScreen(
             formatToast = null
         }
     }
+    LaunchedEffect(skipToast) {
+        if (skipToast != null) {
+            delay(900)
+            skipToast = null
+        }
+    }
 
     BackHandler {
-        if (overlayVisible && errorName == null) overlayVisible = false else onExit()
+        when {
+            countdown >= 0 -> countdown = -1
+            panel != Panel.None -> panel = Panel.None
+            overlayVisible && errorName == null -> overlayVisible = false
+            else -> onExit()
+        }
     }
 
     fun changeChannel(delta: Int) {
@@ -162,6 +258,25 @@ fun PlayerScreen(
         formatToast = next
     }
 
+    fun skip(deltaMs: Long) {
+        if (!player.isCurrentMediaItemSeekable) return
+        val duration = player.duration
+        var target = player.currentPosition + deltaMs
+        if (duration != C.TIME_UNSET) target = target.coerceAtMost(duration)
+        player.seekTo(target.coerceAtLeast(0L))
+        positionMs = target.coerceAtLeast(0L)
+        skipToast = if (deltaMs > 0) "+10" else "-10"
+    }
+
+    fun goLive() {
+        player.seekToDefaultPosition()
+        player.play()
+    }
+
+    fun togglePlay() {
+        if (player.isPlaying) player.pause() else player.play()
+    }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -169,28 +284,49 @@ fun PlayerScreen(
             .focusRequester(rootFocus)
             .onPreviewKeyEvent { event ->
                 if (event.type == KeyEventType.KeyDown) interaction++
-                if (overlayVisible || event.type != KeyEventType.KeyDown) {
-                    return@onPreviewKeyEvent false
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                // Media keys of the remote work whatever is on screen.
+                when (event.key) {
+                    Key.MediaPlayPause -> { togglePlay(); return@onPreviewKeyEvent true }
+                    Key.MediaPlay -> { player.play(); return@onPreviewKeyEvent true }
+                    Key.MediaPause -> { player.pause(); return@onPreviewKeyEvent true }
+                    Key.MediaFastForward, Key.MediaStepForward -> { skip(SKIP_MS); return@onPreviewKeyEvent true }
+                    Key.MediaRewind, Key.MediaStepBackward -> { skip(-SKIP_MS); return@onPreviewKeyEvent true }
+                    Key.MediaNext, Key.ChannelUp -> {
+                        if (channels.size > 1) changeChannel(+1)
+                        return@onPreviewKeyEvent true
+                    }
+                    Key.MediaPrevious, Key.ChannelDown -> {
+                        if (channels.size > 1) changeChannel(-1)
+                        return@onPreviewKeyEvent true
+                    }
+                    Key.Info -> {
+                        overlayVisible = true
+                        panel = if (panel == Panel.Info) Panel.None else Panel.Info
+                        return@onPreviewKeyEvent true
+                    }
+                    else -> Unit
                 }
+                if (overlayVisible) return@onPreviewKeyEvent false
                 when (event.key) {
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter, Key.Menu -> {
                         overlayVisible = true
                         true
                     }
-                    Key.DirectionUp, Key.ChannelUp -> {
-                        changeChannel(+1)
-                        true
-                    }
-                    Key.DirectionDown, Key.ChannelDown -> {
-                        changeChannel(-1)
+                    Key.DirectionLeft -> {
+                        if (canSeek) skip(-SKIP_MS) else overlayVisible = true
                         true
                     }
                     Key.DirectionRight -> {
-                        changeAspect(aspect.next())
+                        if (canSeek) skip(SKIP_MS) else overlayVisible = true
                         true
                     }
-                    Key.DirectionLeft -> {
-                        changeAspect(aspect.previous())
+                    Key.DirectionUp -> {
+                        if (isLiveStream && channels.size > 1) changeChannel(+1) else overlayVisible = true
+                        true
+                    }
+                    Key.DirectionDown -> {
+                        if (isLiveStream && channels.size > 1) changeChannel(-1) else overlayVisible = true
                         true
                     }
                     else -> false
@@ -218,10 +354,10 @@ fun PlayerScreen(
                 }
             },
             update = { view ->
-                view.resizeMode = if (aspect.stretch) {
-                    AspectRatioFrameLayout.RESIZE_MODE_FILL
-                } else {
-                    AspectRatioFrameLayout.RESIZE_MODE_FIT
+                view.resizeMode = when {
+                    aspect.zoom -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    aspect.stretch -> AspectRatioFrameLayout.RESIZE_MODE_FILL
+                    else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
                 }
             },
         )
@@ -240,8 +376,26 @@ fun PlayerScreen(
                 text = stringResource(R.string.player_format, aspectLabel(mode)),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(48.dp),
+                    .padding(bottom = 140.dp),
             )
+        }
+
+        skipToast?.let {
+            StatusChip(text = it + " s", modifier = Modifier.align(Alignment.Center))
+        }
+
+        if (countdown >= 0) {
+            GlassPanel(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 48.dp, bottom = 190.dp),
+                cornerRadius = 20.dp,
+            ) {
+                Column(Modifier.padding(horizontal = 26.dp, vertical = 16.dp)) {
+                    PrismText(text = stringResource(R.string.np_next_episode), size = 20.sp, weight = FontWeight.Bold)
+                    PrismText(text = countdown.toString() + " s", size = 18.sp, color = PrismColors.TextSecondary)
+                }
+            }
         }
 
         AnimatedVisibility(visible = overlayVisible, enter = fadeIn(), exit = fadeOut()) {
@@ -251,9 +405,9 @@ fun PlayerScreen(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                Color.Black.copy(alpha = 0.65f),
+                                Color.Black.copy(alpha = 0.70f),
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.75f),
+                                Color.Black.copy(alpha = 0.85f),
                             ),
                         ),
                     ),
@@ -264,68 +418,327 @@ fun PlayerScreen(
                         .padding(40.dp),
                 ) {
                     PrismText(
-                        text = channels[index].name,
+                        text = if (isSeries) (current.seriesTitle ?: current.name) else current.name,
                         size = 34.sp,
                         weight = FontWeight.Bold,
                         maxLines = 1,
                     )
-                    channels[index].group?.let {
-                        PrismText(text = it, size = 20.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                    if (isSeries && current.season > 0) {
+                        PrismText(
+                            text = stringResource(R.string.season_n, current.season) + " · " + current.episode,
+                            size = 20.sp,
+                            color = PrismColors.TextSecondary,
+                            maxLines = 1,
+                        )
+                    } else {
+                        current.group?.let {
+                            PrismText(text = it, size = 20.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                        }
                     }
                 }
 
-                GlassPanel(
+                Column(
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(40.dp),
+                        .padding(horizontal = 48.dp, vertical = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Column(
-                        Modifier.padding(28.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                    errorName?.let {
+                        PrismText(
+                            text = stringResource(R.string.player_error, it),
+                            size = 20.sp,
+                            color = PrismColors.Danger,
+                        )
+                    }
+                    Timeline(
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        canSeek = canSeek,
+                        live = isLiveStream,
+                        behindLiveMs = behindLiveMs,
+                        onSkip = ::skip,
+                        onGoLive = ::goLive,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        errorName?.let {
-                            PrismText(
-                                text = stringResource(R.string.player_error, it),
-                                size = 20.sp,
-                                color = PrismColors.Danger,
+                        GlassButton(
+                            text = stringResource(if (isPlaying) R.string.player_pause else R.string.player_play),
+                            onClick = ::togglePlay,
+                            focusRequester = playFocus,
+                            emphasized = true,
+                        )
+                        if (canSeek) {
+                            GlassButton(text = "⟲ 10", onClick = { skip(-SKIP_MS) })
+                            GlassButton(text = "10 ⟳", onClick = { skip(SKIP_MS) })
+                        }
+                        if (isSeries) {
+                            GlassButton(
+                                text = stringResource(R.string.np_episodes),
+                                onClick = { panel = Panel.Episodes },
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        if (hasNext) {
                             GlassButton(
-                                text = stringResource(R.string.player_format, aspectLabel(aspect)),
-                                onClick = { changeAspect(aspect.next()) },
-                                focusRequester = overlayFocus,
-                                emphasized = true,
-                            )
-                            GlassButton(
-                                text = stringResource(R.string.player_previous),
-                                onClick = { changeChannel(-1) },
-                            )
-                            GlassButton(
-                                text = stringResource(
-                                    if (isPlaying) R.string.player_pause else R.string.player_play,
-                                ),
-                                onClick = { if (isPlaying) player.pause() else player.play() },
-                            )
-                            GlassButton(
-                                text = stringResource(R.string.player_next),
+                                text = stringResource(R.string.np_next_episode),
                                 onClick = { changeChannel(+1) },
                             )
-                            GlassButton(
-                                text = stringResource(R.string.action_back),
-                                onClick = onExit,
-                            )
+                        } else if (!isSeries && channels.size > 1) {
+                            GlassButton(text = stringResource(R.string.player_previous), onClick = { changeChannel(-1) })
+                            GlassButton(text = stringResource(R.string.player_next), onClick = { changeChannel(+1) })
                         }
-                        PrismText(
-                            text = stringResource(R.string.player_hint),
-                            size = 16.sp,
-                            color = PrismColors.TextSecondary,
+                        GlassButton(
+                            text = stringResource(R.string.np_audio_subs),
+                            onClick = { panel = Panel.Tracks },
                         )
+                        GlassButton(
+                            text = stringResource(R.string.player_format, aspectLabel(aspect)),
+                            onClick = { changeAspect(aspect.next()) },
+                        )
+                        GlassButton(
+                            text = stringResource(R.string.np_info),
+                            onClick = { panel = Panel.Info },
+                        )
+                    }
+                    PrismText(
+                        text = stringResource(R.string.player_hint),
+                        size = 15.sp,
+                        color = PrismColors.TextSecondary,
+                    )
+                }
+
+                if (panel != Panel.None) {
+                    SidePanel(
+                        modifier = Modifier.align(Alignment.CenterEnd),
+                    ) {
+                        when (panel) {
+                            Panel.Tracks -> TracksPanel(tracks, player, panelFocus) { panel = Panel.None }
+                            Panel.Episodes -> EpisodesPanel(channels, index, panelFocus) {
+                                index = it
+                                panel = Panel.None
+                            }
+                            Panel.Info -> InfoPanel(player, panelFocus) { panel = Panel.None }
+                            Panel.None -> Unit
+                        }
                     }
                 }
             }
         }
     }
+}
+
+// --- timeline -----------------------------------------------------------------------------------------------
+
+private fun formatTime(ms: Long): String {
+    val total = (ms.coerceAtLeast(0L) / 1000)
+    val h = total / 3600
+    val m = (total % 3600) / 60
+    val s = total % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
+
+@Composable
+private fun Timeline(
+    positionMs: Long,
+    durationMs: Long,
+    canSeek: Boolean,
+    live: Boolean,
+    behindLiveMs: Long,
+    onSkip: (Long) -> Unit,
+    onGoLive: () -> Unit,
+) {
+    val hasDuration = durationMs != C.TIME_UNSET && durationMs > 0
+    if (!hasDuration && !live) return
+    var focused by remember { mutableStateOf(false) }
+    val atEdge = live && behindLiveMs < LIVE_EDGE_MS
+
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (hasDuration && canSeek) {
+            PrismText(text = formatTime(positionMs), size = 16.sp, color = PrismColors.TextSecondary)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .height(if (focused) 12.dp else 8.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color.White.copy(alpha = 0.25f))
+                    .border(if (focused) 2.dp else 0.dp, Color.White, RoundedCornerShape(6.dp))
+                    .onFocusChanged { focused = it.isFocused }
+                    .onKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        when (event.key) {
+                            Key.DirectionLeft -> { onSkip(-SKIP_MS); true }
+                            Key.DirectionRight -> { onSkip(SKIP_MS); true }
+                            else -> false
+                        }
+                    }
+                    .focusable(),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxWidth((positionMs.toFloat() / durationMs).coerceIn(0f, 1f))
+                        .fillMaxHeight()
+                        .background(PrismColors.Danger),
+                )
+            }
+            PrismText(
+                text = if (live) formatTime(durationMs) else "-" + formatTime(durationMs - positionMs),
+                size = 16.sp,
+                color = PrismColors.TextSecondary,
+            )
+        } else {
+            Box(Modifier.weight(1f))
+        }
+        if (live) {
+            GlassButton(
+                text = "● " + stringResource(R.string.np_live),
+                onClick = onGoLive,
+                tint = if (atEdge) PrismColors.Danger else null,
+            )
+        }
+    }
+}
+
+// --- panels ---------------------------------------------------------------------------------------------------
+
+@Composable
+private fun SidePanel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    GlassPanel(
+        modifier
+            .padding(end = 40.dp)
+            .width(420.dp)
+            .fillMaxHeight(0.7f),
+        cornerRadius = 24.dp,
+    ) {
+        Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
+    }
+}
+
+@Composable
+private fun trackName(group: Tracks.Group, i: Int, number: Int): String {
+    val format = group.getTrackFormat(i)
+    val language = format.language?.takeIf { it != "und" }
+        ?.let { Locale.forLanguageTag(it).getDisplayLanguage(Locale.getDefault()) }
+        ?.takeIf { it.isNotBlank() }
+    val base = TextCleaner.cleanOrNull(format.label) ?: language?.replaceFirstChar { it.uppercase() }
+        ?: stringResource(R.string.np_track_default, number)
+    val channels = format.channelCount.takeIf { it > 0 && group.type == C.TRACK_TYPE_AUDIO }
+    return if (channels != null) "$base · ${channelLabel(channels)}" else base
+}
+
+private fun channelLabel(count: Int): String = when (count) {
+    1 -> "1.0"
+    2 -> "2.0"
+    6 -> "5.1"
+    8 -> "7.1"
+    else -> count.toString()
+}
+
+@Composable
+private fun TracksPanel(tracks: Tracks, player: Player, focus: FocusRequester, onClose: () -> Unit) {
+    val audio = ArrayList<TrackChoice>()
+    val subs = ArrayList<TrackChoice>()
+    var anyTextSelected = false
+    var n = 0
+    for (group in tracks.groups) {
+        if (group.type != C.TRACK_TYPE_AUDIO && group.type != C.TRACK_TYPE_TEXT) continue
+        for (i in 0 until group.length) {
+            if (!group.isTrackSupported(i)) continue
+            n++
+            val label = trackName(group, i, n)
+            val selected = group.isTrackSelected(i)
+            if (group.type == C.TRACK_TYPE_TEXT && selected) anyTextSelected = true
+            val choice = TrackChoice(label, selected) {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(group.type, false)
+                    .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, i))
+                    .build()
+            }
+            if (group.type == C.TRACK_TYPE_AUDIO) audio += choice else subs += choice
+        }
+    }
+    val off = TrackChoice(stringResource(R.string.np_subtitles_off), !anyTextSelected) {
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
+    }
+
+    PrismText(text = stringResource(R.string.np_audio_subs), size = 24.sp, weight = FontWeight.Bold)
+    if (audio.isEmpty() && subs.isEmpty()) {
+        PrismText(text = stringResource(R.string.np_no_tracks), size = 18.sp, color = PrismColors.TextSecondary)
+        GlassButton(text = stringResource(R.string.np_close), onClick = onClose, focusRequester = focus)
+        return
+    }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+        item { PrismText(text = stringResource(R.string.np_audio), size = 18.sp, color = PrismColors.Accent) }
+        itemsIndexed(audio) { i, choice -> TrackRow(choice, if (i == 0) focus else null, onClose) }
+        item { PrismText(text = stringResource(R.string.np_subtitles), size = 18.sp, color = PrismColors.Accent) }
+        itemsIndexed(listOf(off) + subs) { i, choice ->
+            TrackRow(choice, if (audio.isEmpty() && i == 0) focus else null, onClose)
+        }
+    }
+}
+
+@Composable
+private fun TrackRow(choice: TrackChoice, focus: FocusRequester?, onClose: () -> Unit) {
+    GlassSurface(
+        onClick = {
+            choice.select()
+            onClose()
+        },
+        modifier = Modifier.fillMaxWidth(),
+        selected = choice.selected,
+        focusRequester = focus,
+        focusScale = 1.02f,
+    ) {
+        PrismText(
+            text = (if (choice.selected) "✓ " else "") + choice.label,
+            size = 18.sp,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun EpisodesPanel(channels: List<Channel>, current: Int, focus: FocusRequester, onPick: (Int) -> Unit) {
+    PrismText(text = stringResource(R.string.np_episodes), size = 24.sp, weight = FontWeight.Bold)
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+        itemsIndexed(channels) { i, episode ->
+            GlassSurface(
+                onClick = { onPick(i) },
+                modifier = Modifier.fillMaxWidth(),
+                selected = i == current,
+                focusRequester = if (i == current) focus else null,
+                focusScale = 1.02f,
+            ) {
+                PrismText(
+                    text = (if (episode.episode > 0) "%02d  ".format(episode.episode) else "") + episode.name,
+                    size = 18.sp,
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InfoPanel(player: Player, focus: FocusRequester, onClose: () -> Unit) {
+    PrismText(text = stringResource(R.string.np_info), size = 24.sp, weight = FontWeight.Bold)
+    val exo = player as? androidx.media3.exoplayer.ExoPlayer
+    val video = exo?.videoFormat
+    val audio = exo?.audioFormat
+    fun mime(value: String?) = value?.substringAfter('/')?.uppercase().orEmpty()
+    val lines = buildList {
+        if (video != null && video.width > 0) {
+            add("${video.width}x${video.height}" + (if (video.frameRate > 0) " · %.0f fps".format(video.frameRate) else ""))
+            add(mime(video.sampleMimeType) + (if (video.bitrate > 0) " · ${video.bitrate / 1000} kb/s" else ""))
+        }
+        if (audio != null) {
+            add(mime(audio.sampleMimeType) + (if (audio.channelCount > 0) " · ${channelLabel(audio.channelCount)}" else ""))
+        }
+    }
+    for (line in lines) PrismText(text = line, size = 18.sp, color = PrismColors.TextSecondary)
+    GlassButton(text = stringResource(R.string.np_close), onClick = onClose, focusRequester = focus)
 }
 
 @Composable
@@ -340,35 +753,10 @@ private fun StatusChip(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun aspectLabel(mode: AspectMode): String = stringResource(
+fun aspectLabel(mode: AspectMode): String = mode.label ?: stringResource(
     when (mode) {
-        AspectMode.AUTO -> R.string.aspect_auto
-        AspectMode.RATIO_16_9 -> R.string.aspect_16_9
-        AspectMode.RATIO_4_3 -> R.string.aspect_4_3
         AspectMode.FIT_SCREEN -> R.string.aspect_fit_screen
+        AspectMode.ZOOM -> R.string.aspect_zoom
+        else -> R.string.aspect_auto
     },
 )
-
-private fun createPlayer(context: Context): ExoPlayer {
-    val httpFactory = DefaultHttpDataSource.Factory()
-        .setUserAgent("PrismPlayer/0.1 (Android TV)")
-        .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(10_000)
-        .setReadTimeoutMs(15_000)
-    // IPTV panels often serve raw MPEG-TS (output=mpegts). These standard Media3 flags make such streams start
-    // and keep sync more reliably, and decoder fallback retries with another decoder when one fails.
-    val extractors = DefaultExtractorsFactory()
-        .setTsExtractorFlags(
-            DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or
-                DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS or
-                DefaultTsPayloadReaderFactory.FLAG_ENABLE_HDMV_DTS_AUDIO_STREAMS,
-        )
-        .setConstantBitrateSeekingEnabled(true)
-    val renderers = DefaultRenderersFactory(context)
-        .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
-        .setEnableDecoderFallback(true)
-    return ExoPlayer.Builder(context, renderers)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(context, extractors).setDataSourceFactory(httpFactory))
-        .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
-        .build()
-}

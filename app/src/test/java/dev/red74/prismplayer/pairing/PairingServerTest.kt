@@ -18,6 +18,7 @@ class PairingServerTest {
     private lateinit var manager: PairingManager
     private lateinit var server: PairingServer
     private val received = CopyOnWriteArrayList<Pair<String, String>>()
+    private val knownUrls = CopyOnWriteArrayList<String>()
     private var port = 0
 
     private data class Reply(val status: Int, val body: String, val headers: Map<String, String>)
@@ -25,7 +26,11 @@ class PairingServerTest {
     @Before
     fun setUp() {
         manager = PairingManager()
-        server = PairingServer(manager, onPlaylist = { name, url -> received.add(name to url) })
+        server = PairingServer(
+            manager,
+            onPlaylist = { name, url -> received.add(name to url) },
+            isDuplicate = { url -> url in knownUrls },
+        )
         server.start(NanoHTTPD.SOCKET_READ_TIMEOUT, true)
         port = server.listeningPort
     }
@@ -91,6 +96,19 @@ class PairingServerTest {
             assertTrue(response.lowercase().contains("connection: close"))
         }
         assertEquals(listOf("My list" to "https://example.com/list.m3u"), received.toList())
+    }
+
+    @Test
+    fun aListThatIsAlreadySavedIsRefusedAndTheCodeStaysValid() {
+        knownUrls.add("https://example.com/already.m3u")
+        val code = manager.newSession().code
+        val refused = post("/submit", form(code, "https://example.com/already.m3u"))
+        assertEquals(409, refused.status)
+        assertTrue(received.isEmpty())
+        // the code was not burned: a different link still goes through
+        val accepted = post("/submit", form(code, "https://example.com/other.m3u"))
+        assertEquals(200, accepted.status)
+        assertEquals(1, received.size)
     }
 
     @Test

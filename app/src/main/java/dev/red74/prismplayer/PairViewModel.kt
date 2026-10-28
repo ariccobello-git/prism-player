@@ -63,7 +63,11 @@ class PairViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val candidate = PairingServer(manager, onPlaylist = ::onPlaylistReceived)
+        val candidate = PairingServer(
+            manager,
+            onPlaylist = ::onPlaylistReceived,
+            isDuplicate = { container.playlistStore.contains(it) },
+        )
         try {
             candidate.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
         } catch (e: IOException) {
