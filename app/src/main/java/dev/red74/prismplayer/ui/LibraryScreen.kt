@@ -191,9 +191,11 @@ private fun LibraryContent(
         UiSounds.play(UiSounds.Kind.BACK)
         onNav { it.copy(level = levelUp, resume = true) }
     }
+    // Back from a detail page goes to exactly where it was opened: Favourites or a search when it came from there,
+    // otherwise its own group list.
     BackHandler(enabled = nav.movieUrl != null || nav.showTitle != null) {
         UiSounds.play(UiSounds.Kind.BACK)
-        onNav { it.copy(movieUrl = null, showTitle = null, showGroup = null, season = -1, resume = true) }
+        onNav { it.origin?.copy(resume = true) ?: it.copy(movieUrl = null, showTitle = null, showGroup = null, season = -1, resume = true) }
     }
 
     PrismBackground {
@@ -292,6 +294,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
                             // next tab (Favourites showed "No results").
                             tab = tab, category = 0, level = 0, sub = 0, itemIndex = 0, movieUrl = null,
                             showTitle = null, showGroup = null, season = -1, query = "", resume = true,
+                            origin = null, returnKey = null,
                         )
                     }
                 },
@@ -418,7 +421,11 @@ private fun MovieGrid(items: List<Channel>, restorable: Boolean, favorites: Set<
         val item = items[i]
         val key = FavoriteKey.of(item)
         GridEntry(item.name, item.logo, key in favorites, unavailable = key in unavailable) {
-            onNav { it.copy(movieUrl = item.url, itemIndex = if (restorable) i else 0, resume = true) }
+            onNav {
+                // From a search, Back must bring the search back (see LibraryNav.origin).
+                val from = if (restorable) null else it.copy(itemIndex = i, resume = true, origin = null)
+                it.copy(movieUrl = item.url, itemIndex = if (restorable) i else 0, resume = true, origin = from)
+            }
         }
     }
 }
@@ -428,7 +435,10 @@ private fun ShowGrid(items: List<Show>, restorable: Boolean, favorites: Set<Stri
     ItemGrid(items.size, nav, onNav) { i ->
         val item = items[i]
         GridEntry(item.title, item.logo, FavoriteKey.ofShow(item) in favorites) {
-            onNav { it.copy(showTitle = item.title, showGroup = item.group, season = -1, itemIndex = if (restorable) i else 0, resume = true) }
+            onNav {
+                val from = if (restorable) null else it.copy(itemIndex = i, resume = true, origin = null)
+                it.copy(showTitle = item.title, showGroup = item.group, season = -1, itemIndex = if (restorable) i else 0, resume = true, origin = from)
+            }
         }
     }
 }
@@ -1145,8 +1155,19 @@ private fun FavoritesView(
     }
     val playable = remember(entries) { entries.mapNotNull { it.channel } }
     val firstFocus = remember { FocusRequester() }
-    // The favourite watched last keeps the cursor when coming back from the player.
-    val target = remember(entries, nav.played) { entries.indexOfFirst { it.channel != null && it.channel.url == nav.played }.coerceAtLeast(0) }
+    // The cursor goes to the favourite watched or opened last; when a favourite is removed, to the row that takes
+    // its place, so it never disappears from the page (and Back keeps working from there).
+    var focusedIndex by remember { mutableIntStateOf(-1) }
+    val target = remember(entries, nav.played, nav.returnKey, focusedIndex) {
+        val back = entries.indexOfFirst {
+            (it.channel != null && it.channel.url == nav.played) || (it.show != null && FavoriteKey.ofShow(it.show) == nav.returnKey)
+        }
+        when {
+            focusedIndex >= 0 -> focusedIndex.coerceAtMost(entries.lastIndex)
+            back >= 0 -> back
+            else -> 0
+        }
+    }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = target)
     LaunchedEffect(entries.size) { firstFocus.requestWhenReady() }
     val unavailable = LocalReachability.current.unavailable
@@ -1159,13 +1180,17 @@ private fun FavoritesView(
                     if (channel != null) {
                         onPlay(playable, playable.indexOf(channel).coerceAtLeast(0), false)
                     } else if (entry.show != null) {
+                        val key = FavoriteKey.ofShow(entry.show)
                         onNav {
-                            it.copy(tab = LibraryTab.SERIES, showTitle = entry.show.title, showGroup = entry.show.group, season = -1, query = "")
+                            // Back from the series returns here, on this row (see LibraryNav.origin).
+                            val from = it.copy(resume = true, origin = null, returnKey = key)
+                            it.copy(tab = LibraryTab.SERIES, showTitle = entry.show.title, showGroup = entry.show.group, season = -1, query = "", origin = from)
                         }
                     }
                 },
                 modifier = Modifier.weight(1f),
                 focusRequester = if (index == target) firstFocus else null,
+                onFocused = { focusedIndex = index },
                 focusScale = 1.02f,
             ) {
                 val missing = entry.channel?.let { FavoriteKey.of(it) in unavailable } == true

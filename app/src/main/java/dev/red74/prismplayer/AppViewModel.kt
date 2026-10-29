@@ -83,6 +83,13 @@ data class LibraryNav(
     val resume: Boolean = false,
     /** Address of the last content played (kept in memory only), so coming back puts the cursor on it. */
     val played: String? = null,
+    /**
+     * Where a detail page (film, series) was opened from when that is not its own group list: Favourites or a
+     * search. Back from the detail returns exactly there instead of going up the groups of the other tab.
+     */
+    val origin: LibraryNav? = null,
+    /** Favourite key of the series to put the cursor on when going back to Favourites. */
+    val returnKey: String? = null,
 )
 
 /** What the full-screen player plays: a list (a category, a season) and where to start in it. */
