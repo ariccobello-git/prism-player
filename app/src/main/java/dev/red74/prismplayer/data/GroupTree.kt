@@ -16,6 +16,13 @@ fun <T> List<T>.sortedBy(mode: SortMode, title: (T) -> String): List<T> = when (
  * Each sub-group points at one category of the catalog; nothing is copied.
  */
 object GroupTree {
+    /** The level reached by Back or Left from [level]: contents (2) go to the sub-groups (1) if the group has them, else to the groups (0). */
+    fun levelUp(level: Int, hasSubLevel: Boolean): Int = when {
+        level >= 2 -> if (hasSubLevel) 1 else 0
+        level == 1 -> 0
+        else -> -1
+    }
+
     class Sub(val name: String, val category: Int)
 
     /** [categories] are the catalog categories belonging to this group, in list order. */

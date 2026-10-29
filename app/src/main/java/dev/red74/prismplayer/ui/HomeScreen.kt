@@ -131,12 +131,6 @@ fun HomeScreen(
                             onClick = onVerifyAll,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        // The arrows never cross between the menu and the playlists: OK here goes into them.
-                        GlassButton(
-                            text = stringResource(R.string.action_go_lists),
-                            onClick = { runCatching { listFocus.requestFocus() } },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
                     }
                     GlassButton(
                         text = stringResource(R.string.action_updates),

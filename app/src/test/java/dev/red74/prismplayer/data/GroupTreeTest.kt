@@ -41,4 +41,12 @@ class GroupTreeTest {
         assertEquals(listOf("cherry", "banana", "Apple"), list.sortedBy(SortMode.ZA) { it })
         assertEquals(listOf("cherry", "Apple", "banana"), list.sortedBy(SortMode.RECENT) { it })
     }
+
+    @Test
+    fun backAndLeftGoUpOneLevelAtATime() {
+        assertEquals(1, GroupTree.levelUp(2, hasSubLevel = true))
+        assertEquals(0, GroupTree.levelUp(2, hasSubLevel = false))
+        assertEquals(0, GroupTree.levelUp(1, hasSubLevel = true))
+        assertEquals(-1, GroupTree.levelUp(0, hasSubLevel = true))
+    }
 }

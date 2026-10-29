@@ -17,7 +17,7 @@ object UiSounds {
     var enabled: Boolean = false
 
     /** Everything the app plays (interface sounds, opening and closing music) is 30% below full scale. */
-    const val MASTER = 0.7f
+    const val MASTER = 0.42f
 
     /** Set from the Home menu; remembered between launches. */
     @Volatile

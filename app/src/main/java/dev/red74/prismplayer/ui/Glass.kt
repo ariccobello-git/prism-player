@@ -430,20 +430,26 @@ fun Poster(url: String?, title: String, modifier: Modifier = Modifier, fit: Bool
 }
 
 /**
- * Keeps the D-pad inside this section: the arrows stop at its edge in every direction (Left and Right too unless
- * [horizontal] is false) instead of jumping to a neighbouring section. Moving between sections is done only with
- * Back (up/out) and OK (down/in). This is the rule for
- * every list, grid and panel in the app.
+ * Marks a section of the screen. The D-pad moves between sections the natural way (the nearest focusable item in
+ * the direction pressed, as in every TV app), so no arrow is ever blocked. Back goes up one step.
+ */
+fun Modifier.confineFocus(horizontal: Boolean = true): Modifier = this.focusGroup()
+
+/**
+ * Like [confineFocus], but when the arrow [direction] would leave this section, [action] runs instead (for example
+ * going up one group level) and the focus stays where it is. [action] must set an absolute state, so it is safe if
+ * it runs more than once for a single key press.
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-fun Modifier.confineFocus(horizontal: Boolean = true): Modifier = this
+fun Modifier.onExitFocus(direction: androidx.compose.ui.focus.FocusDirection, action: () -> Unit): Modifier = this
     .focusProperties {
-        exit = { direction ->
-            val vertical = direction == androidx.compose.ui.focus.FocusDirection.Up ||
-                direction == androidx.compose.ui.focus.FocusDirection.Down
-            val sideways = direction == androidx.compose.ui.focus.FocusDirection.Left ||
-                direction == androidx.compose.ui.focus.FocusDirection.Right
-            if (vertical || (horizontal && sideways)) FocusRequester.Cancel else FocusRequester.Default
+        exit = { requested ->
+            if (requested == direction) {
+                action()
+                FocusRequester.Cancel
+            } else {
+                FocusRequester.Default
+            }
         }
     }
     .focusGroup()

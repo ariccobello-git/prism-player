@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -42,6 +43,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -136,11 +142,7 @@ fun LibraryScreen(
     }
     val groupTree = remember(groupNames) { GroupTree.build(groupNames) }
     val currentMain = groupTree.getOrNull(nav.category)
-    val levelUp = when {
-        nav.level >= 2 -> if (currentMain?.hasSubLevel == true) 1 else 0
-        nav.level == 1 -> 0
-        else -> -1
-    }
+    val levelUp = GroupTree.levelUp(nav.level, currentMain?.hasSubLevel == true)
     BackHandler(enabled = contentFocused && levelUp >= 0 && nav.query.isEmpty() && nav.tab != LibraryTab.FAVORITES &&
         nav.movieUrl == null && nav.showTitle == null) {
         UiSounds.play(UiSounds.Kind.BACK)
@@ -456,6 +458,7 @@ private fun GroupBrowser(
             resume = nav.resume,
             onResumed = { onNav { it.copy(resume = false) } },
             modifier = Modifier.weight(mainWeight).fillMaxHeight(),
+            onLeft = null,
             onPick = { i ->
                 onNav {
                     it.copy(category = i, sub = 0, itemIndex = 0, level = if (tree[i].hasSubLevel) 1 else 2, resume = true)
@@ -470,11 +473,21 @@ private fun GroupBrowser(
                 resume = nav.resume,
                 onResumed = { onNav { it.copy(resume = false) } },
                 modifier = Modifier.weight(subWeight).fillMaxHeight(),
+                onLeft = { onNav { it.copy(level = 0, resume = true) } },
                 onPick = { i -> onNav { it.copy(sub = i, itemIndex = 0, level = 2, resume = true) } },
             )
         }
         if (level >= 2) {
-            Box(Modifier.weight(if (main.hasSubLevel) 0.6f else 0.73f).fillMaxHeight()) { content(cats) }
+            // Left from the left edge of the contents goes back up one level (the arrow never gets stuck).
+            val up = GroupTree.levelUp(2, main.hasSubLevel)
+            Box(
+                Modifier
+                    .weight(if (main.hasSubLevel) 0.6f else 0.73f)
+                    .fillMaxHeight()
+                    .onExitFocus(androidx.compose.ui.focus.FocusDirection.Left) {
+                        onNav { it.copy(level = up, resume = true) }
+                    },
+            ) { content(cats) }
         }
     }
 }
@@ -487,9 +500,11 @@ private fun GroupColumn(
     resume: Boolean,
     onResumed: () -> Unit,
     modifier: Modifier,
+    onLeft: (() -> Unit)?,
     onPick: (Int) -> Unit,
 ) {
     val focus = remember { FocusRequester() }
+    var focusedIndex by remember { mutableIntStateOf(selected) }
     val current = selected.coerceIn(0, (rows.size - 1).coerceAtLeast(0))
     val state = rememberLazyListState(initialFirstVisibleItemIndex = current)
     LaunchedEffect(resume, active) {
@@ -499,7 +514,22 @@ private fun GroupColumn(
             onResumed()
         }
     }
-    LazyColumn(modifier.depthFocus().confineFocus(), state = state, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Right opens the highlighted group (like OK); Left goes back up a level.
+    LazyColumn(
+        modifier
+            .depthFocus()
+            .confineFocus()
+            .onPreviewKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (event.key) {
+                    Key.DirectionRight -> { UiSounds.play(UiSounds.Kind.FORWARD); onPick(focusedIndex); true }
+                    Key.DirectionLeft -> if (onLeft != null) { UiSounds.play(UiSounds.Kind.BACK); onLeft(); true } else false
+                    else -> false
+                }
+            },
+        state = state,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         itemsIndexed(rows) { index, row ->
             GlassSurface(
                 onClick = {
@@ -508,7 +538,7 @@ private fun GroupColumn(
                 },
                 tint = if (index == current) PrismColors.Accent else null,
                 focusRequester = if (index == current) focus else null,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.hasFocus) focusedIndex = index },
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     PrismText(
