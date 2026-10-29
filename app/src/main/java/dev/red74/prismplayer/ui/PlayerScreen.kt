@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +62,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.PlayerView
 import dev.red74.prismplayer.R
 import dev.red74.prismplayer.data.Channel
@@ -68,6 +70,7 @@ import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.device.DeviceProfile
 import dev.red74.prismplayer.data.TextCleaner
 import dev.red74.prismplayer.player.AspectMode
+import dev.red74.prismplayer.player.FastScan
 import dev.red74.prismplayer.player.createPlayer
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -122,7 +125,14 @@ fun PlayerScreen(
     var countdown by remember { mutableIntStateOf(-1) }
     /** Fast scan like other players: 0 normal, +2/+4/+8 faster forward, -2/-4/-8 backwards. */
     var scan by remember { mutableIntStateOf(0) }
-    var lastScan by remember { mutableIntStateOf(0) }
+    /** Where the scan clock is while scanning by pictures (see [FastScan]), -1 otherwise. */
+    var scanPosMs by remember { mutableLongStateOf(-1L) }
+    /** True when 2x could not keep up with real playback and moved to the scan clock. */
+    var scanBySeeking by remember { mutableStateOf(false) }
+    /** "Buffering" appears only when loading lasts, not for every short seek. */
+    var showBuffering by remember { mutableStateOf(false) }
+    /** Pictures put on screen after a seek; a counter outside Compose state so it never redraws the screen. */
+    val framesShown = remember { intArrayOf(0) }
 
     val player = remember { createPlayer(context) }
     val remote = remember { DeviceProfile.get(context) }
@@ -151,6 +161,10 @@ fun PlayerScreen(
 
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
+            }
+
+            override fun onRenderedFirstFrame() {
+                framesShown[0]++
             }
 
             override fun onTracksChanged(newTracks: Tracks) {
@@ -183,6 +197,7 @@ fun PlayerScreen(
         errorName = null
         countdown = -1
         status = PlayStatus.Loading
+        scanPosMs = -1L
         scan = 0
         player.setPlaybackSpeed(1f)
         liveFlag = false
@@ -197,7 +212,7 @@ fun PlayerScreen(
     // Progress ticker while the controls are visible.
     LaunchedEffect(overlayVisible, index) {
         while (overlayVisible) {
-            positionMs = player.currentPosition.coerceAtLeast(0L)
+            positionMs = if (scanPosMs >= 0L) scanPosMs else player.currentPosition.coerceAtLeast(0L)
             durationMs = player.duration
             canSeek = player.isCurrentMediaItemSeekable
             behindLiveMs = if (player.isCurrentMediaItemLive) {
@@ -247,25 +262,89 @@ fun PlayerScreen(
             formatToast = null
         }
     }
-    // Forward scan plays faster; the player cannot play backwards, so a rewind scan steps back several times a second.
-    LaunchedEffect(scan) {
-        val before = lastScan
-        lastScan = scan
-        player.setPlaybackSpeed(if (scan > 0) scan.toFloat() else 1f)
-        if (before < 0 && scan >= 0) player.play()
-        if (scan < 0) {
-            player.pause()
+    LaunchedEffect(status, scan) {
+        showBuffering = false
+        if (status == PlayStatus.Loading && scan == 0) {
+            delay(700)
+            showBuffering = true
+        }
+    }
+
+    // Fast scan (see FastScan): 2x plays for real while the stream keeps up; 4x, 8x and every rewind move a clock at
+    // exactly the chosen speed and show a key frame near it each time the previous picture is on screen.
+    LaunchedEffect(scan, scanBySeeking) {
+        if (scan == 0) {
+            if (scanBySeeking) scanBySeeking = false
+            player.setSeekParameters(SeekParameters.DEFAULT)
+            player.setPlaybackSpeed(1f)
+            if (scanPosMs >= 0L) {
+                player.seekTo(scanPosMs)
+                positionMs = scanPosMs
+                scanPosMs = -1L
+                player.play()
+            }
+            return@LaunchedEffect
+        }
+        if (FastScan.playsForReal(scan) && !scanBySeeking) {
+            player.setSeekParameters(SeekParameters.DEFAULT)
+            if (scanPosMs >= 0L) {
+                player.seekTo(scanPosMs)
+                scanPosMs = -1L
+            }
+            player.setPlaybackSpeed(scan.toFloat())
+            player.play()
+            var wasReady = false
+            var stalledMs = 0L
             while (true) {
-                delay(250)
-                val target = player.currentPosition + scan * 250L
-                if (target <= 0L) {
-                    player.seekTo(0L)
-                    positionMs = 0L
-                    scan = 0
-                    break
+                delay(100)
+                positionMs = player.currentPosition.coerceAtLeast(0L)
+                durationMs = player.duration
+                when (player.playbackState) {
+                    Player.STATE_READY -> { wasReady = true; stalledMs = 0L }
+                    Player.STATE_BUFFERING -> stalledMs += 100
+                    Player.STATE_ENDED -> { scan = 0; return@LaunchedEffect }
+                    else -> Unit
                 }
-                player.seekTo(target)
-                positionMs = target
+                val offset = if (player.isCurrentMediaItemLive) player.currentLiveOffset else C.TIME_UNSET
+                if (offset != C.TIME_UNSET && offset < LIVE_EDGE_MS) { scan = 0; return@LaunchedEffect }
+                // Before the first picture a longer wait is normal (the stream is still starting).
+                val allowed = if (wasReady) FastScan.STALL_FALLBACK_MS else FastScan.STALL_FALLBACK_MS * 4
+                if (stalledMs >= allowed) { scanBySeeking = true; return@LaunchedEffect }
+            }
+        }
+        player.setPlaybackSpeed(1f)
+        player.pause()
+        // Key frames only: no decoding from the key frame up to the exact position, which is what makes seeks slow.
+        player.setSeekParameters(SeekParameters.CLOSEST_SYNC)
+        var pos = if (scanPosMs >= 0L) scanPosMs else player.currentPosition.coerceAtLeast(0L)
+        scanPosMs = pos
+        var last = withFrameMillis { it }
+        var lastSeekAt = last - FastScan.MAX_SEEK_WAIT_MS
+        var framesAtSeek = framesShown[0]
+        var lastShownAt = 0L
+        while (true) {
+            val now = withFrameMillis { it }
+            pos = FastScan.advance(pos, scan, now - last)
+            last = now
+            val limit = FastScan.forwardLimit(player.duration.takeIf { it != C.TIME_UNSET && it > 0L })
+            val reachedEnd = pos <= 0L || (limit != null && pos >= limit)
+            pos = pos.coerceAtLeast(0L).let { if (limit != null) it.coerceAtMost(limit) else it }
+            if (reachedEnd) {
+                scanPosMs = pos
+                scan = 0
+                return@LaunchedEffect
+            }
+            val pictureShown = framesShown[0] != framesAtSeek || player.playbackState == Player.STATE_READY
+            if (FastScan.shouldSeek(now - lastSeekAt, pictureShown)) {
+                framesAtSeek = framesShown[0]
+                player.seekTo(pos)
+                lastSeekAt = now
+            }
+            if (now - lastShownAt >= 100L) {
+                scanPosMs = pos
+                positionMs = pos
+                durationMs = player.duration
+                lastShownAt = now
             }
         }
     }
@@ -298,9 +377,11 @@ fun PlayerScreen(
 
     fun skip(deltaMs: Long) {
         if (!player.isCurrentMediaItemSeekable) return
+        val from = if (scanPosMs >= 0L) scanPosMs else player.currentPosition
+        scanPosMs = -1L
         scan = 0
         val duration = player.duration
-        var target = player.currentPosition + deltaMs
+        var target = from + deltaMs
         if (duration != C.TIME_UNSET) target = target.coerceAtMost(duration)
         player.seekTo(target.coerceAtLeast(0L))
         positionMs = target.coerceAtLeast(0L)
@@ -317,11 +398,14 @@ fun PlayerScreen(
     }
 
     fun goLive() {
+        scanPosMs = -1L
+        scan = 0
         player.seekToDefaultPosition()
         player.play()
     }
 
     fun togglePlay() {
+        // Ending a scan resumes normal playback from where the scan arrived.
         if (scan != 0) { scan = 0; player.play(); return }
         if (player.isPlaying) player.pause() else player.play()
     }
@@ -413,7 +497,7 @@ fun PlayerScreen(
             },
         )
 
-        if (status == PlayStatus.Loading && errorName == null) {
+        if (showBuffering && errorName == null) {
             StatusChip(
                 text = stringResource(R.string.player_buffering),
                 modifier = Modifier
@@ -432,11 +516,11 @@ fun PlayerScreen(
         }
 
         if (scan != 0) {
-            StatusChip(
-                text = (if (scan > 0) "▶▶ " else "◀◀ ") + kotlin.math.abs(scan) + "×",
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 32.dp),
+            ScanBadge(
+                scan = scan,
+                time = durationMs.takeIf { !isLiveStream && it != C.TIME_UNSET && it > 0L }
+                    ?.let { formatTime(positionMs) + " / " + formatTime(it) },
+                modifier = Modifier.align(Alignment.Center),
             )
         }
 
@@ -807,6 +891,24 @@ private fun androidx.compose.foundation.layout.ColumnScope.InfoPanel(player: Pla
     }
     for (line in lines) PrismText(text = line, size = 18.sp, color = PrismColors.TextSecondary)
     GlassButton(text = stringResource(R.string.np_close), onClick = onClose, focusRequester = focus)
+}
+
+/** The 2x/4x/8x sign in the middle of the picture, with the time it has reached. */
+@Composable
+private fun ScanBadge(scan: Int, time: String?, modifier: Modifier = Modifier) {
+    GlassPanel(modifier, cornerRadius = 28.dp) {
+        Column(
+            Modifier.padding(horizontal = 40.dp, vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            PrismText(
+                text = (if (scan > 0) "▶▶  " else "◀◀  ") + kotlin.math.abs(scan) + "×",
+                size = 44.sp,
+                weight = FontWeight.Bold,
+            )
+            time?.let { PrismText(text = it, size = 20.sp, color = PrismColors.TextSecondary) }
+        }
+    }
 }
 
 @Composable
