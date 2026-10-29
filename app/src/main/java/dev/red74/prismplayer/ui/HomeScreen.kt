@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -59,6 +60,8 @@ fun HomeScreen(
     onNoticeShown: () -> Unit,
 ) {
     val firstFocus = remember { FocusRequester() }
+    val listFocus = remember { FocusRequester() }
+    var muted by remember { mutableStateOf(UiSounds.muted) }
     RequestFocusOnEnter(firstFocus)
     // Two levels side by side: the menu and the playlists. Back from the playlists goes to the menu.
     var listFocused by remember { mutableStateOf(false) }
@@ -127,7 +130,22 @@ fun HomeScreen(
                             onClick = onVerifyAll,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        // The arrows never cross between the menu and the playlists: OK here goes into them.
+                        GlassButton(
+                            text = stringResource(R.string.action_go_lists),
+                            onClick = { runCatching { listFocus.requestFocus() } },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
                     }
+                    GlassButton(
+                        text = stringResource(if (muted) R.string.sound_off else R.string.sound_on),
+                        onClick = {
+                            muted = !muted
+                            UiSounds.setMuted(muted)
+                            if (!muted) UiSounds.play(UiSounds.Kind.SELECT)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
 
@@ -140,6 +158,7 @@ fun HomeScreen(
                 LazyColumn(
                     Modifier
                         .fillMaxSize()
+                        .focusRequester(listFocus)
                         .onFocusChanged { listFocused = it.hasFocus }
                         .confineFocus()
                         .padding(28.dp),

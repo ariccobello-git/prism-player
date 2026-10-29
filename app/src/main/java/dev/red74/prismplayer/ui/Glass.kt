@@ -430,12 +430,13 @@ fun Poster(url: String?, title: String, modifier: Modifier = Modifier, fit: Bool
 }
 
 /**
- * Keeps the D-pad inside this group: Up and Down (and Left and Right when [horizontal] is true) stop at the edge
- * instead of jumping to a neighbouring area. Going up one level is done with the Back key. This is the rule for
+ * Keeps the D-pad inside this section: the arrows stop at its edge in every direction (Left and Right too unless
+ * [horizontal] is false) instead of jumping to a neighbouring section. Moving between sections is done only with
+ * Back (up/out) and OK (down/in). This is the rule for
  * every list, grid and panel in the app.
  */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-fun Modifier.confineFocus(horizontal: Boolean = false): Modifier = this
+fun Modifier.confineFocus(horizontal: Boolean = true): Modifier = this
     .focusProperties {
         exit = { direction ->
             val vertical = direction == androidx.compose.ui.focus.FocusDirection.Up ||

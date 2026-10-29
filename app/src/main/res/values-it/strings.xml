@@ -132,4 +132,7 @@
     <string name="version_label">Versione %1$s</string>
     <string name="np_format">Formato</string>
     <string name="player_hint_hold">Tieni premuto ◀ ▶ per scorrere più veloce · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
+    <string name="sound_on">Suoni: attivi</string>
+    <string name="sound_off">Suoni: silenziati</string>
+    <string name="action_go_lists">Le mie playlist</string>
 </resources>

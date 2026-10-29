@@ -137,9 +137,15 @@ fun LibraryScreen(
                     .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
+                Column(
+                    Modifier.fillMaxWidth().then(if (state.loading || state.error != null) Modifier else Modifier.depthFocus().confineFocus()),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     GlassButton(text = stringResource(R.string.action_back), onClick = onBack)
                     PrismText(text = state.playlistName, size = 30.sp, weight = FontWeight.Bold, maxLines = 1)
+                }
+                if (!state.loading && state.error == null) TopBar(nav, onNav, tabFocus)
                 }
 
                 when {
@@ -171,7 +177,6 @@ fun LibraryScreen(
                                 color = PrismColors.Warn,
                             )
                         }
-                        TopBar(nav, onNav, tabFocus)
                         Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }.depthFocus()) {
                             LibraryBody(state.catalog, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
                         }
@@ -185,7 +190,7 @@ fun LibraryScreen(
 @Composable
 private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) {
     Row(
-        Modifier.fillMaxWidth().depthFocus(),
+        Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
@@ -346,7 +351,7 @@ private fun EmptyNote(text: Int) {
  * in that category until Back is pressed.
  */
 @Composable
-private fun CategoryColumn(names: List<String>, counts: List<Int>, nav: LibraryNav, onNav: NavChange, modifier: Modifier) {
+private fun CategoryColumn(names: List<String>, counts: List<Int>, nav: LibraryNav, onNav: NavChange, modifier: Modifier, selectedFocus: FocusRequester? = null) {
     val other = stringResource(R.string.category_other)
     val selected = nav.category.coerceIn(0, (names.size - 1).coerceAtLeast(0))
     val state = rememberLazyListState(initialFirstVisibleItemIndex = selected)
@@ -355,6 +360,7 @@ private fun CategoryColumn(names: List<String>, counts: List<Int>, nav: LibraryN
             GlassSurface(
                 onClick = { onNav { it.copy(category = index, itemIndex = 0, resume = true) } },
                 tint = if (index == selected) PrismColors.Accent else null,
+                focusRequester = if (index == selected) selectedFocus else null,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -654,6 +660,8 @@ private fun CategoryAndGrid(
     val total = count(category)
     val gridState = rememberLazyGridState(initialFirstVisibleItemIndex = nav.itemIndex.coerceIn(0, (total - 1).coerceAtLeast(0)))
     val itemFocus = remember { FocusRequester() }
+    val categoryFocus = remember { FocusRequester() }
+    var gridFocused by remember { mutableStateOf(false) }
     val target = nav.itemIndex.coerceIn(0, (total - 1).coerceAtLeast(0))
 
     LaunchedEffect(nav.resume) {
@@ -663,10 +671,15 @@ private fun CategoryAndGrid(
             onNav { it.copy(resume = false) }
         }
     }
+    // Back from the items goes to the category column (arrows never cross between the two).
+    BackHandler(enabled = showCategories && gridFocused) {
+        UiSounds.play(UiSounds.Kind.BACK)
+        runCatching { categoryFocus.requestFocus() }
+    }
 
-    Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         if (showCategories) {
-            CategoryColumn(names, counts, nav, onNav, Modifier.weight(0.27f).fillMaxHeight().depthFocus())
+            CategoryColumn(names, counts, nav, onNav, Modifier.weight(0.27f).fillMaxHeight().depthFocus().confineFocus(), categoryFocus)
         }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
@@ -674,7 +687,9 @@ private fun CategoryAndGrid(
             modifier = Modifier
                 .weight(if (showCategories) 0.73f else 1f)
                 .fillMaxHeight()
-                .depthFocus(),
+                .onFocusChanged { gridFocused = it.hasFocus }
+                .depthFocus()
+                .confineFocus(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(8.dp),
@@ -742,30 +757,53 @@ private fun ShowDetail(
     val season = if (nav.season in seasons) nav.season else seasons.first()
     val episodes = remember(show, season) { show.episodesOf(season) }
     val seasonFocus = remember { FocusRequester() }
+    val episodeFocus = remember { FocusRequester() }
     RequestFocusOnEnter(seasonFocus)
     val key = FavoriteKey.ofShow(show)
-
-    Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        Column(Modifier.width(240.dp).depthFocus(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Poster(show.logo, show.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
-            FavoriteButton(key in favorites, { onToggleFavorite(key) }, Modifier.fillMaxWidth())
+    var enterEpisodes by remember { mutableStateOf(false) }
+    var episodesFocused by remember { mutableStateOf(false) }
+    LaunchedEffect(enterEpisodes) {
+        if (enterEpisodes) {
+            withFrameNanos { }
+            runCatching { episodeFocus.requestFocus() }
+            enterEpisodes = false
         }
-        Column(Modifier.weight(1f).depthFocus(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    }
+    // Seasons (with the favourite star) above, episodes below: OK goes down into the episodes, Back comes up.
+    BackHandler(enabled = episodesFocused) {
+        UiSounds.play(UiSounds.Kind.BACK)
+        runCatching { seasonFocus.requestFocus() }
+    }
+
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+        Column(Modifier.width(240.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Poster(show.logo, show.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PrismText(text = show.title, size = 30.sp, weight = FontWeight.Bold, maxLines = 2)
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 6.dp)) {
+            LazyRow(
+                Modifier.depthFocus().confineFocus(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(vertical = 6.dp),
+            ) {
+                item { FavoriteButton(key in favorites, { onToggleFavorite(key) }) }
                 itemsIndexed(seasons) { index, number ->
                     GlassButton(
                         text = if (number == 0) stringResource(R.string.season_none) else stringResource(R.string.season_n, number),
-                        onClick = { onNav { it.copy(season = number) } },
+                        onClick = { onNav { it.copy(season = number) }; enterEpisodes = true },
                         onFocused = { if (number != season) onNav { it.copy(season = number) } },
                         emphasized = number == season,
                         focusRequester = if (index == 0) seasonFocus else null,
                     )
                 }
             }
-            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                Modifier.fillMaxSize().onFocusChanged { episodesFocused = it.hasFocus }.depthFocus().confineFocus(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 itemsIndexed(episodes, key = { index, _ -> index }) { index, episode ->
                     GlassSurface(
+                        focusRequester = if (index == 0) episodeFocus else null,
                         onClick = {
                             onNav { it.copy(resume = false) }
                             onPlay(episodes, index, false)

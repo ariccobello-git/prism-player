@@ -54,7 +54,8 @@ fun ExitScreen(onConfirm: () -> Unit, onDismiss: () -> Unit) {
                 .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
                 .build()
             MediaPlayer.create(context, dev.red74.prismplayer.R.raw.prism_outro, attributes, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE)?.apply {
-                setVolume(1f, 1f)
+                val v = if (UiSounds.muted) 0f else UiSounds.MASTER
+                setVolume(v, v)
                 start()
             }
         }.getOrNull()

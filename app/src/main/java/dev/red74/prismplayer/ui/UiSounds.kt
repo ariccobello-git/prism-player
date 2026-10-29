@@ -16,11 +16,30 @@ object UiSounds {
     @Volatile
     var enabled: Boolean = false
 
+    /** Everything the app plays (interface sounds, opening and closing music) is 30% below full scale. */
+    const val MASTER = 0.7f
+
+    /** Set from the Home menu; remembered between launches. */
+    @Volatile
+    var muted: Boolean = false
+        private set
+
+    private var prefs: android.content.SharedPreferences? = null
+
+    fun setMuted(value: Boolean) {
+        muted = value
+        runCatching { prefs?.edit()?.putBoolean("muted", value)?.apply() }
+    }
+
     private var pool: SoundPool? = null
     private val ids = HashMap<Kind, Int>()
     private val ready = HashSet<Int>()
 
     fun init(context: Context) {
+        if (prefs == null) {
+            prefs = context.applicationContext.getSharedPreferences("prism_ui", Context.MODE_PRIVATE)
+            muted = runCatching { prefs?.getBoolean("muted", false) }.getOrNull() ?: false
+        }
         if (pool != null) return
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
@@ -39,9 +58,9 @@ object UiSounds {
     }
 
     fun play(kind: Kind) {
-        if (!enabled) return
+        if (!enabled || muted) return
         val id = ids[kind] ?: return
         if (!synchronized(ready) { id in ready }) return
-        runCatching { pool?.play(id, kind.volume, kind.volume, 1, 0, 1f) }
+        runCatching { pool?.play(id, kind.volume * MASTER, kind.volume * MASTER, 1, 0, 1f) }
     }
 }
