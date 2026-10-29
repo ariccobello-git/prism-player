@@ -431,6 +431,18 @@ private fun ShowGrid(items: List<Show>, restorable: Boolean, favorites: Set<Stri
     }
 }
 
+/** Index of the entry with [url] within [radius] rows of [hint], or -1: reads at most a few pages of a long list. */
+private fun nearIndex(list: List<Channel>, url: String?, hint: Int, radius: Int = 256): Int {
+    if (url == null || list.isEmpty()) return -1
+    val center = hint.coerceIn(0, list.lastIndex)
+    for (d in 0..radius) {
+        if (center + d <= list.lastIndex && list[center + d].url == url) return center + d
+        if (d > 0 && center - d >= 0 && list[center - d].url == url) return center - d
+        if (center + d >= list.lastIndex && center - d <= 0) break
+    }
+    return -1
+}
+
 /** The ⊘ next to a content the provider could not deliver lately (see [dev.red74.prismplayer.data.Availability]). */
 @Composable
 private fun UnavailableSign(modifier: Modifier = Modifier, size: Int = 20) {
@@ -651,8 +663,9 @@ private fun LiveView(
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
     onToggleFavorite: (String) -> Unit,
 ) {
-    // The channel watched last (also after zapping in the player) wins over the remembered row.
-    val playedIndex = remember(list, nav.played) { nav.played?.let { url -> list.indexOfFirst { it.url == url } } ?: -1 }
+    // The channel watched last (also after zapping in the player) wins over the remembered row. It is looked for
+    // only near that row: the list may be read from the database page by page and must never be scanned whole.
+    val playedIndex = remember(list, nav.played, nav.itemIndex) { nearIndex(list, nav.played, nav.itemIndex) }
     val target = (if (playedIndex >= 0) playedIndex else nav.itemIndex).coerceIn(0, (list.size - 1).coerceAtLeast(0))
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = target)
     val sortAtStart = remember { nav.sort }
