@@ -83,7 +83,8 @@ fun HomeScreen(
             GlassPanel(
                 Modifier
                     .weight(0.38f)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .depthFocus(),
             ) {
                 Column(
                     Modifier
@@ -132,7 +133,8 @@ fun HomeScreen(
             GlassPanel(
                 Modifier
                     .weight(0.62f)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .depthFocus(),
             ) {
                 LazyColumn(
                     Modifier

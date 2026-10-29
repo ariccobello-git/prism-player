@@ -7,6 +7,8 @@ plugins {
 
 // Shown on the opening screen so the installed build can be matched to a release. CI passes the release tag
 // (or the short commit) with -PprismVersion; a local build shows "dev".
+// Each CI build gets a higher version code, so a newer APK installs over the previous one.
+val prismCode: Int = (project.findProperty("prismCode") as String?)?.toIntOrNull() ?: 1
 val prismVersion: String = (project.findProperty("prismVersion") as String?)?.takeIf { it.isNotBlank() } ?: "dev"
 
 android {
@@ -18,9 +20,21 @@ android {
         // API 23 is the floor for AES-GCM keys in the Android Keystore.
         minSdk = 23
         targetSdk = 35
-        versionCode = 1
+        versionCode = prismCode
         versionName = "0.1.0"
         buildConfigField("String", "BUILD_LABEL", "\"$prismVersion\"")
+    }
+
+    // One fixed debug signing key (not a secret: it only signs test builds), so every build carries the same
+    // signature and Android installs a new one over the old one instead of refusing it.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("prism-debug.p12")
+            storeType = "pkcs12"
+            storePassword = "prismdebug"
+            keyAlias = "prism"
+            keyPassword = "prismdebug"
+        }
     }
 
     buildTypes {

@@ -169,7 +169,7 @@ fun LibraryScreen(
                             )
                         }
                         TopBar(nav, onNav, tabFocus)
-                        Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }) {
+                        Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }.depthFocus()) {
                             LibraryBody(state.catalog, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
                         }
                     }
@@ -182,7 +182,7 @@ fun LibraryScreen(
 @Composable
 private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) {
     Row(
-        Modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth().depthFocus(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
@@ -662,14 +662,15 @@ private fun CategoryAndGrid(
 
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         if (showCategories) {
-            CategoryColumn(names, counts, nav, onNav, Modifier.weight(0.27f).fillMaxHeight())
+            CategoryColumn(names, counts, nav, onNav, Modifier.weight(0.27f).fillMaxHeight().depthFocus())
         }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
             state = gridState,
             modifier = Modifier
                 .weight(if (showCategories) 0.73f else 1f)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .depthFocus(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(8.dp),
@@ -741,11 +742,11 @@ private fun ShowDetail(
     val key = FavoriteKey.ofShow(show)
 
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-        Column(Modifier.width(240.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.width(240.dp).depthFocus(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Poster(show.logo, show.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
             FavoriteButton(key in favorites, { onToggleFavorite(key) }, Modifier.fillMaxWidth())
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f).depthFocus(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PrismText(text = show.title, size = 30.sp, weight = FontWeight.Bold, maxLines = 2)
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 6.dp)) {
                 itemsIndexed(seasons) { index, number ->

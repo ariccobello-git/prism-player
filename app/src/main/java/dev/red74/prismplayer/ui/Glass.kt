@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.composed
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -168,6 +169,18 @@ fun PrismBackground(
             )
         }
         content()
+        // The installed build, always readable at the bottom of the page.
+        PrismText(
+            text = androidx.compose.ui.res.stringResource(
+                dev.red74.prismplayer.R.string.version_label,
+                dev.red74.prismplayer.BuildConfig.BUILD_LABEL,
+            ),
+            size = 13.sp,
+            color = PrismColors.TextSecondary,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 8.dp),
+        )
     }
 }
 
@@ -433,3 +446,24 @@ fun Modifier.confineFocus(horizontal: Boolean = false): Modifier = this
         }
     }
     .focusGroup()
+
+/**
+ * Depth between sections: the section that holds the focus comes forward (full size, full brightness) and the
+ * others sit slightly behind (smaller, dimmer). Used on every group of focusable sections, side by side or stacked.
+ */
+fun Modifier.depthFocus(): Modifier = composed {
+    var focused by remember { mutableStateOf(false) }
+    val depth by animateFloatAsState(
+        targetValue = if (focused) 1f else 0f,
+        animationSpec = androidx.compose.animation.core.tween(320),
+        label = "depth",
+    )
+    Modifier
+        .onFocusChanged { focused = it.hasFocus }
+        .graphicsLayer {
+            val s = 0.94f + 0.06f * depth
+            scaleX = s
+            scaleY = s
+            alpha = 0.55f + 0.45f * depth
+        }
+}

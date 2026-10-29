@@ -92,7 +92,7 @@ jobs:
           LABEL="${INPUT_TAG}"
           if [ -z "${LABEL}" ] && [ "${REF_TYPE}" = "tag" ]; then LABEL="${REF_NAME}"; fi
           if [ -z "${LABEL}" ]; then LABEL="${COMMIT:0:7}"; fi
-          ./gradlew --no-daemon --stacktrace --continue -PprismVersion="${LABEL}" testDebugUnitTest lintDebug assembleDebug 2>&1 | tee build.log
+          ./gradlew --no-daemon --stacktrace --continue -PprismVersion="${LABEL}" -PprismCode="${{ github.run_number }}" testDebugUnitTest lintDebug assembleDebug 2>&1 | tee build.log
 
       # The job log is not readable from outside GitHub, so compile errors and failed tests are repeated
       # as one annotation that shows up in the run's check summary.
