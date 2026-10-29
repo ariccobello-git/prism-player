@@ -34,12 +34,14 @@ import dev.red74.prismplayer.ui.LibraryScreen
 import dev.red74.prismplayer.ui.PairScreen
 import dev.red74.prismplayer.ui.PlayerScreen
 import dev.red74.prismplayer.ui.SplashScreen
+import dev.red74.prismplayer.ui.UpdatesScreen
 import dev.red74.prismplayer.ui.UiSounds
 
 private sealed interface Screen {
     data object Home : Screen
     data object Import : Screen
     data object Pair : Screen
+    data object Updates : Screen
     data object Exit : Screen
     data class Library(val playlistId: String) : Screen
     data object Player : Screen
@@ -155,6 +157,7 @@ private fun PrismNavigation(
                 onDelete = viewModel::removePlaylist,
                 onAddUrl = { push(Screen.Import) },
                 onPair = { push(Screen.Pair) },
+                onUpdates = { push(Screen.Updates) },
                 onNoticeShown = viewModel::clearNotice,
             )
 
@@ -175,6 +178,8 @@ private fun PrismNavigation(
                 },
                 onBack = ::pop,
             )
+
+            Screen.Updates -> UpdatesScreen(onBack = ::pop)
 
             Screen.Pair -> {
                 val pairState by pairViewModel.state.collectAsStateWithLifecycle()

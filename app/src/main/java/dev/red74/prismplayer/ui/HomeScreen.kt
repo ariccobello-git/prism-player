@@ -57,6 +57,7 @@ fun HomeScreen(
     onDelete: (String) -> Unit,
     onAddUrl: () -> Unit,
     onPair: () -> Unit,
+    onUpdates: () -> Unit,
     onNoticeShown: () -> Unit,
 ) {
     val firstFocus = remember { FocusRequester() }
@@ -137,6 +138,11 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
+                    GlassButton(
+                        text = stringResource(R.string.action_updates),
+                        onClick = onUpdates,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     GlassButton(
                         text = stringResource(if (muted) R.string.sound_off else R.string.sound_on),
                         onClick = {

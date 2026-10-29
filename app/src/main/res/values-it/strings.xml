@@ -142,4 +142,22 @@
     <string name="sort_az">A–Z</string>
     <string name="sort_za">Z–A</string>
     <string name="sort_recent">Ultimi inseriti</string>
+    <string name="action_updates">Aggiornamenti e codec</string>
+    <string name="updates_title">Aggiornamenti e codec</string>
+    <string name="updates_check">Controlla ora</string>
+    <string name="updates_app">L\'app</string>
+    <string name="updates_engine">Motore video e audio (Media3)</string>
+    <string name="updates_device">Cosa decodifica questo dispositivo</string>
+    <string name="updates_checking">Controllo sul web…</string>
+    <string name="updates_offline">Impossibile raggiungere il web. Controlla la connessione e riprova.</string>
+    <string name="updates_app_unknown">Installata: %1$s. Non riesco a leggere l\'elenco delle release.</string>
+    <string name="updates_app_new">Nuova release disponibile: %1$s (installata: %2$s). Scaricala con Downloader da:</string>
+    <string name="updates_app_ok">Aggiornata (%1$s).</string>
+    <string name="updates_engine_unknown">Installato: %1$s. Non riesco a leggere l\'ultima versione.</string>
+    <string name="updates_engine_new">È disponibile una versione più recente: %1$s (installata: %2$s). Si può preparare una nuova release dell\'app che la includa.</string>
+    <string name="updates_engine_ok">Aggiornato (%1$s).</string>
+    <string name="codec_no">Non disponibile su questo dispositivo</string>
+    <string name="codec_hw">Sì, hardware</string>
+    <string name="codec_sw">Sì, software</string>
+    <string name="updates_note">L\'audio Dolby e DTS può comunque arrivare direttamente a una soundbar anche se questo dispositivo non lo decodifica. L\'app non installa mai aggiornamenti da sola.</string>
 </resources>

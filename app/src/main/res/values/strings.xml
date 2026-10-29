@@ -142,4 +142,22 @@
     <string name="sort_az">A–Z</string>
     <string name="sort_za">Z–A</string>
     <string name="sort_recent">Latest</string>
+    <string name="action_updates">Updates and codecs</string>
+    <string name="updates_title">Updates and codecs</string>
+    <string name="updates_check">Check now</string>
+    <string name="updates_app">The app</string>
+    <string name="updates_engine">Video and audio engine (Media3)</string>
+    <string name="updates_device">What this device decodes</string>
+    <string name="updates_checking">Checking the web…</string>
+    <string name="updates_offline">Could not reach the web. Check the connection and try again.</string>
+    <string name="updates_app_unknown">Installed: %1$s. Could not read the list of releases.</string>
+    <string name="updates_app_new">New release available: %1$s (installed: %2$s). Download it with Downloader from:</string>
+    <string name="updates_app_ok">Up to date (%1$s).</string>
+    <string name="updates_engine_unknown">Installed: %1$s. Could not read the latest version.</string>
+    <string name="updates_engine_new">Newer version available: %1$s (installed: %2$s). A new release of the app with it can be built.</string>
+    <string name="updates_engine_ok">Up to date (%1$s).</string>
+    <string name="codec_no">Not available on this device</string>
+    <string name="codec_hw">Yes, hardware</string>
+    <string name="codec_sw">Yes, software</string>
+    <string name="updates_note">Dolby and DTS sound can still reach a soundbar directly even when this device cannot decode it. Updates are never installed by the app itself.</string>
 </resources>
