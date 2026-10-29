@@ -66,6 +66,12 @@
     <string name="player_pause">Pausa</string>
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Errore di riproduzione (%1$s)</string>
+    <string name="player_trouble_refused">Il fornitore rifiuta questo canale (HTTP %1$s): può essere spento o con troppe connessioni aperte.</string>
+    <string name="player_trouble_missing">Il fornitore non ha più questo contenuto (HTTP %1$s).</string>
+    <string name="player_trouble_server">Il server del fornitore ha un problema (HTTP %1$s). Riprova più tardi.</string>
+    <string name="player_trouble_no_answer">Il server non risponde. Controlla la VPN e la connessione.</string>
+    <string name="player_trouble_bad_stream">Il fornitore non invia un video leggibile.</string>
+    <string name="unavailable_note">⊘ Non disponibile: il fornitore non l\'ha consegnato nelle ultime ore</string>
     <string name="player_hint">◀ ▶ salta 10 s · ⏪ ⏩ 2× 4× 8× · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
     <string name="status_unverified">Da verificare</string>
     <string name="status_ok">OK · %1$d voci</string>

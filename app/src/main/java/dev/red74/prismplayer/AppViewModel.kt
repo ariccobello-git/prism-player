@@ -4,11 +4,13 @@ import android.app.Application
 import android.util.Xml
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.red74.prismplayer.data.Availability
 import dev.red74.prismplayer.data.Catalog
 import dev.red74.prismplayer.data.CatalogBuilder
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.EpgUrl
+import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.FetchException
 import dev.red74.prismplayer.data.HttpAgent
 import dev.red74.prismplayer.data.ListCache
@@ -74,6 +76,8 @@ data class LibraryNav(
     val itemIndex: Int = 0,
     /** True right after starting playback, so coming back puts the cursor on the item that was played. */
     val resume: Boolean = false,
+    /** Address of the last content played (kept in memory only), so coming back puts the cursor on it. */
+    val played: String? = null,
 )
 
 /** What the full-screen player plays: a list (a category, a season) and where to start in it. */
@@ -102,6 +106,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _favorites = MutableStateFlow(container.settings.favorites)
     val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
+
+    private val _unavailable = MutableStateFlow(Availability.live(container.settings.unavailable, System.currentTimeMillis()))
+    /** Keys (see [FavoriteKey]) of the contents the provider could not deliver lately. */
+    val unavailable: StateFlow<Map<String, Long>> = _unavailable.asStateFlow()
+    private var lastGoodPlaybackMs = 0L
 
     private val _notice = MutableStateFlow<Notice?>(null)
     val notice: StateFlow<Notice?> = _notice.asStateFlow()
@@ -451,11 +460,36 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     /** [follow]: the list is the one on screen, so zapping in the player moves the cursor there too. */
     fun play(items: List<Channel>, startIndex: Int, follow: Boolean = false) {
-        _queue.value = PlayQueue(items, startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0)), follow)
+        val start = startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
+        _queue.value = PlayQueue(items, start, follow)
+        items.getOrNull(start)?.let { first -> _nav.update { it.copy(played = first.url) } }
     }
 
     fun setLastIndex(index: Int) {
-        if (_queue.value.follow) _nav.update { it.copy(itemIndex = index) }
+        val queue = _queue.value
+        val played = queue.items.getOrNull(index)?.url
+        _nav.update { if (queue.follow) it.copy(itemIndex = index, played = played) else it.copy(played = played) }
+    }
+
+    /** A content started: its mark (if any) goes, and the network is proved to work. */
+    fun playbackWorked(channel: Channel) {
+        lastGoodPlaybackMs = System.currentTimeMillis()
+        val key = FavoriteKey.of(channel)
+        if (key in _unavailable.value) saveUnavailable(_unavailable.value - key)
+    }
+
+    /** A content failed: it is marked when the rules of [Availability] say the provider is at fault. */
+    fun playbackFailed(channel: Channel, trouble: Availability.Trouble, afterRetry: Boolean, preview: Boolean) {
+        val now = System.currentTimeMillis()
+        val proven = lastGoodPlaybackMs > 0L && now - lastGoodPlaybackMs < Availability.NETWORK_PROOF_MS
+        if (Availability.marks(trouble, afterRetry, proven, preview)) {
+            saveUnavailable(Availability.live(_unavailable.value, now) + (FavoriteKey.of(channel) to now))
+        }
+    }
+
+    private fun saveUnavailable(marks: Map<String, Long>) {
+        _unavailable.value = marks
+        container.settings.unavailable = marks
     }
 
     fun setAspect(mode: AspectMode) {

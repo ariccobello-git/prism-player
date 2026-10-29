@@ -39,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -57,7 +58,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -76,7 +76,9 @@ import dev.red74.prismplayer.data.SortMode
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.NowNext
 import dev.red74.prismplayer.data.Show
+import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.createPlayer
+import dev.red74.prismplayer.player.previewItem
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -87,8 +89,36 @@ private const val PREVIEW_DELAY_MS = 700L
 
 private typealias NavChange = ((LibraryNav) -> LibraryNav) -> Unit
 
+/** Contents marked unavailable (see [dev.red74.prismplayer.data.Availability]) and the preview's report of a good start. */
+private class Reachability(val unavailable: Set<String>, val onPreviewWorked: (Channel) -> Unit)
+
+private val LocalReachability = androidx.compose.runtime.compositionLocalOf { Reachability(emptySet()) {} }
+
+private const val UNAVAILABLE_SIGN = "⊘"
+private const val UNAVAILABLE_ALPHA = 0.45f
+
 @Composable
 fun LibraryScreen(
+    state: LibraryState,
+    nav: LibraryNav,
+    epg: EpgData,
+    favorites: Set<String>,
+    onNav: NavChange,
+    onPlay: (items: List<Channel>, index: Int, follow: Boolean) -> Unit,
+    onToggleFavorite: (String) -> Unit,
+    onRetry: () -> Unit,
+    onBack: () -> Unit,
+    unavailable: Set<String> = emptySet(),
+    onPreviewWorked: (Channel) -> Unit = {},
+) {
+    val reachability = remember(unavailable, onPreviewWorked) { Reachability(unavailable, onPreviewWorked) }
+    androidx.compose.runtime.CompositionLocalProvider(LocalReachability provides reachability) {
+        LibraryContent(state, nav, epg, favorites, onNav, onPlay, onToggleFavorite, onRetry, onBack)
+    }
+}
+
+@Composable
+private fun LibraryContent(
     state: LibraryState,
     nav: LibraryNav,
     epg: EpgData,
@@ -102,7 +132,13 @@ fun LibraryScreen(
     val retryFocus = remember { FocusRequester() }
     val tabFocus = remember { FocusRequester() }
     RequestFocusOnEnter(retryFocus, key = state.error)
-    RequestFocusOnEnter(tabFocus, key = state.loading)
+    // The tab row takes the cursor on entry, except when coming back to a content (the item played, a detail page):
+    // both asking at once left the cursor on the tabs instead of the channel just watched.
+    LaunchedEffect(state.loading) {
+        if (nav.resume || nav.movieUrl != null || nav.showTitle != null) return@LaunchedEffect
+        withFrameNanos { }
+        runCatching { tabFocus.requestFocus() }
+    }
 
     // A search never survives leaving the screen or opening an item: coming back finds the field empty.
     LaunchedEffect(Unit) {
@@ -127,7 +163,7 @@ fun LibraryScreen(
     // A request to focus the content that found nothing to focus (empty tab) must not linger.
     LaunchedEffect(nav.resume) {
         if (nav.resume) {
-            kotlinx.coroutines.delay(600)
+            kotlinx.coroutines.delay(1_500)
             onNav { it.copy(resume = false) }
         }
     }
@@ -368,9 +404,11 @@ private fun LibraryBody(
 
 @Composable
 private fun MovieGrid(items: List<Channel>, restorable: Boolean, favorites: Set<String>, nav: LibraryNav, onNav: NavChange) {
+    val unavailable = LocalReachability.current.unavailable
     ItemGrid(items.size, nav, onNav) { i ->
         val item = items[i]
-        GridEntry(item.name, item.logo, FavoriteKey.of(item) in favorites) {
+        val key = FavoriteKey.of(item)
+        GridEntry(item.name, item.logo, key in favorites, unavailable = key in unavailable) {
             onNav { it.copy(movieUrl = item.url, itemIndex = if (restorable) i else 0, resume = true) }
         }
     }
@@ -384,6 +422,12 @@ private fun ShowGrid(items: List<Show>, restorable: Boolean, favorites: Set<Stri
             onNav { it.copy(showTitle = item.title, showGroup = item.group, season = -1, itemIndex = if (restorable) i else 0, resume = true) }
         }
     }
+}
+
+/** The ⊘ next to a content the provider could not deliver lately (see [dev.red74.prismplayer.data.Availability]). */
+@Composable
+private fun UnavailableSign(modifier: Modifier = Modifier, size: Int = 20) {
+    PrismText(text = UNAVAILABLE_SIGN, size = size.sp, weight = FontWeight.Bold, color = PrismColors.Danger, modifier = modifier)
 }
 
 @Composable
@@ -610,26 +654,29 @@ private fun LiveView(
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
     onToggleFavorite: (String) -> Unit,
 ) {
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = nav.itemIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0)),
-    )
+    // The channel watched last (also after zapping in the player) wins over the remembered row.
+    val playedIndex = remember(list, nav.played) { nav.played?.let { url -> list.indexOfFirst { it.url == url } } ?: -1 }
+    val target = (if (playedIndex >= 0) playedIndex else nav.itemIndex).coerceIn(0, (list.size - 1).coerceAtLeast(0))
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = target)
     val sortAtStart = remember { nav.sort }
     LaunchedEffect(nav.sort) { if (nav.sort != sortAtStart) listState.scrollToItem(0) }
     val nowMs = rememberNowMs()
     var preview by remember(list) { mutableStateOf<Channel?>(null) }
     var fullscreen by remember { mutableStateOf(false) }
     val rowFocus = remember { FocusRequester() }
+    val unavailable = LocalReachability.current.unavailable
 
     LaunchedEffect(nav.resume) {
         if (nav.resume) {
-            withFrameNanos { }
-            runCatching { rowFocus.requestFocus() }
+            if (listState.firstVisibleItemIndex > target || listState.layoutInfo.visibleItemsInfo.none { it.index == target }) {
+                listState.scrollToItem(target)
+            }
+            rowFocus.requestWhenReady()
             onNav { it.copy(resume = false) }
         }
     }
 
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        val target = nav.itemIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0))
         Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SortBar(nav, onNav)
         LazyColumn(
@@ -645,6 +692,7 @@ private fun LiveView(
                     nowNext = epg.nowNext(channel, nowMs),
                     nowMs = nowMs,
                     isFavorite = FavoriteKey.of(channel) in favorites,
+                    unavailable = FavoriteKey.of(channel) in unavailable,
                     onToggleFavorite = { onToggleFavorite(FavoriteKey.of(channel)) },
                     focusRequester = if (index == target) rowFocus else null,
                     onFocused = { preview = channel },
@@ -676,6 +724,7 @@ private fun ChannelRow(
     nowNext: NowNext,
     nowMs: Long,
     isFavorite: Boolean,
+    unavailable: Boolean,
     onToggleFavorite: () -> Unit,
     focusRequester: FocusRequester?,
     onFocused: () -> Unit,
@@ -689,10 +738,17 @@ private fun ChannelRow(
         modifier = Modifier.weight(1f),
         focusScale = 1.02f,
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth().alpha(if (unavailable) UNAVAILABLE_ALPHA else 1f),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Poster(channel.logo, channel.name, Modifier.size(56.dp), fit = true)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                PrismText(text = channel.name, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (unavailable) UnavailableSign()
+                    PrismText(text = channel.name, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                }
                 nowNext.now?.let {
                     PrismText(text = it.title, size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
                     Box(
@@ -736,6 +792,9 @@ private fun PreviewPane(
             PreviewPlayer(channel, active, Modifier.fillMaxWidth())
             if (channel != null) {
                 PrismText(text = channel.name, size = 22.sp, weight = FontWeight.Bold, maxLines = 1)
+                if (FavoriteKey.of(channel) in LocalReachability.current.unavailable) {
+                    PrismText(text = stringResource(R.string.unavailable_note), size = 15.sp, color = PrismColors.Danger, maxLines = 2)
+                }
                 channel.group?.takeIf { it.isNotBlank() }?.let {
                     PrismText(text = it, size = 15.sp, color = PrismColors.Accent, maxLines = 1)
                 }
@@ -776,17 +835,28 @@ private fun PreviewPane(
 @Composable
 private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val exo = remember { createPlayer(context) }
+    val exo = remember { createPlayer(context, preview = true) }
     var failed by remember { mutableStateOf(false) }
+    val reachability = LocalReachability.current
+    val currentChannel by androidx.compose.runtime.rememberUpdatedState(channel)
+    val onWorked by androidx.compose.runtime.rememberUpdatedState(reachability.onPreviewWorked)
+    /** The first preview after entering waits longer: the full-screen player's connection may still be counted. */
+    var firstStart by remember { mutableStateOf(true) }
 
     DisposableEffect(exo) {
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 failed = true
             }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY) currentChannel?.let(onWorked)
+            }
         }
         exo.addListener(listener)
+        PreviewPlayers.register(exo)
         onDispose {
+            PreviewPlayers.unregister(exo)
             exo.removeListener(listener)
             exo.release()
         }
@@ -800,8 +870,10 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
             exo.clearMediaItems()
             return@LaunchedEffect
         }
-        delay(PREVIEW_DELAY_MS)
-        exo.setMediaItem(MediaItem.fromUri(channel.url))
+        delay(if (firstStart) PREVIEW_DELAY_MS * 2 else PREVIEW_DELAY_MS)
+        firstStart = false
+        exo.setPlaybackSpeed(1f)
+        exo.setMediaItem(previewItem(channel.url))
         exo.prepare()
         exo.playWhenReady = true
     }
@@ -835,7 +907,13 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
 
 // --- posters (movies, series) ------------------------------------------------------------------------------
 
-private class GridEntry(val title: String, val logo: String?, val favorite: Boolean, val onClick: () -> Unit)
+private class GridEntry(
+    val title: String,
+    val logo: String?,
+    val favorite: Boolean,
+    val unavailable: Boolean = false,
+    val onClick: () -> Unit,
+)
 
 @Composable
 private fun ItemGrid(
@@ -876,8 +954,14 @@ private fun ItemGrid(
                     tint = if (item.favorite) PrismColors.Favorite else null,
                     contentPadding = PaddingValues(6.dp),
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Poster(item.logo, item.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+                    Column(
+                        Modifier.alpha(if (item.unavailable) UNAVAILABLE_ALPHA else 1f),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Box {
+                            Poster(item.logo, item.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+                            if (item.unavailable) UnavailableSign(Modifier.align(Alignment.TopEnd).padding(6.dp), size = 26)
+                        }
                         PrismText(text = item.title, size = 15.sp, maxLines = 2)
                     }
                 }
@@ -903,6 +987,9 @@ private fun MovieDetail(
             PrismText(text = movie.name, size = 32.sp, weight = FontWeight.Bold, maxLines = 3)
             movie.group?.takeIf { it.isNotBlank() }?.let {
                 PrismText(text = it, size = 18.sp, color = PrismColors.Accent, maxLines = 1)
+            }
+            if (key in LocalReachability.current.unavailable) {
+                PrismText(text = stringResource(R.string.unavailable_note), size = 16.sp, color = PrismColors.Danger, maxLines = 2)
             }
             GlassButton(
                 text = stringResource(R.string.action_play),
@@ -932,7 +1019,14 @@ private fun ShowDetail(
     val episodes = remember(show, season) { show.episodesOf(season) }
     val seasonFocus = remember { FocusRequester() }
     val episodeFocus = remember { FocusRequester() }
-    RequestFocusOnEnter(seasonFocus)
+    // Coming back from an episode puts the cursor on it (the next one, if the player went on by itself).
+    val playedIndex = remember(episodes, nav.played) { nav.played?.let { url -> episodes.indexOfFirst { it.url == url } } ?: -1 }
+    val episodeTarget = playedIndex.coerceAtLeast(0)
+    val episodeState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = episodeTarget)
+    LaunchedEffect(Unit) {
+        if (playedIndex >= 0) episodeFocus.requestWhenReady() else seasonFocus.requestWhenReady()
+    }
+    val unavailable = LocalReachability.current.unavailable
     val key = FavoriteKey.ofShow(show)
     var enterEpisodes by remember { mutableStateOf(false) }
     var episodesFocused by remember { mutableStateOf(false) }
@@ -973,11 +1067,13 @@ private fun ShowDetail(
             }
             LazyColumn(
                 Modifier.fillMaxSize().onFocusChanged { episodesFocused = it.hasFocus }.depthFocus().confineFocus(),
+                state = episodeState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 itemsIndexed(episodes, key = { index, _ -> index }) { index, episode ->
+                    val missing = FavoriteKey.of(episode) in unavailable
                     GlassSurface(
-                        focusRequester = if (index == 0) episodeFocus else null,
+                        focusRequester = if (index == episodeTarget) episodeFocus else null,
                         onClick = {
                             onNav { it.copy(resume = false) }
                             onPlay(episodes, index, false)
@@ -985,7 +1081,12 @@ private fun ShowDetail(
                         modifier = Modifier.fillMaxWidth(),
                         focusScale = 1.02f,
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            Modifier.alpha(if (missing) UNAVAILABLE_ALPHA else 1f),
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (missing) UnavailableSign()
                             PrismText(
                                 text = if (episode.episode > 0) "%02d".format(episode.episode) else "-",
                                 size = 20.sp,
@@ -1029,8 +1130,12 @@ private fun FavoritesView(
     }
     val playable = remember(entries) { entries.mapNotNull { it.channel } }
     val firstFocus = remember { FocusRequester() }
-    RequestFocusOnEnter(firstFocus, key = entries.size)
-    LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // The favourite watched last keeps the cursor when coming back from the player.
+    val target = remember(entries, nav.played) { entries.indexOfFirst { it.channel != null && it.channel.url == nav.played }.coerceAtLeast(0) }
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = target)
+    LaunchedEffect(entries.size) { firstFocus.requestWhenReady() }
+    val unavailable = LocalReachability.current.unavailable
+    LazyColumn(Modifier.fillMaxSize(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(entries) { index, entry ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             GlassSurface(
@@ -1045,10 +1150,16 @@ private fun FavoritesView(
                     }
                 },
                 modifier = Modifier.weight(1f),
-                focusRequester = if (index == 0) firstFocus else null,
+                focusRequester = if (index == target) firstFocus else null,
                 focusScale = 1.02f,
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                val missing = entry.channel?.let { FavoriteKey.of(it) in unavailable } == true
+                Row(
+                    Modifier.alpha(if (missing) UNAVAILABLE_ALPHA else 1f),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (missing) UnavailableSign()
                     Poster(entry.logo, entry.title, Modifier.size(56.dp), fit = entry.channel?.type == dev.red74.prismplayer.data.ContentType.LIVE)
                     PrismText(text = entry.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
                 }
