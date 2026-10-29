@@ -3,6 +3,7 @@ package dev.red74.prismplayer
 import android.app.Application
 import android.content.Context
 import dev.red74.prismplayer.data.AppSettings
+import dev.red74.prismplayer.data.CatalogStore
 import dev.red74.prismplayer.data.KeystoreKeyProvider
 import dev.red74.prismplayer.data.ListCache
 import dev.red74.prismplayer.data.PlaylistFetcher
@@ -32,8 +33,8 @@ class AppContainer(context: Context) {
     )
     /** Last downloaded copy of each list (encrypted), so reopening a list does not wait for the network. */
     val listCache = ListCache(File(context.noBackupFilesDir, "lists"), keys::getOrCreateKey)
-    /** The same lists already parsed, in a compact form that opens much faster than the text. */
-    val snapshotCache = ListCache(File(context.noBackupFilesDir, "lists"), keys::getOrCreateKey, prefix = "snap")
+    /** The same lists as small databases, read a page at a time, so even a very big list opens at once. */
+    val catalogStore = CatalogStore(File(context.noBackupFilesDir, "lists"), keys::getOrCreateKey)
     val fetcher = PlaylistFetcher()
     val pairingManager = PairingManager()
     val settings = AppSettings(context)
