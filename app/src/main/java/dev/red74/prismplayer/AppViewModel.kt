@@ -11,6 +11,7 @@ import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.EpgUrl
 import dev.red74.prismplayer.data.FetchException
 import dev.red74.prismplayer.data.HttpAgent
+import dev.red74.prismplayer.data.CatalogSnapshot
 import dev.red74.prismplayer.data.ListCache
 import dev.red74.prismplayer.data.M3uParser
 import dev.red74.prismplayer.data.PlaylistStatus
@@ -146,6 +147,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun removePlaylist(id: String) {
         viewModelScope.launch {
             container.listCache.delete(id)
+            container.snapshotCache.delete(id)
             _notice.value = runCatching { store.remove(id) }
                 .fold(onSuccess = { Notice.REMOVED }, onFailure = { Notice.SAVE_FAILED })
             if (_library.value.playlistId == id) {
@@ -248,7 +250,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _library.value = LibraryState(playlistId = id, playlistName = playlist.name, loading = true)
         loadJob = viewModelScope.launch {
             // A saved copy opens at once; the network is used only to refresh it when it is old (or on request).
-            val cachedAge = if (force) null else container.listCache.ageMs(id)
+            val cachedAge = if (force) null else (container.snapshotCache.ageMs(id) ?: container.listCache.ageMs(id))
             val fromCopy = if (cachedAge != null) readCopy(playlist) else null
             if (fromCopy != null) {
                 val catalog = buildCatalog(fromCopy)
@@ -271,6 +273,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _library.update { it.copy(loading = false, error = null, catalog = catalog) }
             recordStatus(id, PlaylistStatus.OK, parsed.count, null, null)
             loadGuide(playlist, catalog)
+            saveSnapshot(id, parsed)
         }
     }
 
@@ -278,8 +281,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         CatalogBuilder.build(parsed.channels, parsed.epgUrl, parsed.truncated)
     }
 
-    /** Reads the saved copy of a list; null if it is missing or damaged (it is then deleted and the list downloaded). */
+    /**
+     * Reads the saved copy of a list; null if it is missing or damaged (it is then deleted and the list downloaded).
+     * The compact snapshot is tried first; if only the text copy exists it is parsed and the snapshot made for next time.
+     */
     private suspend fun readCopy(playlist: SavedPlaylist): M3uParser.Result? = withContext(Dispatchers.IO) {
+        container.snapshotCache.open(playlist.id)?.let { stream ->
+            val snap = try {
+                stream.use { CatalogSnapshot.read(java.io.BufferedInputStream(it, 64 * 1024)) }
+            } catch (e: Exception) {
+                null
+            }
+            if (snap != null && snap.count > 0) return@withContext snap
+            container.snapshotCache.delete(playlist.id)
+        }
         val stream = container.listCache.open(playlist.id) ?: return@withContext null
         val result: M3uParser.Result? = try {
             stream.use {
@@ -290,8 +305,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             null
         }
-        if (result == null) container.listCache.delete(playlist.id)
+        if (result == null) container.listCache.delete(playlist.id) else saveSnapshot(playlist.id, result)
         result
+    }
+
+    /** Stores the parsed list in compact form; any failure just means the next opening reads the text copy. */
+    private suspend fun saveSnapshot(id: String, parsed: M3uParser.Result) = withContext(Dispatchers.IO) {
+        val writer = container.snapshotCache.writer(id)
+        try {
+            val out = java.io.BufferedOutputStream(writer, 64 * 1024)
+            CatalogSnapshot.write(out, parsed)
+            out.flush()
+            if (!writer.commit()) writer.abort()
+        } catch (e: Throwable) {
+            writer.abort()
+        }
     }
 
     /** The shown copy is old: download again quietly and swap it in only if the list really changed. */
@@ -301,6 +329,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val parsed = loaded.parsed ?: return@launch
             if (loaded.error != null || _library.value.playlistId != playlist.id) return@launch
             recordStatus(playlist.id, PlaylistStatus.OK, parsed.count, null, null)
+            saveSnapshot(playlist.id, parsed)
             if (parsed.count != shownCount) {
                 val catalog = buildCatalog(parsed)
                 _library.update { if (it.playlistId == playlist.id) it.copy(catalog = catalog) else it }

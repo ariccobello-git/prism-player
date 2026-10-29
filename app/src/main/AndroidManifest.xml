@@ -12,6 +12,18 @@
         android:name="android.software.leanback"
         android:required="true" />
 
+    <!-- Needed on Android 11+ to see which launcher apps are installed (the Shortcuts page). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <!-- Cleartext is allowed because many playlist and stream hosts are plain http. Pairing runs over local http too (see README, Security). -->
     <application
         android:name=".PrismApp"

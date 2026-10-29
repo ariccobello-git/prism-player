@@ -32,6 +32,8 @@ class AppContainer(context: Context) {
     )
     /** Last downloaded copy of each list (encrypted), so reopening a list does not wait for the network. */
     val listCache = ListCache(File(context.noBackupFilesDir, "lists"), keys::getOrCreateKey)
+    /** The same lists already parsed, in a compact form that opens much faster than the text. */
+    val snapshotCache = ListCache(File(context.noBackupFilesDir, "lists"), keys::getOrCreateKey, prefix = "snap")
     val fetcher = PlaylistFetcher()
     val pairingManager = PairingManager()
     val settings = AppSettings(context)

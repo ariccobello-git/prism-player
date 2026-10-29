@@ -12,7 +12,9 @@ import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
+import java.security.SecureRandom
 import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.SecretKeySpec
 
 /**
  * Keeps the last downloaded copy of each playlist on the device so reopening it is instant (like the "cached
@@ -22,9 +24,13 @@ import javax.crypto.spec.GCMParameterSpec
  * in 64 KB sealed blocks (AES-256-GCM, key from the Android Keystore) and stored in the app's private,
  * not-backed-up folder. A damaged or altered file is detected and simply ignored.
  */
-class ListCache(private val dir: File, private val keyProvider: () -> SecretKey) {
+class ListCache(
+    private val dir: File,
+    private val keyProvider: () -> SecretKey,
+    private val prefix: String = "list",
+) {
 
-    private fun fileFor(id: String): File = File(dir, "list-" + id.filter { it.isLetterOrDigit() || it == '-' } + ".bin")
+    private fun fileFor(id: String): File = File(dir, "$prefix-" + id.filter { it.isLetterOrDigit() || it == '-' } + ".bin")
 
     fun ageMs(id: String, now: Long = System.currentTimeMillis()): Long? =
         fileFor(id).takeIf { it.isFile && it.length() > 0 }?.let { now - it.lastModified() }
@@ -128,9 +134,38 @@ class ListCache(private val dir: File, private val keyProvider: () -> SecretKey)
         override fun markSupported(): Boolean = false
     }
 
-    private class BlockEncryptStream(out: OutputStream, private val keyProvider: () -> SecretKey) : FilterOutputStream(out) {
+    /**
+     * Writes the sealed blocks. A fresh random data key is made for each file and stored in the header, itself
+     * sealed once with the Keystore key; the blocks are then sealed in the app's own process with that data key.
+     * Asking the Keystore to seal every 64 KB block (hundreds of times for a big list) was slow on a TV stick.
+     */
+    private class BlockEncryptStream(out: OutputStream, keyProvider: () -> SecretKey) : FilterOutputStream(out) {
         private val block = ByteArray(BLOCK)
         private var filled = 0
+        private val dataKey: SecretKey
+        private val cipher = Cipher.getInstance(TRANSFORMATION)
+        private var headerWritten = false
+        private val wrapped: ByteArray
+        private val wrapIv: ByteArray
+
+        init {
+            val raw = ByteArray(32).also { SecureRandom().nextBytes(it) }
+            dataKey = SecretKeySpec(raw, "AES")
+            val wrapCipher = Cipher.getInstance(TRANSFORMATION)
+            wrapCipher.init(Cipher.ENCRYPT_MODE, keyProvider())
+            wrapIv = wrapCipher.iv
+            wrapped = wrapCipher.doFinal(raw)
+        }
+
+        private fun writeHeader() {
+            if (headerWritten) return
+            headerWritten = true
+            out.write(MAGIC)
+            out.write(wrapIv.size)
+            out.write(wrapIv)
+            out.write(wrapped.size)
+            out.write(wrapped)
+        }
 
         override fun write(b: Int) {
             block[filled++] = b.toByte()
@@ -149,9 +184,9 @@ class ListCache(private val dir: File, private val keyProvider: () -> SecretKey)
         }
 
         private fun flushBlock() {
+            writeHeader()
             if (filled == 0) return
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.ENCRYPT_MODE, keyProvider())
+            cipher.init(Cipher.ENCRYPT_MODE, dataKey)
             val iv = cipher.iv
             val sealed = cipher.doFinal(block, 0, filled)
             val total = iv.size + sealed.size
@@ -175,9 +210,36 @@ class ListCache(private val dir: File, private val keyProvider: () -> SecretKey)
         private var current = ByteArray(0)
         private var pos = 0
         private var end = false
+        private var dataKey: SecretKey? = null
+
+        private fun readExactly(n: Int): ByteArray {
+            val bytes = ByteArray(n)
+            var got = 0
+            while (got < n) {
+                val r = source.read(bytes, got, n - got)
+                if (r < 0) throw IOException("truncated header")
+                got += r
+            }
+            return bytes
+        }
+
+        private fun readHeader() {
+            val magic = readExactly(MAGIC.size)
+            if (!magic.contentEquals(MAGIC)) throw IOException("old or unknown format")
+            val iv = readExactly(source.read().also { if (it < 12) throw IOException("bad header") })
+            val wrapped = readExactly(source.read().also { if (it < TAG_BYTES) throw IOException("bad header") })
+            try {
+                val cipher = Cipher.getInstance(TRANSFORMATION)
+                cipher.init(Cipher.DECRYPT_MODE, keyProvider(), GCMParameterSpec(TAG_BITS, iv))
+                dataKey = SecretKeySpec(cipher.doFinal(wrapped), "AES")
+            } catch (e: GeneralSecurityException) {
+                throw IOException("header not authentic")
+            }
+        }
 
         private fun fill(): Boolean {
             if (end) return false
+            if (dataKey == null) readHeader()
             val header = ByteArray(5)
             var got = 0
             while (got < 5) {
@@ -201,7 +263,7 @@ class ListCache(private val dir: File, private val keyProvider: () -> SecretKey)
             }
             try {
                 val cipher = Cipher.getInstance(TRANSFORMATION)
-                cipher.init(Cipher.DECRYPT_MODE, keyProvider(), GCMParameterSpec(TAG_BITS, body, 0, ivLength))
+                cipher.init(Cipher.DECRYPT_MODE, dataKey!!, GCMParameterSpec(TAG_BITS, body, 0, ivLength))
                 current = cipher.doFinal(body, ivLength, total - ivLength)
             } catch (e: GeneralSecurityException) {
                 throw IOException("block not authentic")
@@ -228,6 +290,7 @@ class ListCache(private val dir: File, private val keyProvider: () -> SecretKey)
     }
 
     private companion object {
+        val MAGIC = byteArrayOf('P'.code.toByte(), 'R'.code.toByte(), 'L'.code.toByte(), '2'.code.toByte())
         const val BLOCK = 64 * 1024
         const val IO_BUFFER = 64 * 1024
         const val TRANSFORMATION = "AES/GCM/NoPadding"

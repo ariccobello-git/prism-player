@@ -66,7 +66,7 @@
     <string name="player_pause">Pausa</string>
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Errore di riproduzione (%1$s)</string>
-    <string name="player_hint">◀ ▶ salta 10 s · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
+    <string name="player_hint">◀ ▶ salta 10 s · ⏪ ⏩ 2× 4× 8× · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
     <string name="status_unverified">Da verificare</string>
     <string name="status_ok">OK · %1$d voci</string>
     <string name="status_failed">Non raggiungibile</string>
@@ -131,7 +131,7 @@
     <string name="np_close">Chiudi</string>
     <string name="version_label">Versione %1$s</string>
     <string name="np_format">Formato</string>
-    <string name="player_hint_hold">Tieni premuto ◀ ▶ per scorrere più veloce · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
+    <string name="player_hint_hold">Tieni premuto ◀ ▶ per scorrere più veloce · ⏪ ⏩ 2× 4× 8× (pulsanti) · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
     <string name="sound_on">Suoni: attivi</string>
     <string name="sound_off">Suoni: silenziati</string>
     <string name="action_go_lists">Le mie playlist</string>
@@ -160,4 +160,15 @@
     <string name="codec_hw">Sì, hardware</string>
     <string name="codec_sw">Sì, software</string>
     <string name="updates_note">L\'audio Dolby e DTS può comunque arrivare direttamente a una soundbar anche se questo dispositivo non lo decodifica. L\'app non installa mai aggiornamenti da sola.</string>
+    <string name="action_shortcuts">Scorciatoie</string>
+    <string name="shortcuts_title">Scorciatoie</string>
+    <string name="shortcuts_mine">Le mie scorciatoie</string>
+    <string name="shortcuts_add">App installate: premi OK per aggiungere</string>
+    <string name="shortcuts_empty">Nessuna scorciatoia. Scegli un\'app a destra per aggiungerla qui.</string>
+    <string name="shortcuts_remove">Rimuovi</string>
+    <string name="shortcuts_missing">Non più installata</string>
+    <string name="shortcuts_cannot_open">Impossibile aprire questa app</string>
+    <string name="shortcuts_loading">Cerco le app installate…</string>
+    <string name="shortcuts_none_left">Tutte le app installate sono già aggiunte.</string>
+    <string name="shortcuts_press_to_add">OK aggiunge la scorciatoia</string>
 </resources>

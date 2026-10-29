@@ -20,7 +20,16 @@ class AppSettings(context: Context) {
             prefs.edit().putStringSet(KEY_FAVORITES, value.toSet()).apply()
         }
 
+    /** Package names of the apps pinned on the Shortcuts page, in the order the user added them. */
+    var shortcuts: List<String>
+        get() = Shortcuts.decode(prefs.getString(KEY_SHORTCUTS, null))
+        set(value) {
+            prefs.edit().putString(KEY_SHORTCUTS, Shortcuts.encode(value)).apply()
+        }
+
     private companion object {
+        const val KEY_SHORTCUTS = "shortcuts"
+
         const val KEY_FAVORITES = "favorites"
         const val KEY_ASPECT = "aspect_mode"
     }

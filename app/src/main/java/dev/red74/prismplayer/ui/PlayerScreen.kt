@@ -120,6 +120,9 @@ fun PlayerScreen(
     var liveFlag by remember { mutableStateOf(false) }
     var behindLiveMs by remember { mutableLongStateOf(0L) }
     var countdown by remember { mutableIntStateOf(-1) }
+    /** Fast scan like other players: 0 normal, +2/+4/+8 faster forward, -2/-4/-8 backwards. */
+    var scan by remember { mutableIntStateOf(0) }
+    var lastScan by remember { mutableIntStateOf(0) }
 
     val player = remember { createPlayer(context) }
     val remote = remember { DeviceProfile.get(context) }
@@ -180,6 +183,8 @@ fun PlayerScreen(
         errorName = null
         countdown = -1
         status = PlayStatus.Loading
+        scan = 0
+        player.setPlaybackSpeed(1f)
         liveFlag = false
         canSeek = false
         positionMs = 0L
@@ -242,6 +247,29 @@ fun PlayerScreen(
             formatToast = null
         }
     }
+    // Forward scan plays faster; the player cannot play backwards, so a rewind scan steps back several times a second.
+    LaunchedEffect(scan) {
+        val before = lastScan
+        lastScan = scan
+        player.setPlaybackSpeed(if (scan > 0) scan.toFloat() else 1f)
+        if (before < 0 && scan >= 0) player.play()
+        if (scan < 0) {
+            player.pause()
+            while (true) {
+                delay(250)
+                val target = player.currentPosition + scan * 250L
+                if (target <= 0L) {
+                    player.seekTo(0L)
+                    positionMs = 0L
+                    scan = 0
+                    break
+                }
+                player.seekTo(target)
+                positionMs = target
+            }
+        }
+    }
+
     LaunchedEffect(skipToast) {
         if (skipToast != null) {
             delay(900)
@@ -251,6 +279,7 @@ fun PlayerScreen(
 
     BackHandler {
         when {
+            scan != 0 -> scan = 0
             countdown >= 0 -> countdown = -1
             panel != Panel.None -> panel = Panel.None
             overlayVisible && errorName == null -> overlayVisible = false
@@ -269,6 +298,7 @@ fun PlayerScreen(
 
     fun skip(deltaMs: Long) {
         if (!player.isCurrentMediaItemSeekable) return
+        scan = 0
         val duration = player.duration
         var target = player.currentPosition + deltaMs
         if (duration != C.TIME_UNSET) target = target.coerceAtMost(duration)
@@ -277,12 +307,22 @@ fun PlayerScreen(
         skipToast = (if (deltaMs > 0) "+" else "-") + (kotlin.math.abs(deltaMs) / 1000)
     }
 
+    /** Each press goes one step further: 2x, 4x, 8x, then back to normal speed (the other direction starts again at 2x). */
+    fun cycleScan(direction: Int) {
+        if (!player.isCurrentMediaItemSeekable) return
+        scan = when {
+            direction > 0 -> when { scan < 0 -> 2; scan == 0 -> 2; scan == 2 -> 4; scan == 4 -> 8; else -> 0 }
+            else -> when { scan > 0 -> -2; scan == 0 -> -2; scan == -2 -> -4; scan == -4 -> -8; else -> 0 }
+        }
+    }
+
     fun goLive() {
         player.seekToDefaultPosition()
         player.play()
     }
 
     fun togglePlay() {
+        if (scan != 0) { scan = 0; player.play(); return }
         if (player.isPlaying) player.pause() else player.play()
     }
 
@@ -299,8 +339,10 @@ fun PlayerScreen(
                     Key.MediaPlayPause -> { togglePlay(); return@onPreviewKeyEvent true }
                     Key.MediaPlay -> { player.play(); return@onPreviewKeyEvent true }
                     Key.MediaPause -> { player.pause(); return@onPreviewKeyEvent true }
-                    Key.MediaFastForward, Key.MediaStepForward -> { skip(SKIP_MS); return@onPreviewKeyEvent true }
-                    Key.MediaRewind, Key.MediaStepBackward -> { skip(-SKIP_MS); return@onPreviewKeyEvent true }
+                    Key.MediaFastForward -> { cycleScan(+1); return@onPreviewKeyEvent true }
+                    Key.MediaStepForward -> { skip(SKIP_MS); return@onPreviewKeyEvent true }
+                    Key.MediaRewind -> { cycleScan(-1); return@onPreviewKeyEvent true }
+                    Key.MediaStepBackward -> { skip(-SKIP_MS); return@onPreviewKeyEvent true }
                     Key.MediaNext, Key.ChannelUp -> {
                         if (channels.size > 1) changeChannel(+1)
                         return@onPreviewKeyEvent true
@@ -386,6 +428,15 @@ fun PlayerScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 140.dp),
+            )
+        }
+
+        if (scan != 0) {
+            StatusChip(
+                text = (if (scan > 0) "▶▶ " else "◀◀ ") + kotlin.math.abs(scan) + "×",
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 32.dp),
             )
         }
 
@@ -491,16 +542,16 @@ fun PlayerScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         if (canSeek) {
-                            TransportButton(icon = TransportIcon.REWIND, onClick = { skip(-SKIP_MS) })
+                            TransportButton(icon = TransportIcon.REWIND, onClick = { cycleScan(-1) })
                         }
                         TransportButton(
                             icon = if (isPlaying) TransportIcon.PAUSE else TransportIcon.PLAY,
-                            onClick = { if (isPlaying) player.pause() else player.play() },
+                            onClick = { togglePlay() },
                             focusRequester = playFocus,
                             selected = true,
                         )
                         if (canSeek) {
-                            TransportButton(icon = TransportIcon.FAST_FORWARD, onClick = { skip(SKIP_MS) })
+                            TransportButton(icon = TransportIcon.FAST_FORWARD, onClick = { cycleScan(+1) })
                         }
                         if (isSeries) {
                             GlassButton(

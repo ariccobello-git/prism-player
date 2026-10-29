@@ -294,16 +294,14 @@ private fun LibraryBody(
                 EmptyNote(R.string.library_empty)
             } else if (query.isEmpty()) {
                 GroupBrowser(names, counts, nav, onNav) { cats ->
-                    val items = remember(cats, catalog, nav.sort) {
-                        val all = if (cats.size == 1) catalog.live[cats[0]].items else cats.flatMap { catalog.live[it].items }
-                        all.sortedBy(nav.sort) { it.name }
-                    }
+                    val all = remember(cats, catalog) { if (cats.size == 1) catalog.live[cats[0]].items else cats.flatMap { catalog.live[it].items } }
+                    val items = sortedAsync(all, nav.sort) { it.name }
                     LiveView(items, true, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
                 }
             } else if (results.isEmpty()) {
                 EmptyNote(R.string.search_none)
             } else {
-                val sorted = remember(results, nav.sort) { results.sortedBy(nav.sort) { it.name } }
+                val sorted = sortedAsync(results, nav.sort) { it.name }
                 LiveView(sorted, false, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
             }
         }
@@ -326,14 +324,12 @@ private fun LibraryBody(
                 catalog.movies.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
                 query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
-                    val items = remember(cats, catalog, nav.sort) {
-                        val all = if (cats.size == 1) catalog.movies[cats[0]].items else cats.flatMap { catalog.movies[it].items }
-                        all.sortedBy(nav.sort) { it.name }
-                    }
+                    val all = remember(cats, catalog) { if (cats.size == 1) catalog.movies[cats[0]].items else cats.flatMap { catalog.movies[it].items } }
+                    val items = sortedAsync(all, nav.sort) { it.name }
                     MovieGrid(items, true, favorites, nav, onNav)
                 }
                 else -> {
-                    val sorted = remember(results, nav.sort) { results.sortedBy(nav.sort) { it.name } }
+                    val sorted = sortedAsync(results, nav.sort) { it.name }
                     MovieGrid(sorted, false, favorites, nav, onNav)
                 }
             }
@@ -360,14 +356,12 @@ private fun LibraryBody(
                 catalog.series.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
                 query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
-                    val items = remember(cats, catalog, nav.sort) {
-                        val all = if (cats.size == 1) catalog.series[cats[0]].shows else cats.flatMap { catalog.series[it].shows }
-                        all.sortedBy(nav.sort) { it.title }
-                    }
+                    val all = remember(cats, catalog) { if (cats.size == 1) catalog.series[cats[0]].shows else cats.flatMap { catalog.series[it].shows } }
+                    val items = sortedAsync(all, nav.sort) { it.title }
                     ShowGrid(items, true, favorites, nav, onNav)
                 }
                 else -> {
-                    val sorted = remember(results, nav.sort) { results.sortedBy(nav.sort) { it.title } }
+                    val sorted = sortedAsync(results, nav.sort) { it.title }
                     ShowGrid(sorted, false, favorites, nav, onNav)
                 }
             }
@@ -1075,4 +1069,19 @@ private fun FavoritesView(
             }
         }
     }
+}
+
+
+/**
+ * Orders a long list off the main thread: sorting a group of tens of thousands of entries on the TV stick would
+ * freeze the screen, so the list is shown at once in its original order and swapped when the sort is ready.
+ */
+@Composable
+private fun <T> sortedAsync(source: List<T>, mode: dev.red74.prismplayer.data.SortMode, title: (T) -> String): List<T> {
+    val small = source.size < 2_000
+    val first = remember(source, mode) { if (small) source.sortedBy(mode, title) else source }
+    val result by produceState(initialValue = first, source, mode) {
+        value = if (small) first else withContext(Dispatchers.Default) { source.sortedBy(mode, title) }
+    }
+    return result
 }

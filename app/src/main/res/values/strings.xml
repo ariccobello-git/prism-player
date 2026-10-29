@@ -66,7 +66,7 @@
     <string name="player_pause">Pause</string>
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Playback error (%1$s)</string>
-    <string name="player_hint">◀ ▶ skip 10 s · ▲ ▼ change channel · OK controls · Back close</string>
+    <string name="player_hint">◀ ▶ skip 10 s · ⏪ ⏩ 2× 4× 8× · ▲ ▼ change channel · OK controls · Back close</string>
     <string name="status_unverified">Not verified</string>
     <string name="status_ok">OK · %1$d entries</string>
     <string name="status_failed">Not reachable</string>
@@ -131,7 +131,7 @@
     <string name="np_close">Close</string>
     <string name="version_label">Version %1$s</string>
     <string name="np_format">Format</string>
-    <string name="player_hint_hold">Hold ◀ ▶ to skip faster · ▲ ▼ change channel · OK controls · Back close</string>
+    <string name="player_hint_hold">Hold ◀ ▶ to skip faster · ⏪ ⏩ 2× 4× 8× (buttons) · ▲ ▼ change channel · OK controls · Back close</string>
     <string name="sound_on">Sounds: on</string>
     <string name="sound_off">Sounds: muted</string>
     <string name="action_go_lists">My playlists</string>
@@ -160,4 +160,15 @@
     <string name="codec_hw">Yes, hardware</string>
     <string name="codec_sw">Yes, software</string>
     <string name="updates_note">Dolby and DTS sound can still reach a soundbar directly even when this device cannot decode it. Updates are never installed by the app itself.</string>
+    <string name="action_shortcuts">Shortcuts</string>
+    <string name="shortcuts_title">Shortcuts</string>
+    <string name="shortcuts_mine">My shortcuts</string>
+    <string name="shortcuts_add">Installed apps: press OK to add</string>
+    <string name="shortcuts_empty">No shortcuts yet. Pick an app on the right to add it here.</string>
+    <string name="shortcuts_remove">Remove</string>
+    <string name="shortcuts_missing">Not installed any more</string>
+    <string name="shortcuts_cannot_open">This app cannot be opened</string>
+    <string name="shortcuts_loading">Looking for installed apps…</string>
+    <string name="shortcuts_none_left">All installed apps are already added.</string>
+    <string name="shortcuts_press_to_add">OK adds a shortcut</string>
 </resources>
