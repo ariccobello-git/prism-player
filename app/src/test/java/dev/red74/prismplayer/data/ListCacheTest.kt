@@ -13,7 +13,7 @@ import org.junit.Test
 
 class ListCacheTest {
     private val key: SecretKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
-    private fun dir() = File.createTempFile("lc", "").let { it.delete(); it.mkdirs(); it }
+    private fun dir() = File.createTempFile("lcache", "").let { it.delete(); it.mkdirs(); it }
 
     private fun payload(size: Int): ByteArray {
         val sb = StringBuilder()
