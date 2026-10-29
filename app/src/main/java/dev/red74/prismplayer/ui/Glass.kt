@@ -178,7 +178,7 @@ fun PrismBackground(
             size = 13.sp,
             color = PrismColors.TextSecondary,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
+                .align(androidx.compose.ui.Alignment.BottomCenter)
                 .padding(bottom = 8.dp),
         )
     }
