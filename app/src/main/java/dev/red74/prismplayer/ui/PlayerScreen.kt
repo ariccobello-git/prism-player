@@ -76,6 +76,7 @@ import dev.red74.prismplayer.player.AspectMode
 import dev.red74.prismplayer.player.FastScan
 import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.StreamIdentity
+import dev.red74.prismplayer.player.TrackPolicy
 import dev.red74.prismplayer.player.createPlayer
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -126,6 +127,9 @@ fun PlayerScreen(
     var plan by remember { mutableStateOf(StreamIdentity.plan()) }
     var retryRequest by remember { mutableIntStateOf(0) }
     var startedOk by remember { mutableStateOf(false) }
+    /** Audio and subtitles follow [TrackPolicy] until the viewer picks them in the panel. */
+    var autoTracks by remember { mutableStateOf(true) }
+    val appliedTracks = remember { arrayOfNulls<String>(1) }
     var isPlaying by remember { mutableStateOf(false) }
     var formatToast by remember { mutableStateOf<AspectMode?>(null) }
     var skipToast by remember { mutableStateOf<String?>(null) }
@@ -191,6 +195,7 @@ fun PlayerScreen(
 
             override fun onTracksChanged(newTracks: Tracks) {
                 tracks = newTracks
+                if (autoTracks) applyTrackPolicy(player, newTracks, appliedTracks)
             }
 
             override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
@@ -237,6 +242,14 @@ fun PlayerScreen(
         StreamIdentity.current = plan.first()
         // Panels often allow one connection per account: the preview's must be closed before this one opens.
         PreviewPlayers.stopAll()
+        // Every content starts in Italian without subtitles (see TrackPolicy); the tracks decide the rest.
+        autoTracks = true
+        appliedTracks[0] = null
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .clearOverrides()
+            .setPreferredAudioLanguage(TrackPolicy.ITALIAN)
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .build()
         countdown = -1
         status = PlayStatus.Loading
         scanPosMs = -1L
@@ -718,7 +731,7 @@ fun PlayerScreen(
                         modifier = Modifier.align(Alignment.CenterEnd),
                     ) {
                         when (panel) {
-                            Panel.Tracks -> TracksPanel(tracks, player, panelFocus) { panel = Panel.None }
+                            Panel.Tracks -> TracksPanel(tracks, player, panelFocus, onPicked = { autoTracks = false }) { panel = Panel.None }
                             Panel.Episodes -> EpisodesPanel(channels, index, panelFocus) {
                                 index = it
                                 panel = Panel.None
@@ -839,8 +852,64 @@ private fun channelLabel(count: Int): String = when (count) {
     else -> count.toString()
 }
 
+/**
+ * Applies [TrackPolicy] to the tracks a content offers: Italian audio when there is one, and the subtitles it
+ * asks for (Italian, else English, else none). Tracks can appear in steps (subtitles found later in a stream),
+ * so this runs on each change; [applied] keeps the last choice so nothing is set twice.
+ */
+private fun applyTrackPolicy(player: Player, tracks: Tracks, applied: Array<String?>) {
+    var italianAudio: Tracks.Group? = null
+    var italianAudioIndex = 0
+    val audioLanguages = ArrayList<String?>()
+    val textLanguages = ArrayList<String?>()
+    for (group in tracks.groups) {
+        for (i in 0 until group.length) {
+            if (!group.isTrackSupported(i)) continue
+            val language = group.getTrackFormat(i).language
+            when (group.type) {
+                C.TRACK_TYPE_AUDIO -> {
+                    audioLanguages += language
+                    if (italianAudio == null && TrackPolicy.normalize(language) == TrackPolicy.ITALIAN) {
+                        italianAudio = group
+                        italianAudioIndex = i
+                    }
+                }
+                C.TRACK_TYPE_TEXT -> textLanguages += language
+            }
+        }
+    }
+    if (audioLanguages.isEmpty() && textLanguages.isEmpty()) return
+    val subtitles = TrackPolicy.subtitles(audioLanguages, textLanguages)
+    val decision = "${italianAudio != null}|$subtitles|${audioLanguages.size}|${textLanguages.size}"
+    if (applied[0] == decision) return
+    applied[0] = decision
+    val builder = player.trackSelectionParameters.buildUpon().clearOverrides()
+    italianAudio?.let { builder.setOverrideForType(TrackSelectionOverride(it.mediaTrackGroup, italianAudioIndex)) }
+    if (subtitles == null) {
+        builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+    } else {
+        builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            .setPreferredTextLanguage(subtitles)
+            .setSelectUndeterminedTextLanguage(false)
+        val group = tracks.groups.firstOrNull { g ->
+            g.type == C.TRACK_TYPE_TEXT && (0 until g.length).any { g.isTrackSupported(it) && TrackPolicy.normalize(g.getTrackFormat(it).language) == subtitles }
+        }
+        if (group != null) {
+            val index = (0 until group.length).first { group.isTrackSupported(it) && TrackPolicy.normalize(group.getTrackFormat(it).language) == subtitles }
+            builder.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, index))
+        }
+    }
+    player.trackSelectionParameters = builder.build()
+}
+
 @Composable
-private fun androidx.compose.foundation.layout.ColumnScope.TracksPanel(tracks: Tracks, player: Player, focus: FocusRequester, onClose: () -> Unit) {
+private fun androidx.compose.foundation.layout.ColumnScope.TracksPanel(
+    tracks: Tracks,
+    player: Player,
+    focus: FocusRequester,
+    onPicked: () -> Unit,
+    onClose: () -> Unit,
+) {
     val audio = ArrayList<TrackChoice>()
     val subs = ArrayList<TrackChoice>()
     var anyTextSelected = false
@@ -854,6 +923,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.TracksPanel(tracks: T
             val selected = group.isTrackSelected(i)
             if (group.type == C.TRACK_TYPE_TEXT && selected) anyTextSelected = true
             val choice = TrackChoice(label, selected) {
+                onPicked()
                 player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                     .setTrackTypeDisabled(group.type, false)
                     .setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, i))
@@ -863,6 +933,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.TracksPanel(tracks: T
         }
     }
     val off = TrackChoice(stringResource(R.string.np_subtitles_off), !anyTextSelected) {
+        onPicked()
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
             .build()
