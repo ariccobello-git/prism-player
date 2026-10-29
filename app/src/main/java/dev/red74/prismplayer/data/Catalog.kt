@@ -74,8 +74,21 @@ object FavoriteKey {
 
     fun ofShow(show: Show): String = hash("show|${show.group}|${show.title}")
 
+    // Hundreds of thousands of keys are computed for a big list (favourites, unavailable marks): one digest per
+    // thread and a hex table instead of a String.format per byte make that about ten times faster.
+    private val digests = object : ThreadLocal<MessageDigest>() {
+        override fun initialValue(): MessageDigest = MessageDigest.getInstance("SHA-256")
+    }
+    private val HEX = "0123456789abcdef".toCharArray()
+
     private fun hash(text: String): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray())
-        return digest.take(12).joinToString("") { "%02x".format(it) }
+        val digest = digests.get()!!.digest(text.toByteArray())
+        val out = CharArray(24)
+        for (i in 0 until 12) {
+            val b = digest[i].toInt() and 0xff
+            out[i * 2] = HEX[b ushr 4]
+            out[i * 2 + 1] = HEX[b and 0x0f]
+        }
+        return String(out)
     }
 }

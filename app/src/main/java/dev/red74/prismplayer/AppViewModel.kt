@@ -11,6 +11,7 @@ import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.EpgUrl
 import dev.red74.prismplayer.data.FavoriteKey
+import dev.red74.prismplayer.data.FavoriteList
 import dev.red74.prismplayer.data.FetchException
 import dev.red74.prismplayer.data.HttpAgent
 import dev.red74.prismplayer.data.CatalogSnapshot
@@ -28,6 +29,10 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -107,6 +112,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _favorites = MutableStateFlow(container.settings.favorites)
     val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
 
+    private val _favoriteList = MutableStateFlow<FavoriteList?>(null)
+    /** The favourites found in the open list (null while the first search runs), ready before the page opens. */
+    val favoriteList: StateFlow<FavoriteList?> = _favoriteList.asStateFlow()
+
     private val _unavailable = MutableStateFlow(Availability.live(container.settings.unavailable, System.currentTimeMillis()))
     /** Keys (see [FavoriteKey]) of the contents the provider could not deliver lately. */
     val unavailable: StateFlow<Map<String, Long>> = _unavailable.asStateFlow()
@@ -134,6 +143,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             runCatching { store.load() }
             _ready.value = true
+        }
+        // The favourites are looked up in the background as soon as a list is ready and after every change; a
+        // newer change cancels a search still running. The page then only shows what is already here.
+        viewModelScope.launch {
+            combine(_library.map { it.catalog }.distinctUntilChanged(), _favorites) { catalog, keys -> catalog to keys }
+                .collectLatest { (catalog, keys) ->
+                    if (catalog.isEmpty) {
+                        _favoriteList.value = null
+                        return@collectLatest
+                    }
+                    _favoriteList.value = withContext(Dispatchers.Default) { FavoriteList.find(catalog, keys) }
+                }
         }
     }
 
@@ -434,6 +455,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun toggleFavorite(key: String) {
+        // A removal shows at once; an addition appears when the background search (a moment) is done.
+        if (key in _favorites.value) _favoriteList.update { it?.without(key) }
         val updated = _favorites.value.let { if (key in it) it - key else it + key }
         _favorites.value = updated
         container.settings.favorites = updated

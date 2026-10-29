@@ -103,7 +103,8 @@
     <string name="season_none">Episodes</string>
     <string name="library_empty">Nothing here yet.</string>
     <string name="search_none">No results.</string>
-    <string name="favorites_empty">No favorites yet. Select an item and choose Add to favorites.</string>
+    <string name="favorites_empty">No favorites yet. Select an item and press its star.</string>
+    <string name="favorites_loading">Looking for your favorites…</string>
     <string name="preview_hint">Press OK for full screen</string>
     <string name="preview_failed">Preview not available</string>
     <string name="no_guide">No programme guide for this channel</string>
