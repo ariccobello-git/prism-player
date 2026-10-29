@@ -2,6 +2,7 @@ package dev.red74.prismplayer
 
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import dev.red74.prismplayer.ui.PrismTheme
@@ -10,6 +11,9 @@ import dev.red74.prismplayer.ui.UiSounds
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // While the app is in front the TV stick never goes to standby or starts its screensaver, whatever is on
+        // screen (menus, a list, a preview or a full-screen stream), and the app itself never closes for inactivity.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         UiSounds.init(this)
         setContent {
             PrismTheme {
