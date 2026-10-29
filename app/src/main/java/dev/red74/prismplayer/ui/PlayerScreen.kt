@@ -330,6 +330,7 @@ fun PlayerScreen(
             if (scanBySeeking) scanBySeeking = false
             player.setSeekParameters(SeekParameters.DEFAULT)
             player.setPlaybackSpeed(1f)
+            player.volume = 1f
             if (scanPosMs >= 0L) {
                 player.seekTo(scanPosMs)
                 positionMs = scanPosMs
@@ -344,6 +345,8 @@ fun PlayerScreen(
                 player.seekTo(scanPosMs)
                 scanPosMs = -1L
             }
+            // No sound while scanning: sped-up audio is only noise.
+            player.volume = 0f
             player.setPlaybackSpeed(scan.toFloat())
             player.play()
             var wasReady = false
@@ -441,13 +444,10 @@ fun PlayerScreen(
         skipToast = (if (deltaMs > 0) "+" else "-") + (kotlin.math.abs(deltaMs) / 1000)
     }
 
-    /** Each press goes one step further: 2x, 4x, 8x, then back to normal speed (the other direction starts again at 2x). */
+    /** Each press goes one step further (2x up to 48x, see FastScan.SPEEDS), then back to normal speed. */
     fun cycleScan(direction: Int) {
         if (!player.isCurrentMediaItemSeekable) return
-        scan = when {
-            direction > 0 -> when { scan < 0 -> 2; scan == 0 -> 2; scan == 2 -> 4; scan == 4 -> 8; else -> 0 }
-            else -> when { scan > 0 -> -2; scan == 0 -> -2; scan == -2 -> -4; scan == -4 -> -8; else -> 0 }
-        }
+        scan = FastScan.next(scan, direction)
     }
 
     fun goLive() {
@@ -960,7 +960,7 @@ private fun troubleText(trouble: Availability.Trouble?, http: Int?): String? {
     }
 }
 
-/** The 2x/4x/8x sign in the middle of the picture, with the time it has reached. */
+/** The 2x...48x sign in the middle of the picture, with the time it has reached. */
 @Composable
 private fun ScanBadge(scan: Int, time: String?, modifier: Modifier = Modifier) {
     GlassPanel(modifier, cornerRadius = 28.dp) {

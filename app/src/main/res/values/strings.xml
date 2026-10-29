@@ -72,7 +72,7 @@
     <string name="player_trouble_no_answer">The server does not answer. Check the VPN and the connection.</string>
     <string name="player_trouble_bad_stream">The provider does not send a readable video.</string>
     <string name="unavailable_note">⊘ Not available: the provider did not deliver it in the last hours</string>
-    <string name="player_hint">◀ ▶ skip 10 s · ⏪ ⏩ 2× 4× 8× · ▲ ▼ change channel · OK controls · Back close</string>
+    <string name="player_hint">◀ ▶ skip 10 s · ⏪ ⏩ 2× → 48× · ▲ ▼ change channel · OK controls · Back close</string>
     <string name="status_unverified">Not verified</string>
     <string name="status_ok">OK · %1$d entries</string>
     <string name="status_failed">Not reachable</string>
@@ -138,7 +138,7 @@
     <string name="np_close">Close</string>
     <string name="version_label">Version %1$s</string>
     <string name="np_format">Format</string>
-    <string name="player_hint_hold">Hold ◀ ▶ to skip faster · ⏪ ⏩ 2× 4× 8× (buttons) · ▲ ▼ change channel · OK controls · Back close</string>
+    <string name="player_hint_hold">Hold ◀ ▶ to skip faster · ⏪ ⏩ 2× → 48× (buttons) · ▲ ▼ change channel · OK controls · Back close</string>
     <string name="sound_on">Sounds: on</string>
     <string name="sound_off">Sounds: muted</string>
     <string name="action_go_lists">My playlists</string>
