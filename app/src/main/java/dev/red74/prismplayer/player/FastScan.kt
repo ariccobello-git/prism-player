@@ -14,8 +14,12 @@ object FastScan {
     /** Gap between two pictures while scanning: lower would only queue seeks the network cannot serve. */
     const val MIN_SEEK_GAP_MS = 120L
 
-    /** A picture that takes longer than this is given up for a newer position. */
-    const val MAX_SEEK_WAIT_MS = 1_500L
+    /**
+     * A picture that takes longer than this is given up for a newer position. At 12x and more every position is
+     * beyond what is already downloaded, and an IPTV server can take a few seconds to answer each jump: giving up
+     * sooner cancelled every jump before it arrived, so the picture never changed.
+     */
+    const val MAX_SEEK_WAIT_MS = 6_000L
 
     /** Real 2x playback that stalls for this long switches to the scan clock. */
     const val STALL_FALLBACK_MS = 600L
