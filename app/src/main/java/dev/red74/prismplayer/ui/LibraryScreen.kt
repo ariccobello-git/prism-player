@@ -288,8 +288,10 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
                     onNav {
                         if (it.tab == tab) it.copy(resume = true)
                         else it.copy(
+                            // A search belongs to the tab it was typed in: left in place it would also filter the
+                            // next tab (Favourites showed "No results").
                             tab = tab, category = 0, level = 0, sub = 0, itemIndex = 0, movieUrl = null,
-                            showTitle = null, showGroup = null, season = -1, resume = true,
+                            showTitle = null, showGroup = null, season = -1, query = "", resume = true,
                         )
                     }
                 },
