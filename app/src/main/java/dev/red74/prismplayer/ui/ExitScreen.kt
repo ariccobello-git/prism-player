@@ -47,6 +47,7 @@ fun ExitScreen(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val fade = remember { Animatable(0f) }
     val context = LocalContext.current
     DisposableEffect(closing) {
+        if (closing) UiSounds.enabled = false
         val player = if (!closing) null else runCatching {
             val attributes = android.media.AudioAttributes.Builder()
                 .setUsage(android.media.AudioAttributes.USAGE_MEDIA)

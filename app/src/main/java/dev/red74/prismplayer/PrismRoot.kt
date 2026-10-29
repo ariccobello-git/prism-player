@@ -34,6 +34,7 @@ import dev.red74.prismplayer.ui.LibraryScreen
 import dev.red74.prismplayer.ui.PairScreen
 import dev.red74.prismplayer.ui.PlayerScreen
 import dev.red74.prismplayer.ui.SplashScreen
+import dev.red74.prismplayer.ui.UiSounds
 
 private sealed interface Screen {
     data object Home : Screen
@@ -84,12 +85,14 @@ private fun PrismNavigation(
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
 
     fun push(screen: Screen) {
+        UiSounds.play(UiSounds.Kind.FORWARD)
         forward = true
         stack.add(screen)
     }
 
     fun pop() {
         if (stack.size > 1) {
+            UiSounds.play(UiSounds.Kind.BACK)
             forward = false
             stack.removeAt(stack.lastIndex)
         }
@@ -98,6 +101,7 @@ private fun PrismNavigation(
     BackHandler(enabled = stack.size > 1) { pop() }
     // Last "back" on the home screen: ask before leaving.
     BackHandler(enabled = stack.size == 1 && !confirmExit) {
+        UiSounds.play(UiSounds.Kind.FORWARD)
         forward = true
         confirmExit = true
     }
@@ -113,6 +117,18 @@ private fun PrismNavigation(
     val verifying by viewModel.verifying.collectAsStateWithLifecycle()
 
     val current: Screen = if (confirmExit) Screen.Exit else stack.last()
+
+    // Interface sounds: everywhere except the player (and the exit screen switches them off itself).
+    LaunchedEffect(current) { UiSounds.enabled = current !is Screen.Player }
+    DisposableEffect(Unit) { onDispose { UiSounds.enabled = false } }
+    LaunchedEffect(notice) {
+        when (notice) {
+            null -> Unit
+            Notice.SAVE_FAILED, Notice.DUPLICATE, Notice.VERIFY_FAILED, Notice.VERIFY_SOME_FAILED -> UiSounds.play(UiSounds.Kind.ERROR)
+            else -> UiSounds.play(UiSounds.Kind.SELECT)
+        }
+    }
+    LaunchedEffect(library.error) { if (library.error != null) UiSounds.play(UiSounds.Kind.ERROR) }
 
     AnimatedContent(
         targetState = current,
@@ -145,6 +161,7 @@ private fun PrismNavigation(
             Screen.Exit -> ExitScreen(
                 onConfirm = { activity?.finish() },
                 onDismiss = {
+                    UiSounds.play(UiSounds.Kind.BACK)
                     forward = false
                     confirmExit = false
                 },
@@ -153,7 +170,7 @@ private fun PrismNavigation(
             Screen.Import -> ImportScreen(
                 onSubmit = { name, url ->
                     viewModel.importPlaylist(name, url).also { result ->
-                        if (result is PlaylistUrl.Result.Valid) pop()
+                        if (result is PlaylistUrl.Result.Valid) pop() else UiSounds.play(UiSounds.Kind.ERROR)
                     }
                 },
                 onBack = ::pop,
@@ -187,7 +204,10 @@ private fun PrismNavigation(
                         viewModel.play(items, index, follow)
                         push(Screen.Player)
                     },
-                    onToggleFavorite = viewModel::toggleFavorite,
+                    onToggleFavorite = { key ->
+                        UiSounds.play(if (key in favorites) UiSounds.Kind.DESELECT else UiSounds.Kind.SELECT)
+                        viewModel.toggleFavorite(key)
+                    },
                     onRetry = viewModel::reloadPlaylist,
                     onBack = ::pop,
                 )

@@ -63,6 +63,7 @@ fun HomeScreen(
     // Two levels side by side: the menu and the playlists. Back from the playlists goes to the menu.
     var listFocused by remember { mutableStateOf(false) }
     androidx.activity.compose.BackHandler(enabled = listFocused) {
+        UiSounds.play(UiSounds.Kind.BACK)
         runCatching { firstFocus.requestFocus() }
     }
 

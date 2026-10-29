@@ -106,9 +106,11 @@ fun LibraryScreen(
     // the tab row clears a search first and then leaves the screen. OK on a tab goes down into the content.
     var contentFocused by remember { mutableStateOf(false) }
     BackHandler(enabled = nav.query.isNotEmpty() && !contentFocused) {
+        UiSounds.play(UiSounds.Kind.BACK)
         onNav { it.copy(query = "", itemIndex = 0, resume = false) }
     }
     BackHandler(enabled = contentFocused) {
+        UiSounds.play(UiSounds.Kind.BACK)
         runCatching { tabFocus.requestFocus() }
     }
     // A request to focus the content that found nothing to focus (empty tab) must not linger.
@@ -119,6 +121,7 @@ fun LibraryScreen(
         }
     }
     BackHandler(enabled = nav.movieUrl != null || nav.showTitle != null) {
+        UiSounds.play(UiSounds.Kind.BACK)
         onNav { it.copy(movieUrl = null, showTitle = null, showGroup = null, season = -1, resume = true) }
     }
 
@@ -196,6 +199,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
             GlassButton(
                 text = stringResource(label),
                 onClick = {
+                    UiSounds.play(UiSounds.Kind.FORWARD)
                     onNav {
                         it.copy(
                             tab = tab, category = 0, itemIndex = 0, movieUrl = null,
