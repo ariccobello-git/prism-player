@@ -33,6 +33,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.foundation.focusable
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.composed
 import androidx.compose.ui.focus.FocusRequester
@@ -287,6 +295,11 @@ fun GlassButton(
     }
 }
 
+/**
+ * A text field for the remote. With [editOnOk] (the default) reaching it with the arrows only highlights it: OK
+ * opens the cursor and the keyboard, and the keyboard's action, Back or moving away with the arrows closes them.
+ * So passing over a search field never pops the keyboard up.
+ */
 @Composable
 fun GlassTextField(
     value: String,
@@ -297,38 +310,87 @@ fun GlassTextField(
     keyboardType: KeyboardType = KeyboardType.Text,
     imeAction: ImeAction = ImeAction.Next,
     onDone: () -> Unit = {},
+    editOnOk: Boolean = true,
 ) {
     var focused by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(!editOnOk) }
+    val boxFocus = remember { FocusRequester() }
+    val fieldFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
     val shape = RoundedCornerShape(16.dp)
+
+    fun stopEditing() {
+        if (!editOnOk || !editing) return
+        editing = false
+        keyboard?.hide()
+        runCatching { boxFocus.requestFocus() }
+    }
+
+    LaunchedEffect(editing) {
+        if (editOnOk && editing) {
+            fieldFocus.requestWhenReady()
+            keyboard?.show()
+        }
+    }
+    BackHandler(enabled = editOnOk && editing) { stopEditing() }
 
     Column(modifier) {
         PrismText(text = label, size = 16.sp, color = PrismColors.TextSecondary)
         Spacer(Modifier.height(6.dp))
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            singleLine = true,
-            textStyle = TextStyle(color = PrismColors.TextPrimary, fontSize = 22.sp),
-            cursorBrush = SolidColor(PrismColors.Accent),
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
-            keyboardActions = KeyboardActions(onDone = { onDone() }),
-            modifier = Modifier
+        Box(
+            Modifier
                 .fillMaxWidth()
                 .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-                .onFocusChanged { focused = it.isFocused }
+                .focusRequester(boxFocus)
+                .onFocusChanged { focused = it.hasFocus }
+                .then(
+                    if (editOnOk) {
+                        Modifier
+                            .onKeyEvent { event ->
+                                val ok = event.key == Key.DirectionCenter || event.key == Key.Enter || event.key == Key.NumPadEnter
+                                if (ok && !editing && event.type == KeyEventType.KeyUp) {
+                                    editing = true
+                                    true
+                                } else {
+                                    ok && !editing
+                                }
+                            }
+                            .focusable()
+                    } else {
+                        Modifier
+                    },
+                )
                 .clip(shape)
-                .background(Color.White.copy(alpha = 0.08f))
+                .background(Color.White.copy(alpha = if (editing) 0.14f else 0.08f))
                 .border(
                     width = if (focused) 3.dp else 1.dp,
                     color = if (focused) Color.White else Color.White.copy(alpha = 0.22f),
                     shape = shape,
                 )
                 .padding(horizontal = 20.dp, vertical = 16.dp),
-        )
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = true,
+                textStyle = TextStyle(color = PrismColors.TextPrimary, fontSize = 22.sp),
+                cursorBrush = SolidColor(PrismColors.Accent),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
+                keyboardActions = KeyboardActions(
+                    onDone = { onDone(); stopEditing() },
+                    onSearch = { onDone(); stopEditing() },
+                    onGo = { onDone(); stopEditing() },
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(fieldFocus)
+                    .focusProperties { canFocus = !editOnOk || editing }
+                    .onFocusChanged { if (!it.isFocused && editOnOk && editing) editing = false },
+            )
+        }
     }
 }
 
-/** Moves D-pad focus to [requester] once its target is on screen (one frame after composition). */
 /**
  * Focuses as soon as the target is on screen: coming back from the player, a long list or an entering screen may
  * need a few frames before the item exists, and a single try would leave the cursor elsewhere.
@@ -340,6 +402,7 @@ suspend fun FocusRequester.requestWhenReady(frames: Int = 40) {
     }
 }
 
+/** Moves D-pad focus to [requester] once its target is on screen (one frame after composition). */
 @Composable
 fun RequestFocusOnEnter(requester: FocusRequester, key: Any? = Unit) {
     LaunchedEffect(key) {
