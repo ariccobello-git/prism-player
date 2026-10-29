@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import dev.red74.prismplayer.data.AppSettings
 import dev.red74.prismplayer.data.KeystoreKeyProvider
+import dev.red74.prismplayer.data.ListCache
 import dev.red74.prismplayer.data.PlaylistFetcher
 import dev.red74.prismplayer.data.PlaylistStore
 import dev.red74.prismplayer.data.SecureBox
@@ -29,6 +30,8 @@ class AppContainer(context: Context) {
         file = File(context.noBackupFilesDir, "playlists.bin"),
         box = SecureBox(keys::getOrCreateKey),
     )
+    /** Last downloaded copy of each list (encrypted), so reopening a list does not wait for the network. */
+    val listCache = ListCache(File(context.noBackupFilesDir, "lists"), keys::getOrCreateKey)
     val fetcher = PlaylistFetcher()
     val pairingManager = PairingManager()
     val settings = AppSettings(context)

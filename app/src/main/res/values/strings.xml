@@ -135,4 +135,11 @@
     <string name="sound_on">Sounds: on</string>
     <string name="sound_off">Sounds: muted</string>
     <string name="action_go_lists">My playlists</string>
+    <string name="channels_loading_count">Loading playlist… %1$d entries read</string>
+    <string name="group_all">All</string>
+    <string name="sort_label">Sort:</string>
+    <string name="sort_standard">Standard</string>
+    <string name="sort_az">A–Z</string>
+    <string name="sort_za">Z–A</string>
+    <string name="sort_recent">Latest</string>
 </resources>

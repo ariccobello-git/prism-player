@@ -2,6 +2,8 @@ package dev.red74.prismplayer.ui
 
 import android.text.format.DateFormat
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -63,6 +65,9 @@ import dev.red74.prismplayer.data.Category
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.FavoriteKey
+import dev.red74.prismplayer.data.GroupTree
+import dev.red74.prismplayer.data.SortMode
+import dev.red74.prismplayer.data.sortedBy
 import dev.red74.prismplayer.data.NowNext
 import dev.red74.prismplayer.data.Show
 import dev.red74.prismplayer.player.createPlayer
@@ -120,6 +125,27 @@ fun LibraryScreen(
             onNav { it.copy(resume = false) }
         }
     }
+    // Levels: tab row > categories > items > detail. Back from the items returns to the category list.
+    val groupNames = remember(state.catalog, nav.tab) {
+        when (nav.tab) {
+            LibraryTab.LIVE -> state.catalog.live.map { it.name }
+            LibraryTab.MOVIES -> state.catalog.movies.map { it.name }
+            LibraryTab.SERIES -> state.catalog.series.map { it.name }
+            LibraryTab.FAVORITES -> emptyList()
+        }
+    }
+    val groupTree = remember(groupNames) { GroupTree.build(groupNames) }
+    val currentMain = groupTree.getOrNull(nav.category)
+    val levelUp = when {
+        nav.level >= 2 -> if (currentMain?.hasSubLevel == true) 1 else 0
+        nav.level == 1 -> 0
+        else -> -1
+    }
+    BackHandler(enabled = contentFocused && levelUp >= 0 && nav.query.isEmpty() && nav.tab != LibraryTab.FAVORITES &&
+        nav.movieUrl == null && nav.showTitle == null) {
+        UiSounds.play(UiSounds.Kind.BACK)
+        onNav { it.copy(level = levelUp, resume = true) }
+    }
     BackHandler(enabled = nav.movieUrl != null || nav.showTitle != null) {
         UiSounds.play(UiSounds.Kind.BACK)
         onNav { it.copy(movieUrl = null, showTitle = null, showGroup = null, season = -1, resume = true) }
@@ -143,14 +169,23 @@ fun LibraryScreen(
                 ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     GlassButton(text = stringResource(R.string.action_back), onClick = onBack)
-                    PrismText(text = state.playlistName, size = 30.sp, weight = FontWeight.Bold, maxLines = 1)
+                    val crumb = if (nav.level >= 1 && nav.query.isEmpty() && currentMain != null) {
+                        val mainName = currentMain.name.ifBlank { stringResource(R.string.category_other) }
+                        if (nav.level >= 2 && currentMain.hasSubLevel && nav.sub > 0) {
+                            mainName + "  ›  " + currentMain.subs.getOrNull(nav.sub - 1)?.name.orEmpty()
+                        } else mainName
+                    } else null
+                    PrismText(
+                        text = if (crumb.isNullOrBlank()) state.playlistName else state.playlistName + "  ›  " + crumb,
+                        size = 30.sp, weight = FontWeight.Bold, maxLines = 1,
+                    )
                 }
                 if (!state.loading && state.error == null) TopBar(nav, onNav, tabFocus)
                 }
 
                 when {
                     state.loading -> PrismText(
-                        text = stringResource(R.string.channels_loading),
+                        text = if (state.loadedCount > 0) stringResource(R.string.channels_loading_count, state.loadedCount) else stringResource(R.string.channels_loading),
                         size = 22.sp,
                         color = PrismColors.TextSecondary,
                     )
@@ -206,8 +241,9 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
                 onClick = {
                     UiSounds.play(UiSounds.Kind.FORWARD)
                     onNav {
-                        it.copy(
-                            tab = tab, category = 0, itemIndex = 0, movieUrl = null,
+                        if (it.tab == tab) it.copy(resume = true)
+                        else it.copy(
+                            tab = tab, category = 0, level = 0, sub = 0, itemIndex = 0, movieUrl = null,
                             showTitle = null, showGroup = null, season = -1, resume = true,
                         )
                     }
@@ -244,25 +280,35 @@ private fun LibraryBody(
     val query = nav.query.trim()
     when (nav.tab) {
         LibraryTab.LIVE -> {
+            val names = remember(catalog) { catalog.live.map { it.name } }
+            val counts = remember(catalog) { catalog.live.map { it.items.size } }
             val results by produceState(emptyList<Channel>(), catalog, query) {
                 value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.Default) {
                     catalog.live.asSequence().flatMap { it.items.asSequence() }
                         .filter { it.name.contains(query, ignoreCase = true) }.take(SEARCH_LIMIT).toList()
                 }
             }
-            val everything = remember(catalog) { catalog.live.flatMap { it.items } }
             if (catalog.live.isEmpty()) {
                 EmptyNote(R.string.library_empty)
             } else if (query.isEmpty()) {
-                LiveView(everything, true, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
+                GroupBrowser(names, counts, nav, onNav) { cats ->
+                    val items = remember(cats, catalog, nav.sort) {
+                        val all = if (cats.size == 1) catalog.live[cats[0]].items else cats.flatMap { catalog.live[it].items }
+                        all.sortedBy(nav.sort) { it.name }
+                    }
+                    LiveView(items, true, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
+                }
             } else if (results.isEmpty()) {
                 EmptyNote(R.string.search_none)
             } else {
-                LiveView(results, false, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
+                val sorted = remember(results, nav.sort) { results.sortedBy(nav.sort) { it.name } }
+                LiveView(sorted, false, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
             }
         }
 
         LibraryTab.MOVIES -> {
+            val names = remember(catalog) { catalog.movies.map { it.name } }
+            val counts = remember(catalog) { catalog.movies.map { it.items.size } }
             val selected = nav.movieUrl
             val movie = remember(catalog, selected) {
                 selected?.let { url -> catalog.movies.firstNotNullOfOrNull { c -> c.items.firstOrNull { it.url == url } } }
@@ -277,27 +323,23 @@ private fun LibraryBody(
                 movie != null -> MovieDetail(movie, favorites, onNav, onPlay, onToggleFavorite)
                 catalog.movies.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
+                query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
+                    val items = remember(cats, catalog, nav.sort) {
+                        val all = if (cats.size == 1) catalog.movies[cats[0]].items else cats.flatMap { catalog.movies[it].items }
+                        all.sortedBy(nav.sort) { it.name }
+                    }
+                    MovieGrid(items, true, favorites, nav, onNav)
+                }
                 else -> {
-                    val flat = if (query.isEmpty()) null else results
-                    CategoryAndGrid(
-                        names = catalog.movies.map { it.name },
-                        counts = catalog.movies.map { it.items.size },
-                        showCategories = flat == null,
-                        nav = nav,
-                        onNav = onNav,
-                        count = { c -> flat?.size ?: catalog.movies[c].items.size },
-                        entry = { c, i ->
-                            val item = flat?.get(i) ?: catalog.movies[c].items[i]
-                            GridEntry(item.name, item.logo, FavoriteKey.of(item) in favorites) {
-                                onNav { it.copy(movieUrl = item.url, itemIndex = if (flat == null) i else 0, resume = true) }
-                            }
-                        },
-                    )
+                    val sorted = remember(results, nav.sort) { results.sortedBy(nav.sort) { it.name } }
+                    MovieGrid(sorted, false, favorites, nav, onNav)
                 }
             }
         }
 
         LibraryTab.SERIES -> {
+            val names = remember(catalog) { catalog.series.map { it.name } }
+            val counts = remember(catalog) { catalog.series.map { it.shows.size } }
             val group = nav.showGroup
             val title = nav.showTitle
             val show = remember(catalog, group, title) {
@@ -315,27 +357,41 @@ private fun LibraryBody(
                 show != null -> ShowDetail(show, nav, favorites, onNav, onPlay, onToggleFavorite)
                 catalog.series.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
+                query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
+                    val items = remember(cats, catalog, nav.sort) {
+                        val all = if (cats.size == 1) catalog.series[cats[0]].shows else cats.flatMap { catalog.series[it].shows }
+                        all.sortedBy(nav.sort) { it.title }
+                    }
+                    ShowGrid(items, true, favorites, nav, onNav)
+                }
                 else -> {
-                    val flat = if (query.isEmpty()) null else results
-                    CategoryAndGrid(
-                        names = catalog.series.map { it.name },
-                        counts = catalog.series.map { it.shows.size },
-                        showCategories = flat == null,
-                        nav = nav,
-                        onNav = onNav,
-                        count = { c -> flat?.size ?: catalog.series[c].shows.size },
-                        entry = { c, i ->
-                            val item = flat?.get(i) ?: catalog.series[c].shows[i]
-                            GridEntry(item.title, item.logo, FavoriteKey.ofShow(item) in favorites) {
-                                onNav { it.copy(showTitle = item.title, showGroup = item.group, season = -1, itemIndex = if (flat == null) i else 0, resume = true) }
-                            }
-                        },
-                    )
+                    val sorted = remember(results, nav.sort) { results.sortedBy(nav.sort) { it.title } }
+                    ShowGrid(sorted, false, favorites, nav, onNav)
                 }
             }
         }
 
         LibraryTab.FAVORITES -> FavoritesView(catalog, query, nav, favorites, onNav, onPlay, onToggleFavorite)
+    }
+}
+
+@Composable
+private fun MovieGrid(items: List<Channel>, restorable: Boolean, favorites: Set<String>, nav: LibraryNav, onNav: NavChange) {
+    ItemGrid(items.size, nav, onNav) { i ->
+        val item = items[i]
+        GridEntry(item.name, item.logo, FavoriteKey.of(item) in favorites) {
+            onNav { it.copy(movieUrl = item.url, itemIndex = if (restorable) i else 0, resume = true) }
+        }
+    }
+}
+
+@Composable
+private fun ShowGrid(items: List<Show>, restorable: Boolean, favorites: Set<String>, nav: LibraryNav, onNav: NavChange) {
+    ItemGrid(items.size, nav, onNav) { i ->
+        val item = items[i]
+        GridEntry(item.title, item.logo, FavoriteKey.ofShow(item) in favorites) {
+            onNav { it.copy(showTitle = item.title, showGroup = item.group, season = -1, itemIndex = if (restorable) i else 0, resume = true) }
+        }
     }
 }
 
@@ -346,39 +402,150 @@ private fun EmptyNote(text: Int) {
 
 // --- shared pieces ---------------------------------------------------------------------------------------
 
+private class GroupRow(val label: String, val count: Int)
+
 /**
- * First level of Live, Movies and Series: the categories of the list. OK opens one; inside it the cursor stays
- * in that category until Back is pressed.
+ * The group levels of Live, Movies and Series on one page: main groups, sub-groups, then the contents. Each level
+ * is a column; going down (OK) keeps the earlier columns on the left, smaller and dimmer, and Back goes up one
+ * level at a time. The arrows stay inside the column that holds the cursor.
  */
 @Composable
-private fun CategoryColumn(names: List<String>, counts: List<Int>, nav: LibraryNav, onNav: NavChange, modifier: Modifier, selectedFocus: FocusRequester? = null) {
+private fun GroupBrowser(
+    names: List<String>,
+    counts: List<Int>,
+    nav: LibraryNav,
+    onNav: NavChange,
+    content: @Composable (cats: List<Int>) -> Unit,
+) {
+    val tree = remember(names) { GroupTree.build(names) }
+    if (tree.isEmpty()) return
     val other = stringResource(R.string.category_other)
-    val selected = nav.category.coerceIn(0, (names.size - 1).coerceAtLeast(0))
-    val state = rememberLazyListState(initialFirstVisibleItemIndex = selected)
-    LazyColumn(modifier, state = state, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        itemsIndexed(names) { index, name ->
+    val all = stringResource(R.string.group_all)
+    val mainIndex = nav.category.coerceIn(0, tree.lastIndex)
+    val main = tree[mainIndex]
+    val level = when {
+        nav.level <= 0 -> 0
+        nav.level == 1 && main.hasSubLevel -> 1
+        else -> 2
+    }
+    val subIndex = nav.sub.coerceIn(0, if (main.hasSubLevel) main.subs.size else 0)
+    val cats = remember(main, subIndex) {
+        if (!main.hasSubLevel || subIndex == 0) main.categories else listOf(main.subs[subIndex - 1].category)
+    }
+    val mainRows = remember(tree, counts, other) {
+        tree.map { GroupRow(it.name.ifBlank { other }, it.categories.sumOf { c -> counts[c] }) }
+    }
+    val subRows = remember(main, counts, all) {
+        if (!main.hasSubLevel) emptyList()
+        else listOf(GroupRow(all, main.categories.sumOf { c -> counts[c] })) +
+            main.subs.map { GroupRow(it.name.ifBlank { other }, counts[it.category]) }
+    }
+    val mainWeight by animateFloatAsState(
+        targetValue = when (level) { 0 -> 1f; 1 -> 0.32f; else -> if (main.hasSubLevel) 0.2f else 0.27f },
+        animationSpec = tween(320), label = "mainWeight",
+    )
+    val subWeight by animateFloatAsState(
+        targetValue = if (level == 1) 0.68f else 0.2f,
+        animationSpec = tween(320), label = "subWeight",
+    )
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        GroupColumn(
+            rows = mainRows,
+            selected = mainIndex,
+            active = level == 0,
+            resume = nav.resume,
+            onResumed = { onNav { it.copy(resume = false) } },
+            modifier = Modifier.weight(mainWeight).fillMaxHeight(),
+            onPick = { i ->
+                onNav {
+                    it.copy(category = i, sub = 0, itemIndex = 0, level = if (tree[i].hasSubLevel) 1 else 2, resume = true)
+                }
+            },
+        )
+        if (level >= 1 && main.hasSubLevel) {
+            GroupColumn(
+                rows = subRows,
+                selected = subIndex,
+                active = level == 1,
+                resume = nav.resume,
+                onResumed = { onNav { it.copy(resume = false) } },
+                modifier = Modifier.weight(subWeight).fillMaxHeight(),
+                onPick = { i -> onNav { it.copy(sub = i, itemIndex = 0, level = 2, resume = true) } },
+            )
+        }
+        if (level >= 2) {
+            Box(Modifier.weight(if (main.hasSubLevel) 0.6f else 0.73f).fillMaxHeight()) { content(cats) }
+        }
+    }
+}
+
+@Composable
+private fun GroupColumn(
+    rows: List<GroupRow>,
+    selected: Int,
+    active: Boolean,
+    resume: Boolean,
+    onResumed: () -> Unit,
+    modifier: Modifier,
+    onPick: (Int) -> Unit,
+) {
+    val focus = remember { FocusRequester() }
+    val current = selected.coerceIn(0, (rows.size - 1).coerceAtLeast(0))
+    val state = rememberLazyListState(initialFirstVisibleItemIndex = current)
+    LaunchedEffect(resume, active) {
+        if (resume && active) {
+            withFrameNanos { }
+            runCatching { focus.requestFocus() }
+            onResumed()
+        }
+    }
+    LazyColumn(modifier.depthFocus().confineFocus(), state = state, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        itemsIndexed(rows) { index, row ->
             GlassSurface(
-                onClick = { onNav { it.copy(category = index, itemIndex = 0, resume = true) } },
-                tint = if (index == selected) PrismColors.Accent else null,
-                focusRequester = if (index == selected) selectedFocus else null,
+                onClick = {
+                    UiSounds.play(UiSounds.Kind.FORWARD)
+                    onPick(index)
+                },
+                tint = if (index == current) PrismColors.Accent else null,
+                focusRequester = if (index == current) focus else null,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     PrismText(
-                        text = name.ifBlank { other },
+                        text = row.label,
                         size = 17.sp,
                         weight = FontWeight.SemiBold,
                         maxLines = 2,
                         modifier = Modifier.weight(1f),
                     )
                     PrismText(
-                        text = counts[index].toString(),
+                        text = row.count.toString(),
                         size = 14.sp,
                         color = PrismColors.TextSecondary,
                         modifier = Modifier.padding(start = 8.dp),
                     )
                 }
             }
+        }
+    }
+}
+
+/** The ordering of the final list: standard (as the list declares), A-Z, Z-A, latest added first. */
+@Composable
+private fun SortBar(nav: LibraryNav, onNav: NavChange) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        PrismText(text = stringResource(R.string.sort_label), size = 15.sp, color = PrismColors.TextSecondary)
+        for ((mode, label) in listOf(
+            SortMode.STANDARD to R.string.sort_standard,
+            SortMode.AZ to R.string.sort_az,
+            SortMode.ZA to R.string.sort_za,
+            SortMode.RECENT to R.string.sort_recent,
+        )) {
+            GlassButton(
+                text = stringResource(label),
+                onClick = { onNav { it.copy(sort = mode, itemIndex = 0) } },
+                emphasized = nav.sort == mode,
+            )
         }
     }
 }
@@ -427,6 +594,8 @@ private fun LiveView(
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = nav.itemIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0)),
     )
+    val sortAtStart = remember { nav.sort }
+    LaunchedEffect(nav.sort) { if (nav.sort != sortAtStart) listState.scrollToItem(0) }
     val nowMs = rememberNowMs()
     var preview by remember(list) { mutableStateOf<Channel?>(null) }
     var fullscreen by remember { mutableStateOf(false) }
@@ -442,10 +611,12 @@ private fun LiveView(
 
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         val target = nav.itemIndex.coerceIn(0, (list.size - 1).coerceAtLeast(0))
+        Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SortBar(nav, onNav)
         LazyColumn(
             Modifier
-                .weight(0.58f)
-                .fillMaxHeight(),
+                .weight(1f)
+                .fillMaxWidth(),
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -465,6 +636,7 @@ private fun LiveView(
                     },
                 )
             }
+        }
         }
         PreviewPane(
             channel = preview,
@@ -647,22 +819,17 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
 private class GridEntry(val title: String, val logo: String?, val favorite: Boolean, val onClick: () -> Unit)
 
 @Composable
-private fun CategoryAndGrid(
-    names: List<String>,
-    counts: List<Int>,
-    showCategories: Boolean,
+private fun ItemGrid(
+    total: Int,
     nav: LibraryNav,
     onNav: NavChange,
-    count: (Int) -> Int,
-    entry: (Int, Int) -> GridEntry,
+    entry: (Int) -> GridEntry,
 ) {
-    val category = nav.category.coerceIn(0, (names.size - 1).coerceAtLeast(0))
-    val total = count(category)
     val gridState = rememberLazyGridState(initialFirstVisibleItemIndex = nav.itemIndex.coerceIn(0, (total - 1).coerceAtLeast(0)))
     val itemFocus = remember { FocusRequester() }
-    val categoryFocus = remember { FocusRequester() }
-    var gridFocused by remember { mutableStateOf(false) }
     val target = nav.itemIndex.coerceIn(0, (total - 1).coerceAtLeast(0))
+    val sortAtStart = remember { nav.sort }
+    LaunchedEffect(nav.sort) { if (nav.sort != sortAtStart) gridState.scrollToItem(0) }
 
     LaunchedEffect(nav.resume) {
         if (nav.resume) {
@@ -671,31 +838,19 @@ private fun CategoryAndGrid(
             onNav { it.copy(resume = false) }
         }
     }
-    // Back from the items goes to the category column (arrows never cross between the two).
-    BackHandler(enabled = showCategories && gridFocused) {
-        UiSounds.play(UiSounds.Kind.BACK)
-        runCatching { categoryFocus.requestFocus() }
-    }
 
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        if (showCategories) {
-            CategoryColumn(names, counts, nav, onNav, Modifier.weight(0.27f).fillMaxHeight().depthFocus().confineFocus(), categoryFocus)
-        }
+    Column(Modifier.fillMaxSize().depthFocus().confineFocus(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SortBar(nav, onNav)
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
             state = gridState,
-            modifier = Modifier
-                .weight(if (showCategories) 0.73f else 1f)
-                .fillMaxHeight()
-                .onFocusChanged { gridFocused = it.hasFocus }
-                .depthFocus()
-                .confineFocus(),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(8.dp),
         ) {
             items(total, key = { it }) { index ->
-                val item = entry(category, index)
+                val item = entry(index)
                 GlassSurface(
                     onClick = item.onClick,
                     focusRequester = if (index == target) itemFocus else null,

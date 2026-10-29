@@ -135,4 +135,11 @@
     <string name="sound_on">Suoni: attivi</string>
     <string name="sound_off">Suoni: silenziati</string>
     <string name="action_go_lists">Le mie playlist</string>
+    <string name="channels_loading_count">Caricamento della playlist… %1$d voci lette</string>
+    <string name="group_all">Tutti</string>
+    <string name="sort_label">Ordina:</string>
+    <string name="sort_standard">Standard</string>
+    <string name="sort_az">A–Z</string>
+    <string name="sort_za">Z–A</string>
+    <string name="sort_recent">Ultimi inseriti</string>
 </resources>

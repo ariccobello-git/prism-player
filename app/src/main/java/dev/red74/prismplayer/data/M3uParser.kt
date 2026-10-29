@@ -15,6 +15,7 @@ import java.net.URI
 object M3uParser {
     /** Safety cap on parsed entries (memory on a TV stick); a longer list is cut here and flagged as truncated. */
     const val MAX_CHANNELS = 300_000
+    private const val PROGRESS_STEP = 2_500
 
     private val attribute = Regex("""([A-Za-z0-9_\-]+)="([^"]*)"""")
     private val absoluteUrl = Regex("""^[a-zA-Z][a-zA-Z0-9+.\-]*://""")
@@ -40,7 +41,12 @@ object M3uParser {
         parse(BufferedReader(StringReader(text)), sourceUrl, keepChannels = true).channels
 
     /** Reads line by line, so the size of the playlist is limited by the entry cap, never by a byte count. */
-    fun parse(reader: BufferedReader, sourceUrl: String, keepChannels: Boolean): Result {
+    fun parse(
+        reader: BufferedReader,
+        sourceUrl: String,
+        keepChannels: Boolean,
+        onProgress: ((Int) -> Unit)? = null,
+    ): Result {
         val channels = ArrayList<Channel>()
         val shared = HashMap<String, String>()
         fun share(value: String?): String? = value?.let { shared.getOrPut(it) { it } }
@@ -84,6 +90,7 @@ object M3uParser {
                     val resolved = resolve(sourceUrl, line)
                     if (resolved != null) {
                         count++
+                        if (onProgress != null && count % PROGRESS_STEP == 0) onProgress(count)
                         if (keepChannels) {
                             channels += buildChannel(resolved, pending, pendingGroup, count, ::share)
                         }
@@ -148,26 +155,31 @@ object M3uParser {
 
     /** Live, film or episode: first by the path an IPTV panel uses, then by the file type and the episode tag. */
     internal fun classify(url: String, name: String): ContentType {
-        val path = pathOf(url).lowercase()
-        return when {
-            path.contains("/series/") -> ContentType.SERIES
-            path.contains("/movie/") -> ContentType.MOVIE
-            else -> {
-                val extension = path.substringAfterLast('.', "")
-                if (extension in videoFileExtensions) {
-                    if (episodeTagAnywhere.containsMatchIn(name)) ContentType.SERIES else ContentType.MOVIE
-                } else {
-                    ContentType.LIVE
-                }
+        // Looks only at the path part of the address, without building temporary strings: this runs once per entry.
+        val schemeEnd = url.indexOf("://")
+        val pathStart = url.indexOf('/', if (schemeEnd >= 0) schemeEnd + 3 else 0)
+        if (pathStart < 0) return ContentType.LIVE
+        var pathEnd = url.length
+        for (i in pathStart until url.length) {
+            val c = url[i]
+            if (c == '?' || c == '#') { pathEnd = i; break }
+        }
+        if (regionContains(url, pathStart, pathEnd, "/series/")) return ContentType.SERIES
+        if (regionContains(url, pathStart, pathEnd, "/movie/")) return ContentType.MOVIE
+        val dot = url.lastIndexOf('.', pathEnd - 1)
+        val slash = url.lastIndexOf('/', pathEnd - 1)
+        if (dot > slash && dot >= pathStart) {
+            val extension = url.substring(dot + 1, pathEnd).lowercase()
+            if (extension in videoFileExtensions) {
+                return if (episodeTagAnywhere.containsMatchIn(name)) ContentType.SERIES else ContentType.MOVIE
             }
         }
+        return ContentType.LIVE
     }
 
-    private fun pathOf(url: String): String {
-        val afterScheme = url.substringAfter("://", url)
-        val slash = afterScheme.indexOf('/')
-        if (slash < 0) return ""
-        return afterScheme.substring(slash).substringBefore('?').substringBefore('#')
+    private fun regionContains(text: String, from: Int, to: Int, needle: String): Boolean {
+        val at = text.indexOf(needle, from, ignoreCase = true)
+        return at >= 0 && at + needle.length <= to
     }
 
     private fun attributes(text: String): Map<String, String> {
