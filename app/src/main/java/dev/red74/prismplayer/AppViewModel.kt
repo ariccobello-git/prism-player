@@ -297,7 +297,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openPlaylist(id: String, force: Boolean = false) {
         val current = _library.value
-        if (!force && current.playlistId == id && !current.catalog.isEmpty) return
+        if (!force && current.playlistId == id && !current.catalog.isEmpty) {
+            // The same list again: the cursor goes back to where it was in it.
+            _nav.update { it.copy(resume = true) }
+            return
+        }
         val playlist = store.find(id) ?: return
 
         if (current.playlistId != id) _nav.value = LibraryNav()

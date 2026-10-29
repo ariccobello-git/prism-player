@@ -117,31 +117,31 @@ fun HomeScreen(
                     GlassButton(
                         text = stringResource(R.string.action_add_url),
                         onClick = onAddUrl,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().focusMemory("add"),
                         focusRequester = firstFocus,
                         emphasized = true,
                     )
                     GlassButton(
                         text = stringResource(R.string.action_pair),
                         onClick = onPair,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().focusMemory("pair"),
                     )
                     if (playlists.isNotEmpty()) {
                         GlassButton(
                             text = stringResource(R.string.action_verify_all),
                             onClick = onVerifyAll,
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().focusMemory("verify_all"),
                         )
                     }
                     GlassButton(
                         text = stringResource(R.string.action_shortcuts),
                         onClick = onShortcuts,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().focusMemory("shortcuts"),
                     )
                     GlassButton(
                         text = stringResource(R.string.action_updates),
                         onClick = onUpdates,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().focusMemory("updates"),
                     )
                     GlassButton(
                         text = stringResource(if (muted) R.string.sound_off else R.string.sound_on),
@@ -150,7 +150,7 @@ fun HomeScreen(
                             UiSounds.setMuted(muted)
                             if (!muted) UiSounds.play(UiSounds.Kind.SELECT)
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().focusMemory("sound"),
                     )
                 }
             }
@@ -291,7 +291,7 @@ private fun PlaylistRow(
             subtitleColor = statusColor,
             tint = if (failed) PrismColors.Danger else null,
             onClick = onOpen,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).focusMemory("playlist:" + playlist.id),
         )
         if (playlist.status != PlaylistStatus.OK && !checking) {
             GlassButton(
@@ -300,6 +300,7 @@ private fun PlaylistRow(
                 ),
                 onClick = onVerify,
                 emphasized = playlist.status == PlaylistStatus.UNVERIFIED,
+                modifier = Modifier.focusMemory("verify:" + playlist.id),
             )
         }
         Box {

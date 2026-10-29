@@ -123,6 +123,7 @@ private fun PrismNavigation(
     val verifying by viewModel.verifying.collectAsStateWithLifecycle()
 
     val current: Screen = if (confirmExit) Screen.Exit else stack.last()
+    val focusMemory = remember { dev.red74.prismplayer.ui.FocusMemory() }
 
     // Interface sounds: everywhere except the player (and the exit screen switches them off itself).
     LaunchedEffect(current) { UiSounds.enabled = current !is Screen.Player }
@@ -150,6 +151,11 @@ private fun PrismNavigation(
         },
         label = "screens",
     ) { screen ->
+        // Each screen remembers where the cursor was (see FocusMemory), so coming back puts it there again.
+        androidx.compose.runtime.CompositionLocalProvider(
+            dev.red74.prismplayer.ui.LocalFocusMemory provides focusMemory,
+            dev.red74.prismplayer.ui.LocalScreenKey provides screenKey(screen),
+        ) {
         when (screen) {
             Screen.Home -> HomeScreen(
                 playlists = playlists,
@@ -247,5 +253,18 @@ private fun PrismNavigation(
                 }
             }
         }
+        }
     }
+}
+
+/** One name per kind of screen, for [dev.red74.prismplayer.ui.FocusMemory]. */
+private fun screenKey(screen: Screen): String = when (screen) {
+    Screen.Home -> "home"
+    Screen.Import -> "import"
+    Screen.Pair -> "pair"
+    Screen.Updates -> "updates"
+    Screen.Shortcuts -> "shortcuts"
+    Screen.Exit -> "exit"
+    is Screen.Library -> "library"
+    Screen.Player -> "player"
 }

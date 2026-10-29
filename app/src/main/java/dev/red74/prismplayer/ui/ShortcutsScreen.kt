@@ -115,7 +115,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
                                     text = app?.label ?: pkg,
                                     subtitle = if (app == null && installed != null) stringResource(R.string.shortcuts_missing) else null,
                                     onClick = { if (!InstalledApps.open(context, pkg)) message = cannotOpen },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1f).focusMemory("app:$pkg"),
                                     focusRequester = if (pkg == pinned.first()) firstFocus else null,
                                 )
                                 GlassButton(
