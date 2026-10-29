@@ -103,7 +103,8 @@
     <string name="season_none">Episodi</string>
     <string name="library_empty">Qui non c\'è ancora nulla.</string>
     <string name="search_none">Nessun risultato.</string>
-    <string name="favorites_empty">Nessun preferito. Seleziona un contenuto e scegli Aggiungi ai preferiti.</string>
+    <string name="favorites_empty">Nessun preferito. Seleziona un contenuto e premi la sua stella.</string>
+    <string name="favorites_loading">Cerco i tuoi preferiti…</string>
     <string name="preview_hint">Premi OK per lo schermo intero</string>
     <string name="preview_failed">Anteprima non disponibile</string>
     <string name="no_guide">Nessuna guida programmi per questo canale</string>

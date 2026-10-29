@@ -94,6 +94,9 @@ private class Reachability(val unavailable: Set<String>, val onPreviewWorked: (C
 
 private val LocalReachability = androidx.compose.runtime.compositionLocalOf { Reachability(emptySet()) {} }
 
+/** The favourites already found by the view model (null while the first search runs). */
+private val LocalFavoriteList = androidx.compose.runtime.compositionLocalOf<dev.red74.prismplayer.data.FavoriteList?> { null }
+
 private const val UNAVAILABLE_SIGN = "⊘"
 private const val UNAVAILABLE_ALPHA = 0.45f
 
@@ -110,9 +113,13 @@ fun LibraryScreen(
     onBack: () -> Unit,
     unavailable: Set<String> = emptySet(),
     onPreviewWorked: (Channel) -> Unit = {},
+    favoriteList: dev.red74.prismplayer.data.FavoriteList? = null,
 ) {
     val reachability = remember(unavailable, onPreviewWorked) { Reachability(unavailable, onPreviewWorked) }
-    androidx.compose.runtime.CompositionLocalProvider(LocalReachability provides reachability) {
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalReachability provides reachability,
+        LocalFavoriteList provides favoriteList,
+    ) {
         LibraryContent(state, nav, epg, favorites, onNav, onPlay, onToggleFavorite, onRetry, onBack)
     }
 }
@@ -398,7 +405,7 @@ private fun LibraryBody(
             }
         }
 
-        LibraryTab.FAVORITES -> FavoritesView(catalog, query, nav, favorites, onNav, onPlay, onToggleFavorite)
+        LibraryTab.FAVORITES -> FavoritesView(query, nav, favorites, onNav, onPlay, onToggleFavorite)
     }
 }
 
@@ -629,16 +636,6 @@ private fun rememberNowMs(): Long {
 private fun clock(ms: Long): String {
     val context = LocalContext.current
     return remember(ms) { DateFormat.getTimeFormat(context).format(Date(ms)) }
-}
-
-@Composable
-private fun FavoriteButton(isFavorite: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    GlassButton(
-        text = stringResource(if (isFavorite) R.string.fav_remove else R.string.fav_add),
-        onClick = onClick,
-        modifier = modifier,
-        tint = if (isFavorite) PrismColors.Favorite else null,
-    )
 }
 
 // --- Live ------------------------------------------------------------------------------------------------
@@ -1000,7 +997,7 @@ private fun MovieDetail(
                 focusRequester = playFocus,
                 emphasized = true,
             )
-            FavoriteButton(key in favorites, { onToggleFavorite(key) })
+            StarButton(key in favorites, { onToggleFavorite(key) })
         }
     }
 }
@@ -1054,7 +1051,7 @@ private fun ShowDetail(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(vertical = 6.dp),
             ) {
-                item { FavoriteButton(key in favorites, { onToggleFavorite(key) }) }
+                item { StarButton(key in favorites, { onToggleFavorite(key) }) }
                 itemsIndexed(seasons) { index, number ->
                     GlassButton(
                         text = if (number == 0) stringResource(R.string.season_none) else stringResource(R.string.season_n, number),
@@ -1106,7 +1103,6 @@ private fun ShowDetail(
 
 @Composable
 private fun FavoritesView(
-    catalog: Catalog,
     query: String,
     nav: LibraryNav,
     favorites: Set<String>,
@@ -1114,18 +1110,22 @@ private fun FavoritesView(
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
     onToggleFavorite: (String) -> Unit,
 ) {
-    // The hashes are computed off the main thread: a big list has hundreds of thousands of entries.
-    val entries by produceState(emptyList<Entry>(), catalog, favorites, query) {
-        value = withContext(Dispatchers.IO) {
-            if (favorites.isEmpty()) return@withContext emptyList()
-            val found = ArrayList<Entry>()
-            for (c in catalog.favorites(favorites)) found += Entry(c, null)
-            for (s in catalog.favoriteShows(favorites)) found += Entry(null, s)
-            if (query.isEmpty()) found else found.filter { it.title.contains(query, ignoreCase = true) }
-        }
+    // The view model has already found them (see FavoriteList): the page only shows them, so it opens at once.
+    val found = LocalFavoriteList.current
+    if (favorites.isEmpty()) {
+        EmptyNote(R.string.favorites_empty)
+        return
+    }
+    if (found == null) {
+        EmptyNote(R.string.favorites_loading)
+        return
+    }
+    val entries = remember(found, query) {
+        found.entries.map { Entry(it.channel, it.show) }
+            .let { all -> if (query.isEmpty()) all else all.filter { it.title.contains(query, ignoreCase = true) } }
     }
     if (entries.isEmpty()) {
-        EmptyNote(if (favorites.isEmpty()) R.string.favorites_empty else R.string.search_none)
+        EmptyNote(R.string.search_none)
         return
     }
     val playable = remember(entries) { entries.mapNotNull { it.channel } }

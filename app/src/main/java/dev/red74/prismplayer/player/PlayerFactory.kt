@@ -82,6 +82,9 @@ object StreamIdentity {
     fun plan(): List<String?> = listOf(preferred, preferred) + CANDIDATES.filter { it != preferred }
 }
 
+/** Upper limit for the preview's video when the stream offers a choice (HLS/DASH variants). */
+private const val PREVIEW_MAX_BITRATE = 1_500_000
+
 /** One player setup for the full-screen view and (with [preview]) the small preview next to the channel list. */
 fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
     // A fresh source for every connection, so a change of identity applies to the next try (and to each HLS segment).
@@ -124,7 +127,8 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
         .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
     if (preview) {
         // The preview never changes speed to catch up with a live edge (that is what made it run fast with
-        // warbling sound) and never decodes more than 720p for a window a third of the screen wide.
+        // warbling sound) and, where the stream offers several qualities, takes the lowest SD one: the window is a
+        // third of the screen wide, and every decoded pixel is taken from the menus drawn around it.
         builder.setLivePlaybackSpeedControl(
             DefaultLivePlaybackSpeedControl.Builder()
                 .setFallbackMinPlaybackSpeed(1f)
@@ -132,7 +136,12 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
                 .build(),
         )
         val selector = DefaultTrackSelector(context)
-        selector.setParameters(selector.buildUponParameters().setMaxVideoSize(1280, 720))
+        selector.setParameters(
+            selector.buildUponParameters()
+                .setMaxVideoSizeSd()
+                .setMaxVideoBitrate(PREVIEW_MAX_BITRATE)
+                .setForceLowestBitrate(true),
+        )
         builder.setTrackSelector(selector)
     }
     return builder.build()
