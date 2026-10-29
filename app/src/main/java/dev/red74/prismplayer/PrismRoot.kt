@@ -115,6 +115,7 @@ private fun PrismNavigation(
     val nav by viewModel.nav.collectAsStateWithLifecycle()
     val epg by viewModel.epg.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
+    val unavailable by viewModel.unavailable.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val aspect by viewModel.aspect.collectAsStateWithLifecycle()
@@ -219,6 +220,8 @@ private fun PrismNavigation(
                         viewModel.toggleFavorite(key)
                     },
                     onRetry = viewModel::reloadPlaylist,
+                    unavailable = unavailable.keys,
+                    onPreviewWorked = viewModel::playbackWorked,
                     onBack = ::pop,
                 )
             }
@@ -234,6 +237,10 @@ private fun PrismNavigation(
                         onAspectChange = viewModel::setAspect,
                         onIndexChange = viewModel::setLastIndex,
                         onExit = ::pop,
+                        onPlaybackWorked = viewModel::playbackWorked,
+                        onPlaybackFailed = { channel, trouble, afterRetry ->
+                            viewModel.playbackFailed(channel, trouble, afterRetry, preview = false)
+                        },
                     )
                 }
             }

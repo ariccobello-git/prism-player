@@ -66,6 +66,12 @@
     <string name="player_pause">Pause</string>
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Playback error (%1$s)</string>
+    <string name="player_trouble_refused">The provider refuses this channel (HTTP %1$s): it may be off, or too many connections are open.</string>
+    <string name="player_trouble_missing">The provider no longer has this content (HTTP %1$s).</string>
+    <string name="player_trouble_server">The provider\'s server has a problem (HTTP %1$s). Try again later.</string>
+    <string name="player_trouble_no_answer">The server does not answer. Check the VPN and the connection.</string>
+    <string name="player_trouble_bad_stream">The provider does not send a readable video.</string>
+    <string name="unavailable_note">⊘ Not available: the provider did not deliver it in the last hours</string>
     <string name="player_hint">◀ ▶ skip 10 s · ⏪ ⏩ 2× 4× 8× · ▲ ▼ change channel · OK controls · Back close</string>
     <string name="status_unverified">Not verified</string>
     <string name="status_ok">OK · %1$d entries</string>

@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
 import androidx.compose.runtime.withFrameNanos
@@ -62,15 +63,19 @@ import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.PlayerView
 import dev.red74.prismplayer.R
+import dev.red74.prismplayer.data.Availability
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.device.DeviceProfile
 import dev.red74.prismplayer.data.TextCleaner
 import dev.red74.prismplayer.player.AspectMode
 import dev.red74.prismplayer.player.FastScan
+import dev.red74.prismplayer.player.PreviewPlayers
+import dev.red74.prismplayer.player.StreamIdentity
 import dev.red74.prismplayer.player.createPlayer
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -105,6 +110,8 @@ fun PlayerScreen(
     onAspectChange: (AspectMode) -> Unit,
     onIndexChange: (Int) -> Unit,
     onExit: () -> Unit,
+    onPlaybackWorked: (Channel) -> Unit = {},
+    onPlaybackFailed: (Channel, Availability.Trouble, Boolean) -> Unit = { _, _, _ -> },
 ) {
     val context = LocalContext.current
     var index by remember { mutableIntStateOf(startIndex.coerceIn(0, channels.lastIndex)) }
@@ -112,6 +119,13 @@ fun PlayerScreen(
     var interaction by remember { mutableIntStateOf(0) }
     var status by remember { mutableStateOf(PlayStatus.Loading) }
     var errorName by remember { mutableStateOf<String?>(null) }
+    var trouble by remember { mutableStateOf<Availability.Trouble?>(null) }
+    var troubleHttp by remember { mutableStateOf<Int?>(null) }
+    /** Tries of the current channel (see [StreamIdentity.plan]) and a request for the next one. */
+    var attempt by remember { mutableIntStateOf(0) }
+    var plan by remember { mutableStateOf(StreamIdentity.plan()) }
+    var retryRequest by remember { mutableIntStateOf(0) }
+    var startedOk by remember { mutableStateOf(false) }
     var isPlaying by remember { mutableStateOf(false) }
     var formatToast by remember { mutableStateOf<AspectMode?>(null) }
     var skipToast by remember { mutableStateOf<String?>(null) }
@@ -144,6 +158,9 @@ fun PlayerScreen(
     val isSeries = current.type == ContentType.SERIES
     val hasNext = isSeries && index < channels.lastIndex
     val isLiveStream = liveFlag || current.type == ContentType.LIVE
+    val currentChannels by rememberUpdatedState(channels)
+    val worked by rememberUpdatedState(onPlaybackWorked)
+    val failed by rememberUpdatedState(onPlaybackFailed)
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -153,6 +170,11 @@ fun PlayerScreen(
                     Player.STATE_READY -> {
                         status = PlayStatus.Ready
                         errorName = null
+                        if (!startedOk) {
+                            startedOk = true
+                            StreamIdentity.preferred = StreamIdentity.current
+                            currentChannels.getOrNull(index)?.let(worked)
+                        }
                     }
                     Player.STATE_ENDED -> status = PlayStatus.Ended
                     else -> Unit
@@ -177,6 +199,19 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                val http = generateSequence(error.cause) { it.cause }
+                    .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
+                    .firstOrNull()?.responseCode
+                val kind = Availability.classify(error.errorCode, http)
+                // HTTP errors are tried again silently: a moment later, then with the other identities.
+                if (!startedOk && Availability.retries(kind) && attempt < plan.lastIndex) {
+                    attempt++
+                    retryRequest++
+                    return
+                }
+                currentChannels.getOrNull(index)?.let { failed(it, kind, attempt >= plan.lastIndex) }
+                trouble = kind
+                troubleHttp = http
                 // Only the error code name is shown: exception messages can contain the stream URL.
                 errorName = error.errorCodeName
                 status = PlayStatus.Error
@@ -195,6 +230,13 @@ fun PlayerScreen(
     LaunchedEffect(index) {
         onIndexChange(index)
         errorName = null
+        trouble = null
+        attempt = 0
+        startedOk = false
+        plan = StreamIdentity.plan()
+        StreamIdentity.current = plan.first()
+        // Panels often allow one connection per account: the preview's must be closed before this one opens.
+        PreviewPlayers.stopAll()
         countdown = -1
         status = PlayStatus.Loading
         scanPosMs = -1L
@@ -204,6 +246,17 @@ fun PlayerScreen(
         canSeek = false
         positionMs = 0L
         durationMs = C.TIME_UNSET
+        player.setMediaItem(MediaItem.fromUri(channels[index].url))
+        player.prepare()
+        player.playWhenReady = true
+    }
+
+    LaunchedEffect(retryRequest) {
+        if (retryRequest == 0) return@LaunchedEffect
+        val tryIndex = index
+        delay(if (attempt == 1) Availability.RETRY_DELAY_MS else Availability.NEXT_IDENTITY_DELAY_MS)
+        if (tryIndex != index) return@LaunchedEffect
+        StreamIdentity.current = plan[attempt.coerceAtMost(plan.lastIndex)]
         player.setMediaItem(MediaItem.fromUri(channels[index].url))
         player.prepare()
         player.playWhenReady = true
@@ -607,7 +660,7 @@ fun PlayerScreen(
                 ) {
                     errorName?.let {
                         PrismText(
-                            text = stringResource(R.string.player_error, it),
+                            text = troubleText(trouble, troubleHttp) ?: stringResource(R.string.player_error, it),
                             size = 20.sp,
                             color = PrismColors.Danger,
                         )
@@ -891,6 +944,20 @@ private fun androidx.compose.foundation.layout.ColumnScope.InfoPanel(player: Pla
     }
     for (line in lines) PrismText(text = line, size = 18.sp, color = PrismColors.TextSecondary)
     GlassButton(text = stringResource(R.string.np_close), onClick = onClose, focusRequester = focus)
+}
+
+/** A plain explanation of what went wrong on the provider's side, or null for the other errors. */
+@Composable
+private fun troubleText(trouble: Availability.Trouble?, http: Int?): String? {
+    val code = http?.toString() ?: "?"
+    return when (trouble) {
+        Availability.Trouble.REFUSED -> stringResource(R.string.player_trouble_refused, code)
+        Availability.Trouble.MISSING -> stringResource(R.string.player_trouble_missing, code)
+        Availability.Trouble.SERVER -> stringResource(R.string.player_trouble_server, code)
+        Availability.Trouble.NO_ANSWER -> stringResource(R.string.player_trouble_no_answer)
+        Availability.Trouble.BAD_STREAM -> stringResource(R.string.player_trouble_bad_stream)
+        Availability.Trouble.OTHER, null -> null
+    }
 }
 
 /** The 2x/4x/8x sign in the middle of the picture, with the time it has reached. */
