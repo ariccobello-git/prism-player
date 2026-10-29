@@ -73,7 +73,7 @@ import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.GroupTree
 import dev.red74.prismplayer.data.SortMode
-import dev.red74.prismplayer.data.sortedBy
+import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.NowNext
 import dev.red74.prismplayer.data.Show
 import dev.red74.prismplayer.player.createPlayer
@@ -285,23 +285,22 @@ private fun LibraryBody(
             val names = remember(catalog) { catalog.live.map { it.name } }
             val counts = remember(catalog) { catalog.live.map { it.items.size } }
             val results by produceState(emptyList<Channel>(), catalog, query) {
-                value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.Default) {
-                    catalog.live.asSequence().flatMap { it.items.asSequence() }
-                        .filter { it.name.contains(query, ignoreCase = true) }.take(SEARCH_LIMIT).toList()
+                value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.IO) {
+                    catalog.search(ContentType.LIVE, query, SEARCH_LIMIT)
                 }
             }
             if (catalog.live.isEmpty()) {
                 EmptyNote(R.string.library_empty)
             } else if (query.isEmpty()) {
                 GroupBrowser(names, counts, nav, onNav) { cats ->
-                    val all = remember(cats, catalog) { if (cats.size == 1) catalog.live[cats[0]].items else cats.flatMap { catalog.live[it].items } }
-                    val items = sortedAsync(all, nav.sort) { it.name }
+                    val all = remember(cats, catalog) { catalog.channels(ContentType.LIVE, cats) }
+                    val items = sortedAsync(all, nav.sort, catalog::sorted)
                     LiveView(items, true, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
                 }
             } else if (results.isEmpty()) {
                 EmptyNote(R.string.search_none)
             } else {
-                val sorted = sortedAsync(results, nav.sort) { it.name }
+                val sorted = sortedAsync(results, nav.sort, catalog::sorted)
                 LiveView(sorted, false, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
             }
         }
@@ -311,12 +310,11 @@ private fun LibraryBody(
             val counts = remember(catalog) { catalog.movies.map { it.items.size } }
             val selected = nav.movieUrl
             val movie = remember(catalog, selected) {
-                selected?.let { url -> catalog.movies.firstNotNullOfOrNull { c -> c.items.firstOrNull { it.url == url } } }
+                selected?.let { url -> catalog.find(ContentType.MOVIE, url) }
             }
             val results by produceState(emptyList<Channel>(), catalog, query) {
-                value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.Default) {
-                    catalog.movies.asSequence().flatMap { it.items.asSequence() }
-                        .filter { it.name.contains(query, ignoreCase = true) }.take(SEARCH_LIMIT).toList()
+                value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.IO) {
+                    catalog.search(ContentType.MOVIE, query, SEARCH_LIMIT)
                 }
             }
             when {
@@ -324,12 +322,12 @@ private fun LibraryBody(
                 catalog.movies.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
                 query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
-                    val all = remember(cats, catalog) { if (cats.size == 1) catalog.movies[cats[0]].items else cats.flatMap { catalog.movies[it].items } }
-                    val items = sortedAsync(all, nav.sort) { it.name }
+                    val all = remember(cats, catalog) { catalog.channels(ContentType.MOVIE, cats) }
+                    val items = sortedAsync(all, nav.sort, catalog::sorted)
                     MovieGrid(items, true, favorites, nav, onNav)
                 }
                 else -> {
-                    val sorted = sortedAsync(results, nav.sort) { it.name }
+                    val sorted = sortedAsync(results, nav.sort, catalog::sorted)
                     MovieGrid(sorted, false, favorites, nav, onNav)
                 }
             }
@@ -341,14 +339,11 @@ private fun LibraryBody(
             val group = nav.showGroup
             val title = nav.showTitle
             val show = remember(catalog, group, title) {
-                if (title == null) null else catalog.series.asSequence()
-                    .filter { group == null || it.name == group }
-                    .flatMap { it.shows.asSequence() }.firstOrNull { it.title == title }
+                if (title == null) null else catalog.findShow(group, title)
             }
             val results by produceState(emptyList<Show>(), catalog, query) {
-                value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.Default) {
-                    catalog.series.asSequence().flatMap { it.shows.asSequence() }
-                        .filter { it.title.contains(query, ignoreCase = true) }.take(SEARCH_LIMIT).toList()
+                value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.IO) {
+                    catalog.searchShows(query, SEARCH_LIMIT)
                 }
             }
             when {
@@ -356,12 +351,12 @@ private fun LibraryBody(
                 catalog.series.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
                 query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
-                    val all = remember(cats, catalog) { if (cats.size == 1) catalog.series[cats[0]].shows else cats.flatMap { catalog.series[it].shows } }
-                    val items = sortedAsync(all, nav.sort) { it.title }
+                    val all = remember(cats, catalog) { catalog.shows(cats) }
+                    val items = sortedAsync(all, nav.sort, catalog::sortedShows)
                     ShowGrid(items, true, favorites, nav, onNav)
                 }
                 else -> {
-                    val sorted = sortedAsync(results, nav.sort) { it.title }
+                    val sorted = sortedAsync(results, nav.sort, catalog::sortedShows)
                     ShowGrid(sorted, false, favorites, nav, onNav)
                 }
             }
@@ -1020,12 +1015,11 @@ private fun FavoritesView(
 ) {
     // The hashes are computed off the main thread: a big list has hundreds of thousands of entries.
     val entries by produceState(emptyList<Entry>(), catalog, favorites, query) {
-        value = withContext(Dispatchers.Default) {
+        value = withContext(Dispatchers.IO) {
             if (favorites.isEmpty()) return@withContext emptyList()
             val found = ArrayList<Entry>()
-            for (category in catalog.live) for (c in category.items) if (FavoriteKey.of(c) in favorites) found += Entry(c, null)
-            for (category in catalog.movies) for (c in category.items) if (FavoriteKey.of(c) in favorites) found += Entry(c, null)
-            for (category in catalog.series) for (s in category.shows) if (FavoriteKey.ofShow(s) in favorites) found += Entry(null, s)
+            for (c in catalog.favorites(favorites)) found += Entry(c, null)
+            for (s in catalog.favoriteShows(favorites)) found += Entry(null, s)
             if (query.isEmpty()) found else found.filter { it.title.contains(query, ignoreCase = true) }
         }
     }
@@ -1075,13 +1069,19 @@ private fun FavoritesView(
 /**
  * Orders a long list off the main thread: sorting a group of tens of thousands of entries on the TV stick would
  * freeze the screen, so the list is shown at once in its original order and swapped when the sort is ready.
+ * [sort] is the catalog's own (the list database sorts with a query and reads only the rows shown).
  */
 @Composable
-private fun <T> sortedAsync(source: List<T>, mode: dev.red74.prismplayer.data.SortMode, title: (T) -> String): List<T> {
-    val small = source.size < 2_000
-    val first = remember(source, mode) { if (small) source.sortedBy(mode, title) else source }
+private fun <T> sortedAsync(
+    source: List<T>,
+    mode: dev.red74.prismplayer.data.SortMode,
+    sort: (List<T>, dev.red74.prismplayer.data.SortMode) -> List<T>,
+): List<T> {
+    val now = source.size < 2_000 || mode == dev.red74.prismplayer.data.SortMode.STANDARD ||
+        mode == dev.red74.prismplayer.data.SortMode.RECENT
+    val first = remember(source, mode) { if (now) sort(source, mode) else source }
     val result by produceState(initialValue = first, source, mode) {
-        value = if (small) first else withContext(Dispatchers.Default) { source.sortedBy(mode, title) }
+        value = if (now) first else withContext(Dispatchers.IO) { sort(source, mode) }
     }
     return result
 }

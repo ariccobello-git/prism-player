@@ -4,41 +4,43 @@
 
 > ## Stato di verifica
 >
-> **Questo è uno scaffold iniziale. Non è ancora stato compilato né testato su una macchina con Android SDK.**
-> Il codice è stato scritto in un ambiente senza Android SDK e senza accesso a Google Maven / Maven Central / Gradle Services, quindi nessuna compilazione, nessun test, nessun lint e nessuna prova su dispositivo reale sono stati eseguiti prima del commit.
->
-> Il progetto va considerato **verificato solo dopo un run verde del workflow "Android CI"** (tab *Actions*), che esegue test unitari, lint e `assembleDebug`. Fino ad allora possono esserci errori di compilazione o di risoluzione delle dipendenze.
+> Il progetto viene compilato e testato **solo dalla CI** (workflow *Android CI*: test unitari, lint, `assembleDebug`). Ogni APK pubblicata nelle *Releases* viene da un run verde.
+> Non esistono test su dispositivo né test dell'interfaccia: grafica, suoni, telecomando, fluidità e tempi delle liste grandi si verificano a mano sulla Xiaomi TV Stick.
 
 | Verifica | Stato |
 | --- | --- |
-| Compilazione `assembleDebug` | non eseguita (la esegue la CI) |
-| Test unitari (`testDebugUnitTest`) | non eseguiti (li esegue la CI) |
-| Lint | non eseguito (lo esegue la CI, non bloccante) |
-| Risoluzione delle versioni delle dipendenze | non verificata da rete (la verifica la CI) |
-| Prova su Xiaomi TV Stick / emulatore Android TV | non eseguita |
-| Navigazione con telecomando reale | non provata |
+| Compilazione `assembleDebug` | eseguita dalla CI a ogni push e pull request |
+| Test unitari (`testDebugUnitTest`) | eseguiti dalla CI |
+| Lint | eseguito dalla CI, non bloccante |
+| Prova su Xiaomi TV Stick | manuale, a ogni release |
+| Test strumentati / interfaccia | assenti |
 
 ## Funzionalità
 
-- **Interfaccia Glassmorphism per TV** (Compose for TV): pannelli traslucidi con bordo luminoso su sfondo sfumato, testo grande, focus D-pad evidente (ingrandimento e bordo bianco). Niente blur reale dello sfondo: non è disponibile prima di Android 12 e pesa troppo sulle chiavette entry-level.
-- **Player Media3 (ExoPlayer)** con HLS e DASH, flussi progressivi (MP4, TS), redirect tra http e https, gestione del focus audio e schermo sempre acceso durante la riproduzione.
-- **Formato video** ciclabile in riproduzione: **Auto** (rapporto nativo), **16:9**, **4:3** e **Adatta allo schermo** (stira a tutto schermo). La scelta viene ricordata.
-- **Importazione manuale** di un URL playlist con il telecomando (tastiera su schermo della TV). Sono accettati solo link `http` e `https`.
-- **Abbinamento col telefono tramite QR** generato sulla TV, vedi sotto.
-- **Playlist M3U/M3U8**: liste IPTV (`#EXTINF`, `group-title`, `#EXTGRP`), URL relativi, liste di soli URL e singoli flussi HLS (un link `.m3u8` diretto si riproduce così com'è).
-- **Italiano e inglese**.
-- Compatibile Android TV / Google TV: `leanback` richiesto, touchscreen non richiesto, banner e launcher TV.
-- Icona e banner a tema prisma; all'avvio una schermata glass con un raggio bianco che attraversa il prisma e si scompone nei colori, finché i dati sono caricati; l'ultimo comando Indietro dalla home chiede conferma prima di chiudere l'app.
+- **Home**: Aggiungi URL playlist, Abbina dal telefono, Verifica tutte le liste, Scorciatoie, Aggiornamenti e codec, Suoni attivi/silenziati. A destra le playlist con il loro stato (verde: verificata, con il numero di voci; rosso: errore con il motivo; giallo: non ancora verificata), Riprova/Verifica ed Elimina con conferma. La versione è scritta in basso su ogni pagina.
+- **Playlist M3U/M3U8** e pannelli Xtream (`get.php`): aggiunta con la tastiera della TV o dal telefono tramite QR. Una lista identica non viene salvata due volte. In lettura si provano 10 identità HTTP (User-Agent) e varianti dell'indirizzo, con messaggi d'errore specifici; tetto di 300.000 voci (oltre, la lista è troncata e segnalato).
+- **Libreria Live / Film / Serie / Preferiti** organizzata come la lista: gruppi a più livelli sulla stessa pagina (gruppo principale › sottogruppo › contenuti, con la voce «Tutti»), ordinamento Standard / A–Z / Z–A / Ultimi inseriti, ricerca, locandine, guida programmi (EPG), anteprima live, schede di film e serie (stagioni ed episodi), preferiti con stella.
+- **Liste molto grandi**: ogni lista aperta è salvata sul dispositivo in un piccolo database (SQLite). Alle aperture successive si leggono solo i nomi dei gruppi e i conteggi; le voci si leggono a pagine mentre si scorre, la ricerca usa un indice di parole (FTS4) e l'ordinamento lo fa il database. La copia si aggiorna in background quando ha più di 6 ore.
+- **Player Media3** in stile Netflix: play/pausa, ±10 s (tenendo premuto accelera), barra del tempo, avanzamento 2×/4×/8×, audio e sottotitoli, episodi e prossimo episodio, info flusso, 14 formati immagine con scelta ricordata, LIVE con ritorno al vivo, ▲/▼ cambiano canale.
+- **Scorciatoie**: apre le app installate sulla TV scelte dall'utente.
+- **Aggiornamenti e codec**: controlla se c'è una release più recente dell'app e di Media3 ed elenca i decoder del dispositivo.
+- **Interfaccia per telecomando**: movimento naturale del cursore tra le sezioni, la sezione attiva in primo piano e le altre arretrate, cursore ripristinato al rientro, riconoscimento del telecomando Xiaomi. Suoni d'interfaccia leggeri e disattivabili (mai nel player). Schermo sempre acceso con l'app in primo piano.
+- **Apertura e uscita**: splash di 10,6 s con una foto reale della Via Lattea, un prisma di vetro che ruota con la musica e un raggio bianco scomposto con rifrazione reale; musica originale sintetizzata. L'ultimo Indietro dalla Home chiede conferma, poi l'app si dissolve con un jingle di chiusura.
+- **Italiano e inglese**. Compatibile Android TV / Google TV (`leanback`, banner e launcher TV).
 
 ### Telecomando
 
 | Dove | Tasto | Azione |
 | --- | --- | --- |
-| Ovunque | Frecce / OK / Indietro | Navigazione standard |
-| Player (menu chiuso) | OK / Menu | Apre il menu |
-| Player (menu chiuso) | ▲ / ▼ (o CH+ / CH−) | Canale successivo / precedente |
-| Player (menu chiuso) | ◀ / ▶ | Cambia formato video |
-| Player | Indietro | Chiude il menu, poi esce |
+| Ovunque | Frecce | Si muovono tra le sezioni in modo naturale |
+| Libreria | Destra / OK | Apre un gruppo (scende di un livello) |
+| Libreria | Sinistra / Indietro | Risale di un livello |
+| Fila dei tab | OK | Scende ai contenuti |
+| Player (comandi nascosti) | ◀ / ▶ | Salto di 10 s; tenendo premuto 30 s, poi 60 s |
+| Player | ▲ / ▼ | Canale successivo / precedente |
+| Player | OK | Mostra i comandi |
+| Player | ⏪ / ⏩ (a schermo o sul telecomando) | 2×, 4×, 8×, poi velocità normale |
+| Home | Indietro | Chiede se chiudere l'app |
 
 ## Abbinamento col telefono
 
@@ -60,6 +62,7 @@ Regole del codice (applicate in `PairingManager` e coperte da test):
 **Playlist salvate**
 
 - Salvate in un unico file cifrato **AES-256-GCM**. La chiave sta nell'Android Keystore e non è esportabile.
+- La copia scaricata di ogni lista è compressa e cifrata a blocchi (AES-256-GCM). Nel database della lista gli indirizzi dei flussi (che contengono le credenziali) sono cifrati uno per uno con una chiave casuale del file, a sua volta cifrata dalla chiave del Keystore; nomi, gruppi e loghi sono in chiaro. Tutto sta in `noBackupFilesDir`.
 - Il file è in `noBackupFilesDir`, escluso da backup e trasferimenti; `allowBackup` è disattivato.
 - Un file illeggibile (corrotto o chiave persa) viene messo da parte come `.corrupt` senza far crashare l'app.
 - L'interfaccia mostra solo l'**host** del link, mai percorso o query (spesso contengono token). L'URL non viene mai scritto nei log né nei messaggi di errore.
@@ -117,7 +120,7 @@ Servono JDK 17 e l'Android SDK (con `platforms;android-35` e `build-tools;34.0.0
 ./gradlew assembleDebug            # APK di debug
 ```
 
-L'APK compare in `app/build/outputs/apk/debug/app-debug.apk`. È firmato con la chiave di debug generata da Android: va bene per i test, **non** per la distribuzione.
+L'APK compare in `app/build/outputs/apk/debug/app-debug.apk`. È firmato con una chiave di debug fissa (`app/prism-debug.p12`, non segreta), così ogni nuova build si installa sopra la precedente senza disinstallare: va bene per i test, **non** per la distribuzione.
 
 ### Con GitHub Actions
 
@@ -141,6 +144,10 @@ In alternativa, pubblicando un tag `v*` da git, la release parte da sola. Il job
 
 ## Installare su Xiaomi TV Stick
 
+Il modo più semplice: con l'app **Downloader** sulla TV apri il link diretto della release (vedi sopra). Dalla v0.1.17 ogni versione si installa sopra la precedente; Android chiede sempre la conferma.
+
+In alternativa, con adb:
+
 1. Sulla TV: *Impostazioni → Preferenze dispositivo → Informazioni*, tocca più volte **Build** per attivare le opzioni sviluppatore, poi abilita **Debug USB** / **Debug di rete**.
 2. Dal computer, sulla stessa rete:
 
@@ -160,7 +167,9 @@ app/src/main/java/dev/red74/prismplayer/
   AppViewModel.kt, PairViewModel.kt   stato di playlist, canali, abbinamento
   data/                               URL, parser M3U, cifratura, storage, download
   pairing/                            codice, server locale, pagine, QR, rete
-  player/AspectMode.kt                formati video
+  data/CatalogDb.kt                   database delle liste (pagine, ricerca, ordinamento)
+  device/                             profilo del telecomando, app installate, codec
+  player/                             formati video, avanzamento veloce
   ui/                                 tema glass e schermate
 app/src/test/                         test unitari
 .github/workflows/android.yml         CI
@@ -173,19 +182,23 @@ Test unitari JVM (JUnit 4), eseguiti da `testDebugUnitTest`:
 - **Pairing**: durata di 3 minuti al millisecondo, monouso, invalidazione con nuova richiesta, blocco dopo tentativi errati, normalizzazione del codice.
 - **Server di abbinamento** (vero server su loopback): form e header di sicurezza, un solo invio per codice, errore di battitura che non brucia il codice, limite di dimensione, nessun URL salvato servito dalla rete.
 - **Cifratura e storage**: andata e ritorno, IV casuale, rilevamento di manomissioni e chiave errata, nessun URL in chiaro nel file, ripristino da file corrotto.
-- **Parser M3U e validazione URL**: attributi, URL relativi, flussi HLS singoli, schemi non http scartati.
-- **Formati video** e **generazione del QR**.
+- **Parser M3U e validazione URL**: attributi, URL relativi, flussi HLS singoli, schemi non http scartati; pannello Xtream simulato.
+- **Catalogo e liste grandi**: gruppi a livelli, ordinamenti, ricerche e preferiti; lettura a pagine (`RowList`) e testo della ricerca a parole (`FtsQuery`); copia cifrata a blocchi (`ListCache`).
+- **Formati video**, **QR**, **pulizia del testo incollato**, **controllo aggiornamenti**, **Scorciatoie**, **ottica e movimento del prisma**.
 
-**Non coperto da test automatici:** interfaccia Compose, riproduzione Media3, Keystore Android reale, navigazione col telecomando e comportamento su Xiaomi TV Stick. Servono prove manuali o test strumentati, non ancora presenti.
+**Non coperto da test automatici:** interfaccia Compose, riproduzione Media3, database SQLite reale (le query girano solo sul dispositivo), Keystore Android reale, navigazione col telecomando e comportamento su Xiaomi TV Stick. Servono prove manuali o test strumentati, non ancora presenti.
 
 ## Limiti noti e idee
 
-- Nessuna guida programmi (EPG), nessun logo dei canali, nessuna ricerca nell'elenco.
 - Solo http/https: niente RTSP né RTMP.
-- Nessun test strumentato né prova su hardware.
-- Le prestazioni su chiavette entry-level con liste molto grandi (fino a 20.000 voci) non sono state misurate.
+- Nessun test strumentato: tutto ciò che si vede e si sente è provato solo a mano sulla TV.
+- La prima apertura di una lista dopo un aggiornamento che cambia il formato salvato è lenta (la lista si rilegge e si salva di nuovo); i tempi reali con 250.000 voci vanno misurati sulla Xiaomi.
+- Il telecomando Xiaomi non ha tasti di avanzamento veloce: si usano i pulsanti ⏪ ⏩ a schermo.
 - Nessun file `LICENSE`: scegline uno prima di pubblicare o distribuire.
 
-## Origine del codice
+## Origine del codice e crediti
 
-Codice scritto da zero per questo progetto. Non contiene codice proprietario né servizi interni di Nanomid. Le dipendenze sono librerie open source pubbliche (AndroidX, Media3, NanoHTTPD, ZXing, kotlinx).
+Codice scritto da zero per questo progetto. Non contiene codice proprietario né servizi interni di Nanomid. Le dipendenze sono librerie open source pubbliche (AndroidX, Media3, NanoHTTPD, ZXing, kotlinx, Coil).
+
+- Musica di apertura, chiusura e suoni dell'interfaccia: originali, sintetizzati per questo progetto.
+- Foto della Via Lattea nella schermata d'apertura (`res/drawable-nodpi/galaxy_bg.jpg`): **ESO/S. Brunier**, «The Milky Way panorama» (eso0932a), licenza [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Ritagliata, ruotata e leggermente scurita. Fonte: <https://www.eso.org/public/images/eso0932a/>.

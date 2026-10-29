@@ -178,9 +178,9 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
 }
 
 /**
- * The scene: a photographic-style night sky with the Milky Way, a glass prism that turns with the music, a white
- * beam from the lower left and the spectrum, traced with real refraction (see [PrismOptics]) so the colours follow
- * every move of the glass. The turn itself is [PrismMotion].
+ * The scene: a real photograph of the Milky Way (ESO/S. Brunier, CC BY 4.0, cropped and turned; see the README),
+ * a glass prism that turns with the music, a white beam from the lower left and the spectrum, traced with real
+ * refraction (see [PrismOptics]) so the colours follow every move of the glass. The turn itself is [PrismMotion].
  */
 @Composable
 private fun SpaceAndPrism(galaxy: ImageBitmap?, progress: () -> Float, modifier: Modifier = Modifier) {
