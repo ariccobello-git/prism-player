@@ -158,6 +158,11 @@ adb install -r app-debug.apk
 
 In alternativa copia l'APK su una chiavetta USB e aprilo con un file manager della TV, consentendo l'installazione da origini sconosciute. I nomi esatti dei menu variano con la versione del sistema.
 
+## Documentazione
+
+- [docs/RELEASE.md](docs/RELEASE.md): procedura di rilascio, dal tag all'installazione con Downloader, con la checklist di prova sulla TV.
+- [docs/DESIGN.md](docs/DESIGN.md): stile Glass, splash del prisma e transizioni.
+
 ## Struttura del progetto
 
 ```
