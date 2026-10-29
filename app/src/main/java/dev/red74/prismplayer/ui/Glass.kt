@@ -329,6 +329,17 @@ fun GlassTextField(
 }
 
 /** Moves D-pad focus to [requester] once its target is on screen (one frame after composition). */
+/**
+ * Focuses as soon as the target is on screen: coming back from the player, a long list or an entering screen may
+ * need a few frames before the item exists, and a single try would leave the cursor elsewhere.
+ */
+suspend fun FocusRequester.requestWhenReady(frames: Int = 40) {
+    repeat(frames) {
+        withFrameNanos { }
+        if (runCatching { requestFocus() }.isSuccess) return
+    }
+}
+
 @Composable
 fun RequestFocusOnEnter(requester: FocusRequester, key: Any? = Unit) {
     LaunchedEffect(key) {

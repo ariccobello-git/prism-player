@@ -20,6 +20,13 @@ class AppSettings(context: Context) {
             prefs.edit().putStringSet(KEY_FAVORITES, value.toSet()).apply()
         }
 
+    /** Contents the provider could not deliver (see [Availability]): hash keys and the time of the failure. */
+    var unavailable: Map<String, Long>
+        get() = Availability.decode(prefs.getStringSet(KEY_UNAVAILABLE, emptySet()).orEmpty())
+        set(value) {
+            prefs.edit().putStringSet(KEY_UNAVAILABLE, Availability.encode(value)).apply()
+        }
+
     /** Package names of the apps pinned on the Shortcuts page, in the order the user added them. */
     var shortcuts: List<String>
         get() = Shortcuts.decode(prefs.getString(KEY_SHORTCUTS, null))
@@ -31,6 +38,7 @@ class AppSettings(context: Context) {
         const val KEY_SHORTCUTS = "shortcuts"
 
         const val KEY_FAVORITES = "favorites"
+        const val KEY_UNAVAILABLE = "unavailable"
         const val KEY_ASPECT = "aspect_mode"
     }
 }
