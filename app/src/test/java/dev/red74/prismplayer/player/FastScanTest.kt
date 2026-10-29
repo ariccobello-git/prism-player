@@ -37,4 +37,16 @@ class FastScanTest {
         assertFalse(FastScan.shouldSeek(800L, pictureShown = false))
         assertTrue(FastScan.shouldSeek(FastScan.MAX_SEEK_WAIT_MS, pictureShown = false))
     }
+
+    @Test
+    fun eachPressGoesUpToFortyEightTimesThenBackToNormal() {
+        var speed = 0
+        val seen = mutableListOf<Int>()
+        repeat(7) { speed = FastScan.next(speed, +1); seen += speed }
+        assertEquals(listOf(2, 4, 8, 12, 24, 48, 0), seen)
+        assertEquals(-2, FastScan.next(24, -1))
+        assertEquals(-12, FastScan.next(-8, -1))
+        assertEquals(0, FastScan.next(-48, -1))
+        assertEquals(2, FastScan.next(-4, +1))
+    }
 }

@@ -72,7 +72,7 @@
     <string name="player_trouble_no_answer">Il server non risponde. Controlla la VPN e la connessione.</string>
     <string name="player_trouble_bad_stream">Il fornitore non invia un video leggibile.</string>
     <string name="unavailable_note">⊘ Non disponibile: il fornitore non l\'ha consegnato nelle ultime ore</string>
-    <string name="player_hint">◀ ▶ salta 10 s · ⏪ ⏩ 2× 4× 8× · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
+    <string name="player_hint">◀ ▶ salta 10 s · ⏪ ⏩ 2× → 48× · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
     <string name="status_unverified">Da verificare</string>
     <string name="status_ok">OK · %1$d voci</string>
     <string name="status_failed">Non raggiungibile</string>
@@ -138,7 +138,7 @@
     <string name="np_close">Chiudi</string>
     <string name="version_label">Versione %1$s</string>
     <string name="np_format">Formato</string>
-    <string name="player_hint_hold">Tieni premuto ◀ ▶ per scorrere più veloce · ⏪ ⏩ 2× 4× 8× (pulsanti) · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
+    <string name="player_hint_hold">Tieni premuto ◀ ▶ per scorrere più veloce · ⏪ ⏩ 2× → 48× (pulsanti) · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
     <string name="sound_on">Suoni: attivi</string>
     <string name="sound_off">Suoni: silenziati</string>
     <string name="action_go_lists">Le mie playlist</string>
