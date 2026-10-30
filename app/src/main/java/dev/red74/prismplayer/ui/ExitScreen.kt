@@ -37,10 +37,10 @@ import dev.red74.prismplayer.R
 
 /** "Close the app?" shown when back is pressed on the home screen. Focus starts on "No". */
 @Composable
-fun ExitScreen(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+fun ExitScreen(onConfirm: () -> Unit, onDismiss: () -> Unit, closeNow: Boolean = false) {
     val noFocus = remember { FocusRequester() }
     RequestFocusOnEnter(noFocus)
-    var closing by remember { mutableStateOf(false) }
+    var closing by remember { mutableStateOf(closeNow) }
     // Once "Yes" is pressed there is no way back: the screen dissolves to pure black while the closing sting plays.
     BackHandler(enabled = true) { if (!closing) onDismiss() }
 
@@ -54,8 +54,8 @@ fun ExitScreen(onConfirm: () -> Unit, onDismiss: () -> Unit) {
                 .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
                 .build()
             MediaPlayer.create(context, dev.red74.prismplayer.R.raw.prism_outro, attributes, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE)?.apply {
-                val v = if (UiSounds.muted) 0f else UiSounds.MASTER
-                setVolume(v, v)
+                // The closing music always plays: the Home switch only silences the interface sounds.
+                setVolume(UiSounds.MASTER, UiSounds.MASTER)
                 start()
             }
         }.getOrNull()

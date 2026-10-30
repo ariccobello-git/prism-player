@@ -141,8 +141,8 @@
     <string name="version_label">Version %1$s</string>
     <string name="np_format">Format</string>
     <string name="player_hint_hold">Hold ◀ ▶ to skip faster · ⏪ ⏩ 2× → 48× (buttons) · ▲ ▼ change channel · OK controls · Back close</string>
-    <string name="sound_on">Sounds: on</string>
-    <string name="sound_off">Sounds: muted</string>
+    <string name="sound_on">Key sounds: on</string>
+    <string name="sound_off">Key sounds: muted</string>
     <string name="action_go_lists">My playlists</string>
     <string name="channels_loading_count">Loading playlist… %1$d entries read</string>
     <string name="group_all">All</string>

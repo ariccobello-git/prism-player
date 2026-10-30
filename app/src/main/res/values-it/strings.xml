@@ -141,8 +141,8 @@
     <string name="version_label">Versione %1$s</string>
     <string name="np_format">Formato</string>
     <string name="player_hint_hold">Tieni premuto ◀ ▶ per scorrere più veloce · ⏪ ⏩ 2× → 48× (pulsanti) · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
-    <string name="sound_on">Suoni: attivi</string>
-    <string name="sound_off">Suoni: silenziati</string>
+    <string name="sound_on">Suoni dei tasti: attivi</string>
+    <string name="sound_off">Suoni dei tasti: silenziati</string>
     <string name="action_go_lists">Le mie playlist</string>
     <string name="channels_loading_count">Caricamento della playlist… %1$d voci lette</string>
     <string name="group_all">Tutti</string>

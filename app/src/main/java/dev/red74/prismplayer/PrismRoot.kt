@@ -93,6 +93,8 @@ private fun PrismNavigation(
     val viewModel = appViewModel
     val activity = LocalContext.current as? Activity
     var confirmExit by remember { mutableStateOf(false) }
+    /** True when the app closes for inactivity: the exit screen starts already closing, with its music. */
+    var idleClose by remember { mutableStateOf(false) }
     var forward by remember { mutableStateOf(true) }
     val stack = remember { mutableStateListOf<Screen>(Screen.Home) }
 
@@ -166,7 +168,9 @@ private fun PrismNavigation(
                 IdleExit.countingDown = left != null
                 if (left == 0) {
                     UiSounds.enabled = false
-                    activity?.finish()
+                    idleClose = true
+                    forward = true
+                    confirmExit = true
                     break
                 }
                 kotlinx.coroutines.delay(200)
@@ -213,6 +217,7 @@ private fun PrismNavigation(
             )
 
             Screen.Exit -> ExitScreen(
+                closeNow = idleClose,
                 onConfirm = { activity?.finish() },
                 onDismiss = {
                     UiSounds.play(UiSounds.Kind.BACK)
