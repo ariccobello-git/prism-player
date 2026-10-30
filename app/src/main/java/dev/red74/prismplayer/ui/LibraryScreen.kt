@@ -69,6 +69,7 @@ import dev.red74.prismplayer.R
 import dev.red74.prismplayer.data.Catalog
 import dev.red74.prismplayer.data.Category
 import dev.red74.prismplayer.data.Channel
+import dev.red74.prismplayer.data.ContentInfo
 import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.GroupTree
@@ -1013,17 +1014,32 @@ private fun MovieDetail(
             if (key in LocalReachability.current.unavailable) {
                 PrismText(text = stringResource(R.string.unavailable_note), size = 16.sp, color = PrismColors.Danger, maxLines = 2)
             }
-            GlassButton(
-                text = stringResource(R.string.action_play),
-                onClick = {
-                    onNav { it.copy(resume = false) }
-                    onPlay(listOf(movie), 0, false)
-                },
-                focusRequester = playFocus,
-                emphasized = true,
-            )
-            StarButton(key in favorites, { onToggleFavorite(key) })
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                GlassButton(
+                    text = stringResource(R.string.action_play),
+                    onClick = {
+                        onNav { it.copy(resume = false) }
+                        onPlay(listOf(movie), 0, false)
+                    },
+                    focusRequester = playFocus,
+                    emphasized = true,
+                )
+                StarButton(key in favorites, { onToggleFavorite(key) })
+            }
+            Description(movie.url, maxLines = 10) { ContentInfo.filmPlot(movie.url) }
         }
+    }
+}
+
+/** The plot under the title or the play button: asked of the panel when the page opens, or a "missing" note. */
+@Composable
+private fun Description(key: Any, maxLines: Int, load: suspend () -> String?) {
+    val state by produceState<Pair<Boolean, String?>>(false to null, key) { value = true to load() }
+    val (loaded, text) = state
+    when {
+        text != null -> PrismText(text = text, size = 18.sp, maxLines = maxLines)
+        loaded -> PrismText(text = stringResource(R.string.description_missing), size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
+        else -> PrismText(text = stringResource(R.string.description_loading), size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
     }
 }
 
@@ -1071,6 +1087,7 @@ private fun ShowDetail(
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PrismText(text = show.title, size = 30.sp, weight = FontWeight.Bold, maxLines = 2)
+            Description(show, maxLines = 4) { ContentInfo.seriesPlot(show.episodes.firstOrNull()?.url, show.title) }
             LazyRow(
                 Modifier.depthFocus().confineFocus(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
