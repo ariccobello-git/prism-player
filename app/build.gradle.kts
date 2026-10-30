@@ -13,7 +13,7 @@ val prismVersion: String = (project.findProperty("prismVersion") as String?)?.ta
 
 android {
     namespace = "dev.red74.prismplayer"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.red74.prismplayer"

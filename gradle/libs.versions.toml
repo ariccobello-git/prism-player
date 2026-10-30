@@ -1,7 +1,7 @@
 [versions]
-# Toolchain set pinned together (late-2024 generation): AGP 8.7.x needs Gradle >= 8.9 and JDK 17,
-# supports compileSdk 35, and pairs with Kotlin 2.0.x (Compose compiler plugin ships with Kotlin).
-agp = "8.7.3"
+# Toolchain set pinned together: AGP 8.11.x needs Gradle >= 8.13 and JDK 17, supports compileSdk 36
+# (required by Media3 1.11), and pairs with Kotlin 2.0.x (Compose compiler plugin ships with Kotlin).
+agp = "8.11.1"
 kotlin = "2.0.21"
 composeBom = "2024.12.01"
 tvMaterial = "1.0.0"

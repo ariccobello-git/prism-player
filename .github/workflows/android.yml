@@ -40,11 +40,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # compileSdk/targetSdk 35 need platform 35; AGP 8.7 defaults to build-tools 34.0.0.
+      # compileSdk 36 (needed by Media3 1.11) needs platform 36; AGP 8.11 defaults to build-tools 35.0.0.
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platforms;android-35 build-tools;34.0.0"
+          packages: "platforms;android-36 build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -57,24 +57,24 @@ jobs:
           java_major=$(java -version 2>&1 | head -n1 | sed -E 's/.*version "([0-9]+).*/\1/')
           echo "JDK major version: ${java_major}"
           if [ "${java_major}" -ne 17 ]; then
-            echo "::error::AGP 8.7 expects JDK 17, found ${java_major}"
+            echo "::error::AGP 8.11 expects JDK 17, found ${java_major}"
             exit 1
           fi
 
           gradle_version=$(sed -nE 's/.*gradle-([0-9]+\.[0-9]+(\.[0-9]+)?)-bin\.zip.*/\1/p' gradle/wrapper/gradle-wrapper.properties)
           echo "Gradle wrapper version: ${gradle_version}"
-          lowest=$(printf '%s\n%s\n' "8.9" "${gradle_version}" | sort -V | head -n1)
-          if [ "${lowest}" != "8.9" ]; then
-            echo "::error::AGP 8.7 needs Gradle 8.9 or newer, wrapper uses ${gradle_version}"
+          lowest=$(printf '%s\n%s\n' "8.13" "${gradle_version}" | sort -V | head -n1)
+          if [ "${lowest}" != "8.13" ]; then
+            echo "::error::AGP 8.11 needs Gradle 8.13 or newer, wrapper uses ${gradle_version}"
             exit 1
           fi
 
           echo "ANDROID_HOME=${ANDROID_HOME}"
-          test -d "${ANDROID_HOME}/platforms/android-35" \
-            || { echo "::error::Android platform 35 is missing"; exit 1; }
-          test -d "${ANDROID_HOME}/build-tools/34.0.0" \
-            || { echo "::error::Build-tools 34.0.0 are missing"; exit 1; }
-          echo "Toolchain OK: JDK ${java_major}, Gradle ${gradle_version}, platform 35, build-tools 34.0.0"
+          test -d "${ANDROID_HOME}/platforms/android-36" \
+            || { echo "::error::Android platform 36 is missing"; exit 1; }
+          test -d "${ANDROID_HOME}/build-tools/35.0.0" \
+            || { echo "::error::Build-tools 35.0.0 are missing"; exit 1; }
+          echo "Toolchain OK: JDK ${java_major}, Gradle ${gradle_version}, platform 36, build-tools 35.0.0"
 
       - name: Make wrapper executable
         run: chmod +x ./gradlew
