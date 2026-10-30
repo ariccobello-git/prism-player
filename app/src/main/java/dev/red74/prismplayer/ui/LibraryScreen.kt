@@ -199,7 +199,9 @@ private fun LibraryContent(
         onNav { it.origin?.copy(resume = true) ?: it.copy(movieUrl = null, showTitle = null, showGroup = null, season = -1, resume = true) }
     }
 
+    val prism = remember { PrismSession() }
     PrismBackground {
+        Box(Modifier.fillMaxSize()) {
         GlassPanel(
             Modifier
                 .fillMaxSize()
@@ -228,7 +230,7 @@ private fun LibraryContent(
                         size = 30.sp, weight = FontWeight.Bold, maxLines = 1,
                     )
                 }
-                if (!state.loading && state.error == null) TopBar(nav, onNav, tabFocus)
+                if (!state.loading && state.error == null) TopBar(nav, onNav, tabFocus, prism, state.catalog, epg)
                 }
 
                 when {
@@ -267,11 +269,13 @@ private fun LibraryContent(
                 }
             }
         }
+        PrismAssistantWindow(prism)
+        }
     }
 }
 
 @Composable
-private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) {
+private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester, prism: PrismSession, catalog: Catalog, epg: EpgData) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -310,6 +314,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
             modifier = Modifier.weight(1f),
             imeAction = androidx.compose.ui.text.input.ImeAction.Search,
         )
+        PrismAssistantButton(prism, catalog, epg)
     }
 }
 
