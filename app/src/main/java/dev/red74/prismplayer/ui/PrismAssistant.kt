@@ -221,7 +221,7 @@ private suspend fun confirm(session: PrismSession, voice: PrismVoice, say: suspe
         session.hint = ""
         session.mood = PrismMood.IDLE
         if (heard is PrismVoice.Heard.Words) PrismBrain.yesOrNo(heard.text)?.let { return it }
-        if (heard !is PrismVoice.Heard.Words && heard != PrismVoice.Heard.Nothing) return null
+        if (heard == PrismVoice.Heard.NoPermission) return null
     }
     return null
 }
