@@ -22,6 +22,8 @@
 - **Libreria Live / Film / Serie / Preferiti** organizzata come la lista: gruppi a più livelli sulla stessa pagina (gruppo principale › sottogruppo › contenuti, con la voce «Tutti»), ordinamento Standard / A–Z / Z–A / Ultimi inseriti, ricerca, locandine, guida programmi (EPG), anteprima live, schede di film e serie (stagioni ed episodi), preferiti con stella.
 - **Liste molto grandi**: ogni lista aperta è salvata sul dispositivo in un piccolo database (SQLite). Alle aperture successive si leggono solo i nomi dei gruppi e i conteggi; le voci si leggono a pagine mentre si scorre, la ricerca usa un indice di parole (FTS4) e l'ordinamento lo fa il database. La copia si aggiorna in background quando ha più di 6 ore.
 - **Player Media3** in stile Netflix: play/pausa, ±10 s (tenendo premuto accelera), barra del tempo, avanzamento 2×/4×/8×, audio e sottotitoli, episodi e prossimo episodio, info flusso, 14 formati immagine con scelta ricordata, LIVE con ritorno al vivo, ▲/▼ cambiano canale.
+- **Descrizioni**: nella scheda di un film la trama compare sotto **Guarda**, in quella di una serie sotto il titolo; si chiede al pannello Xtream solo quando la scheda si apre. Senza trama compare «Descrizione non disponibile».
+- **Prism, l'assistente**: un omino stilizzato con la testa a prisma, accanto al campo Cerca nella libreria. Con OK saluta, chiede «Come posso aiutarti?» e ascolta dal microfono del telecomando, senza tastiera. La domanda compare in una finestra al centro; dopo qualche secondo Prism chiede di confermare a voce: con «no» riascolta, con «sì» risponde e si chiude, e il cursore resta su di lui. Il cervello è dentro l'app: cerca film, serie e canali, dice cosa va in onda, racconta la trama e spiega le funzioni dell'app.
 - **Scorciatoie**: apre le app installate sulla TV scelte dall'utente.
 - **Aggiornamenti e codec**: controlla se c'è una release più recente dell'app e di Media3 ed elenca i decoder del dispositivo.
 - **Interfaccia per telecomando**: movimento naturale del cursore tra le sezioni, la sezione attiva in primo piano e le altre arretrate, cursore ripristinato al rientro, riconoscimento del telecomando Xiaomi. Suoni d'interfaccia leggeri e disattivabili (mai nel player). Schermo sempre acceso con l'app in primo piano.
@@ -71,7 +73,7 @@ Regole del codice (applicate in `PairingManager` e coperte da test):
 
 - Il server di abbinamento è **solo in scrittura**: serve moduli statici e accetta un invio per codice valido. Non esiste alcun endpoint che elenchi, legga o esporti le playlist salvate, quindi i loro URL non transitano mai sulla rete locale. Un test automatico lo verifica.
 - Accetta solo client locali (loopback, indirizzi privati, link-local) e risponde con `Cache-Control: no-store`, `Referrer-Policy: no-referrer` e una Content-Security-Policy restrittiva, e chiude la connessione dopo ogni risposta. La pagina non usa JavaScript.
-- Permesso Android richiesto: solo `INTERNET`.
+- Permessi Android: `INTERNET` e `RECORD_AUDIO`. Il microfono serve solo all'assistente Prism, viene chiesto la prima volta che lo si usa, e l'audio va al riconoscimento vocale della TV (Google sulla Xiaomi TV Stick).
 
 **Limiti noti (da conoscere prima dell'uso)**
 
