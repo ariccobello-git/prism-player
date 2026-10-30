@@ -66,9 +66,11 @@ internal object BlackHoleTimeline {
     const val BLACK = 1.5f
     const val TOTAL = POINT_START + POINT + BLACK
 
-    /** Core radius of the black hole as a share of the screen height; with its glowing disk it spans about a third. */
+    /** Core radius of the black hole as a share of the screen height; with its glow it spans about a third. */
     const val CORE = 0.065f
-    const val DISK = 2.5f
+
+    /** Outer edge of the thin glowing corona, in core radii. */
+    const val DISK = 1.45f
 
     /** Size of the black hole from 0 to 1 at [t] seconds. */
     fun holeScale(t: Float): Float = when {
@@ -238,8 +240,8 @@ private fun DrawScope.drawBlackHole(t: Float, s: Swallowed) {
         val disk = core * BlackHoleTimeline.DISK
         val glowUp = if (t > BlackHoleTimeline.SHRINK_START) 1f + 1.5f * ((t - BlackHoleTimeline.SHRINK_START) / BlackHoleTimeline.SHRINK).coerceIn(0f, 1f) else 1f
         drawCircle(
-            Brush.radialGradient(listOf(Color(0xFFFF9A3D).copy(alpha = 0.22f * glowUp.coerceAtMost(2f)), Color(0xFF7A3CFF).copy(alpha = 0.10f), Color.Transparent), center = hole, radius = disk * 1.5f),
-            radius = disk * 1.5f, center = hole, blendMode = BlendMode.Plus,
+            Brush.radialGradient(listOf(Color(0xFFFF9A3D).copy(alpha = 0.22f * glowUp.coerceAtMost(2f)), Color(0xFF7A3CFF).copy(alpha = 0.10f), Color.Transparent), center = hole, radius = core * 2.6f),
+            radius = core * 2.6f, center = hole, blendMode = BlendMode.Plus,
         )
         rotate(t * 140f, hole) {
             drawCircle(
@@ -250,13 +252,13 @@ private fun DrawScope.drawBlackHole(t: Float, s: Swallowed) {
                     ),
                     center = hole,
                 ),
-                radius = (core + disk) / 2f, center = hole, style = Stroke(width = (disk - core) * 0.9f), blendMode = BlendMode.Plus,
+                radius = (core * 1.12f + disk) / 2f, center = hole, style = Stroke(width = (disk - core * 1.12f) * 0.7f), blendMode = BlendMode.Plus,
             )
         }
         rotate(-t * 230f, hole) {
             drawCircle(
                 Brush.sweepGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.5f), Color.Transparent, Color(0xFFFFD08A).copy(alpha = 0.45f), Color.Transparent), center = hole),
-                radius = core * 1.6f, center = hole, style = Stroke(width = core * 0.35f), blendMode = BlendMode.Plus,
+                radius = core * 1.2f, center = hole, style = Stroke(width = core * 0.08f), blendMode = BlendMode.Plus,
             )
         }
         // the photon ring, bright and thin, right at the edge of the dark
