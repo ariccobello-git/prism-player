@@ -167,7 +167,9 @@ private fun PrismNavigation(
                 idleSeconds = left
                 IdleExit.countingDown = left != null
                 if (left == 0) {
+                    // At zero the countdown disappears and the closing animation starts.
                     UiSounds.enabled = false
+                    idleSeconds = null
                     idleClose = true
                     forward = true
                     confirmExit = true
