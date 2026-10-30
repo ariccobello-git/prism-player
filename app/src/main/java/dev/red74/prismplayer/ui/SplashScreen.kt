@@ -134,8 +134,8 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
         music[0] = player
         withTimeoutOrNull(PREPARE_TIMEOUT_MS) { snapshotFlow { images }.first { it != null } }
         player?.let {
-            val v = if (UiSounds.muted) 0f else UiSounds.MASTER
-            runCatching { it.setVolume(v, v); it.start() }
+            // The opening music always plays: the Home switch only silences the interface sounds.
+            runCatching { it.setVolume(UiSounds.MASTER, UiSounds.MASTER); it.start() }
         }
         val startedAt = withFrameNanos { it }
         var correction = 0f

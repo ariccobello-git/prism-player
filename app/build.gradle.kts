@@ -13,7 +13,7 @@ val prismVersion: String = (project.findProperty("prismVersion") as String?)?.ta
 
 android {
     namespace = "dev.red74.prismplayer"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.red74.prismplayer"
@@ -53,14 +53,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-        freeCompilerArgs += listOf(
-            "-opt-in=androidx.media3.common.util.UnstableApi",
-            "-opt-in=androidx.tv.material3.ExperimentalTvMaterial3Api",
-        )
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -76,6 +68,16 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        freeCompilerArgs.addAll(
+            "-opt-in=androidx.media3.common.util.UnstableApi",
+            "-opt-in=androidx.tv.material3.ExperimentalTvMaterial3Api",
+        )
     }
 }
 

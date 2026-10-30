@@ -19,7 +19,7 @@ object UiSounds {
     /** Everything the app plays (interface sounds, opening and closing music) is 30% below full scale. */
     const val MASTER = 0.42f
 
-    /** Set from the Home menu; remembered between launches. */
+    /** Set from the Home menu; remembered between launches. Silences the interface sounds, never the opening and closing music. */
     @Volatile
     var muted: Boolean = false
         private set
