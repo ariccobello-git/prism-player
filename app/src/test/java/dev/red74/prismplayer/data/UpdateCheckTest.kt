@@ -43,4 +43,13 @@ class UpdateCheckTest {
         assertFalse(dev.appNewer)
         assertTrue(UpdateCheck.report("v0.1.1", "1.0", null, null).offline)
     }
+
+    @Test
+    fun engineFallsBackToGithubReleases() {
+        val tags = """[{"tag_name":"1.7.0-alpha01"},{"tag_name":"1.6.1"},{"tag_name":"1.5.1"}]"""
+        assertEquals("1.6.1", UpdateCheck.latestStableTag(tags))
+        val r = UpdateCheck.report("v0.1.30-debug", "1.5.1", null, null, tags)
+        assertEquals("1.6.1", r.engineLatest); assertTrue(r.engineNewer); assertFalse(r.offline)
+        assertEquals("1.9.2", UpdateCheck.report("v0.1.1", "1.5.1", null, "<version>1.9.2</version>", tags).engineLatest)
+    }
 }

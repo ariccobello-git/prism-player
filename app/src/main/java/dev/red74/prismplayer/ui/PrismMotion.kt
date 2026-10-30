@@ -68,6 +68,17 @@ internal object PrismMotion {
         return PrismOptics.CLASSIC_THETA - Math.toRadians(remaining)
     }
 
+    /**
+     * How bright a sparkle on the glass is at time [t] (0..1): it flares on every pulse before the hit, on the hit
+     * itself and on each glint after it, so the highlights blink with the music.
+     */
+    fun sparkle(t: Double): Double {
+        var s = 1.2 * exp(-((t - IMPACT) / 0.18).pow(2.0))
+        for (p in pulses) s += 0.35 * exp(-((t - p) / 0.07).pow(2.0))
+        for (g in glints) s += 0.75 * exp(-((t - g) / 0.12).pow(2.0))
+        return s.coerceIn(0.0, 1.0)
+    }
+
     /** Degrees still to turn at time [t] before the prism rests. */
     fun remainingDegrees(t: Double): Double = turned[turned.size - 1] - turnedAt(t.coerceAtMost(STOP_AT))
 }
