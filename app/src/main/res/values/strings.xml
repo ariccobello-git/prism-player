@@ -24,6 +24,8 @@
     <string name="action_no">No</string>
     <string name="exit_title">Close the app?</string>
     <string name="exit_message">Press Yes to leave Prism Player.</string>
+    <string name="idle_title">Prism Player is closing because it is not in use</string>
+    <string name="idle_message">Press any key to keep it open.</string>
     <string name="action_cancel">Cancel</string>
     <string name="action_back">Back</string>
     <string name="error_url_empty">Enter a playlist URL.</string>

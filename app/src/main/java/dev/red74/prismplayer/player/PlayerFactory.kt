@@ -51,6 +51,9 @@ object PreviewPlayers {
 
     fun unregister(player: ExoPlayer) { active -= player }
 
+    /** True while a preview is showing a content (it counts as the app being in use). Main thread only. */
+    fun anyPlaying(): Boolean = active.any { it.isPlaying || it.playbackState == androidx.media3.common.Player.STATE_BUFFERING }
+
     /** Panels often allow one connection per account: a preview still open would make the channel answer 403. */
     fun stopAll() {
         for (player in active) {
