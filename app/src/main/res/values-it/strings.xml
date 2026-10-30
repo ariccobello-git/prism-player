@@ -102,6 +102,8 @@
     <string name="fav_remove">Rimuovi dai preferiti</string>
     <string name="action_play">Guarda</string>
     <string name="season_n">Stagione %1$d</string>
+    <string name="description_missing">Descrizione non disponibile</string>
+    <string name="description_loading">Caricamento della descrizione…</string>
     <string name="season_none">Episodi</string>
     <string name="library_empty">Qui non c\'è ancora nulla.</string>
     <string name="search_none">Nessun risultato.</string>

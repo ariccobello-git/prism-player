@@ -1,0 +1,266 @@
+package dev.red74.prismplayer.data
+
+import java.io.BufferedReader
+import java.io.InputStream
+import java.io.InputStreamReader
+import java.io.Reader
+import java.net.HttpURLConnection
+import java.net.URI
+import java.net.URL
+import java.util.zip.GZIPInputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+
+/**
+ * The plot of a film or series, asked of the IPTV panel only when its page is opened (playlists almost never carry
+ * one). Works with Xtream-style panels, whose stream addresses are `/movie/<user>/<password>/<id>.<ext>` and
+ * `/series/<user>/<password>/<id>.<ext>`: a film is asked for by its id; series are listed once per panel and
+ * matched by title. The answers stay in memory only. Null means "no description".
+ */
+object ContentInfo {
+    private val films = HashMap<String, String?>()
+    private val seriesPlots = HashMap<String, Map<String, String>>()
+    private val lock = Mutex()
+
+    suspend fun filmPlot(streamUrl: String): String? {
+        val address = PanelAddress.vodInfo(streamUrl) ?: return null
+        lock.withLock { if (films.containsKey(streamUrl)) return films[streamUrl] }
+        // A failed request is not remembered, so the next visit asks again.
+        val answer = withContext(Dispatchers.IO) { runCatching { request(address) { PanelJson.filmPlot(it) } } }
+        val plot = answer.getOrNull()
+        if (answer.isSuccess) lock.withLock { films[streamUrl] = plot }
+        return plot
+    }
+
+    suspend fun seriesPlot(episodeUrl: String?, title: String): String? {
+        val address = episodeUrl?.let { PanelAddress.seriesList(it) } ?: return null
+        val plots = lock.withLock {
+            seriesPlots[address] ?: withContext(Dispatchers.IO) {
+                runCatching { request(address) { PanelJson.seriesPlots(it) } }.getOrNull()
+            }?.also { seriesPlots[address] = it }
+        } ?: return null
+        return plots[PanelJson.titleKey(title)]
+    }
+
+    private fun <T> request(address: String, read: (Reader) -> T): T {
+        var last: Exception? = null
+        for (agent in AGENTS) {
+            val connection = URL(address).openConnection() as HttpURLConnection
+            try {
+                connection.connectTimeout = 10_000
+                connection.readTimeout = 30_000
+                connection.setRequestProperty("User-Agent", agent)
+                connection.setRequestProperty("Connection", "close")
+                if (connection.responseCode !in 200..299) {
+                    last = IllegalStateException("HTTP ${connection.responseCode}")
+                    continue
+                }
+                return connection.inputStream.use { raw -> read(reader(raw)) }
+            } catch (e: Exception) {
+                last = e
+            } finally {
+                connection.disconnect()
+            }
+        }
+        throw last ?: IllegalStateException("no answer")
+    }
+
+    private fun reader(raw: InputStream): Reader {
+        val buffered = raw.buffered(64 * 1024)
+        buffered.mark(2)
+        val gzipped = buffered.read() == 0x1f && buffered.read() == 0x8b
+        buffered.reset()
+        val stream = if (gzipped) GZIPInputStream(buffered, 64 * 1024) else buffered
+        return BufferedReader(InputStreamReader(stream, Charsets.UTF_8), 64 * 1024)
+    }
+
+    private val AGENTS = listOf(HttpAgent.LIST_AGENTS[0], "okhttp/4.12.0", "IPTVSmartersPro")
+}
+
+/** Builds the panel requests for [ContentInfo] from a stream address; null for anything not Xtream-style. */
+object PanelAddress {
+    fun vodInfo(streamUrl: String): String? {
+        val (base, user, password, id) = parts(streamUrl, "movie") ?: return null
+        return "$base/player_api.php?username=$user&password=$password&action=get_vod_info&vod_id=$id"
+    }
+
+    fun seriesList(episodeUrl: String): String? {
+        val (base, user, password, _) = parts(episodeUrl, "series") ?: return null
+        return "$base/player_api.php?username=$user&password=$password&action=get_series"
+    }
+
+    private fun parts(url: String, kind: String): List<String>? {
+        val uri = runCatching { URI(url) }.getOrNull() ?: return null
+        val scheme = uri.scheme?.lowercase() ?: return null
+        if (scheme != "http" && scheme != "https") return null
+        val host = uri.rawAuthority ?: return null
+        val segments = uri.rawPath.orEmpty().split('/').filter { it.isNotEmpty() }
+        val at = segments.indexOfLast { it.equals(kind, ignoreCase = true) }
+        if (at < 0 || segments.size != at + 4) return null
+        val id = segments[at + 3].substringBefore('.')
+        if (id.isEmpty() || !id.all { it.isDigit() }) return null
+        val prefix = segments.subList(0, at).joinToString("") { "/$it" }
+        return listOf("$scheme://$host$prefix", segments[at + 1], segments[at + 2], id)
+    }
+}
+
+/**
+ * Reads only what is needed from the panel's JSON answers, as a stream: the series list of a large panel can be
+ * many megabytes, so it is never held as one string or one tree.
+ */
+object PanelJson {
+    private const val MAX_PLOT = 900
+
+    /** `get_vod_info`: the plot (or description) of the film. */
+    fun filmPlot(reader: Reader): String? {
+        var plot: String? = null
+        var description: String? = null
+        JsonScan(reader).run { _, key, value ->
+            when (key.lowercase()) {
+                "plot" -> if (plot == null) plot = clean(value)
+                "description" -> if (description == null) description = clean(value)
+            }
+        }
+        return plot ?: description
+    }
+
+    /** `get_series`: series title (as [titleKey]) to plot, for the series that have one. */
+    fun seriesPlots(reader: Reader): Map<String, String> {
+        val out = HashMap<String, String>()
+        var name: String? = null
+        var plot: String? = null
+        JsonScan(reader).run(
+            onEnd = { depth ->
+                if (depth == 2) {
+                    val n = name
+                    val p = plot
+                    if (n != null && p != null) out.putIfAbsent(titleKey(n), p)
+                    name = null
+                    plot = null
+                }
+            },
+        ) { depth, key, value ->
+            if (depth == 2) when (key.lowercase()) {
+                "name" -> name = value
+                "plot" -> plot = clean(value)
+            }
+        }
+        return out
+    }
+
+    /** Titles match ignoring case, accents aside, spaces and punctuation ("Dr. House" and "DR HOUSE" are the same). */
+    fun titleKey(title: String): String = buildString {
+        for (ch in title.lowercase()) if (ch.isLetterOrDigit()) append(ch)
+    }
+
+    private fun clean(text: String): String? {
+        val cleaned = text.trim().replace(Regex("\\s+"), " ")
+        if (cleaned.isEmpty() || cleaned.equals("null", ignoreCase = true) || cleaned == "N/A") return null
+        return TextCleaner.cleanOrNull(cleaned)?.let { if (it.length > MAX_PLOT) it.take(MAX_PLOT).trimEnd() + "…" else it }
+    }
+}
+
+/**
+ * A small streaming JSON reader: reports every string value with its key and depth (see [run]) and the end of every
+ * object. Numbers, booleans and nulls are skipped. Malformed input simply stops the scan.
+ */
+internal class JsonScan(private val reader: Reader) {
+    private var peeked = -2
+
+    private fun peek(): Int {
+        if (peeked == -2) peeked = reader.read()
+        return peeked
+    }
+
+    private fun next(): Int = peek().also { peeked = -2 }
+
+    private fun skipSpace() {
+        while (true) {
+            val c = peek()
+            if (c == ' '.code || c == '\n'.code || c == '\r'.code || c == '\t'.code || c == 0xFEFF) next() else return
+        }
+    }
+
+    /**
+     * Depth counts the objects around a value: in `[{"name":"x"}]` "name" is at depth 2 (the array counts as 1);
+     * in `{"info":{"plot":"y"}}` "plot" is at depth 2 too.
+     */
+    fun run(onEnd: (depth: Int) -> Unit = {}, onString: (depth: Int, key: String, value: String) -> Unit) {
+        runCatching { value(0, "", onEnd, onString) }
+    }
+
+    private fun value(depth: Int, key: String, onEnd: (Int) -> Unit, onString: (Int, String, String) -> Unit) {
+        skipSpace()
+        when (peek()) {
+            '{'.code -> {
+                next()
+                val inner = depth + 1
+                while (true) {
+                    skipSpace()
+                    when (peek()) {
+                        '}'.code -> { next(); break }
+                        ','.code -> { next(); continue }
+                        '"'.code -> {
+                            val k = string()
+                            skipSpace()
+                            check(next() == ':'.code)
+                            value(inner, k, onEnd, onString)
+                        }
+                        else -> error("bad object")
+                    }
+                }
+                onEnd(inner)
+            }
+            '['.code -> {
+                next()
+                while (true) {
+                    skipSpace()
+                    when (peek()) {
+                        ']'.code -> { next(); break }
+                        ','.code -> { next(); continue }
+                        -1 -> error("end")
+                        else -> value(depth + 1, key, onEnd, onString)
+                    }
+                }
+            }
+            '"'.code -> onString(depth, key, string())
+            -1 -> error("end")
+            else -> {
+                // number, true, false, null
+                while (true) {
+                    val c = peek()
+                    if (c == -1 || c == ','.code || c == '}'.code || c == ']'.code || c <= ' '.code) break
+                    next()
+                }
+            }
+        }
+    }
+
+    private fun string(): String {
+        check(next() == '"'.code)
+        val out = StringBuilder()
+        while (true) {
+            val c = next()
+            when (c) {
+                -1 -> error("end")
+                '"'.code -> return out.toString()
+                '\\'.code -> when (val e = next()) {
+                    'n'.code -> out.append('\n')
+                    't'.code -> out.append('\t')
+                    'r'.code -> out.append('\r')
+                    'b'.code, 'f'.code -> out.append(' ')
+                    'u'.code -> {
+                        var code = 0
+                        repeat(4) { code = code * 16 + Character.digit(next(), 16).also { d -> check(d >= 0) } }
+                        out.append(code.toChar())
+                    }
+                    -1 -> error("end")
+                    else -> out.append(e.toChar())
+                }
+                else -> out.append(c.toChar())
+            }
+        }
+    }
+}

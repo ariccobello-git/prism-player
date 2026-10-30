@@ -102,6 +102,8 @@
     <string name="fav_remove">Remove from favorites</string>
     <string name="action_play">Play</string>
     <string name="season_n">Season %1$d</string>
+    <string name="description_missing">Description not available</string>
+    <string name="description_loading">Loading the description…</string>
     <string name="season_none">Episodes</string>
     <string name="library_empty">Nothing here yet.</string>
     <string name="search_none">No results.</string>
