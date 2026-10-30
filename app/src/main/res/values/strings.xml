@@ -152,6 +152,7 @@
     <string name="action_updates">Updates and codecs</string>
     <string name="updates_title">Updates and codecs</string>
     <string name="updates_check">Check now</string>
+    <string name="updates_check_hint">Looks on the web for a new app release and a new video engine.</string>
     <string name="updates_app">The app</string>
     <string name="updates_engine">Video and audio engine (Media3)</string>
     <string name="updates_device">What this device decodes</string>

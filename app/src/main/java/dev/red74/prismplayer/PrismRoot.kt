@@ -34,6 +34,7 @@ import dev.red74.prismplayer.ui.LibraryScreen
 import dev.red74.prismplayer.ui.PairScreen
 import dev.red74.prismplayer.ui.PlayerScreen
 import dev.red74.prismplayer.ui.ShortcutsScreen
+import dev.red74.prismplayer.ui.SPLASH_EXIT_MS
 import dev.red74.prismplayer.ui.SplashScreen
 import dev.red74.prismplayer.ui.UpdatesScreen
 import dev.red74.prismplayer.ui.UiSounds
@@ -60,7 +61,7 @@ fun PrismRoot(
         targetState = splashDone,
         transitionSpec = {
             (fadeIn(tween(600)) + scaleIn(tween(600), initialScale = 1.06f)) togetherWith
-                (fadeOut(tween(450)) + scaleOut(tween(450), targetScale = 0.96f))
+                (fadeOut(tween(SPLASH_EXIT_MS)) + scaleOut(tween(SPLASH_EXIT_MS), targetScale = 0.96f))
         },
         label = "splashToApp",
     ) { done ->

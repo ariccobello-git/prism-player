@@ -1,11 +1,9 @@
 package dev.red74.prismplayer.ui
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaPlayer
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -20,10 +18,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,6 +47,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.red74.prismplayer.R
 import kotlin.math.cos
 import kotlin.math.exp
@@ -56,10 +58,17 @@ import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** The opening lasts exactly as long as its music. */
-private const val SPLASH_MS = 10_600
 private const val SPLASH_SECONDS = 10.6f
+
+/** The app fades in over the opening this long before the music ends, so picture and sound finish together. */
+const val SPLASH_EXIT_MS = 450
+
+/** Longest wait for the photo and the music to be ready before the opening starts anyway. */
+private const val PREPARE_TIMEOUT_MS = 1_500L
+
 private val Spectrum = listOf(
     Color(0xFFFF3B4E), // red
     Color(0xFFFF9A3D), // orange
@@ -90,50 +99,95 @@ private fun smooth(edge0: Float, edge1: Float, x: Float): Float {
  */
 @Composable
 fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
-    val progress = remember { Animatable(0f) }
+    // Seconds into the opening. The music is the clock: picture and sound start on the same frame and stay together.
+    val clock = remember { mutableFloatStateOf(0f) }
     val readyNow by rememberUpdatedState(ready)
-    val context0 = LocalContext.current
-    val galaxy by produceState<ImageBitmap?>(null) {
+    val finish by rememberUpdatedState(onFinished)
+    val context = LocalContext.current
+    val images by produceState<SplashImages?>(null) {
         value = withContext(Dispatchers.Default) {
-            runCatching { BitmapFactory.decodeResource(context0.resources, R.drawable.galaxy_bg)?.asImageBitmap() }.getOrNull()
+            runCatching {
+                val sky = BitmapFactory.decodeResource(context.resources, R.drawable.galaxy_bg) ?: return@runCatching null
+                // A small copy of the sky, soft once stretched back to full size: what the glass shows through and reflects.
+                val small = Bitmap.createScaledBitmap(sky, 240, (240f * sky.height / sky.width).roundToInt().coerceAtLeast(1), true)
+                SplashImages(sky.asImageBitmap(), small.asImageBitmap())
+            }.getOrNull()
         }
     }
+    val music = remember { arrayOfNulls<MediaPlayer>(1) }
 
     // The animation is not interruptible; back is ignored for these few seconds.
     BackHandler(enabled = true) { }
 
-    val context = LocalContext.current
-    DisposableEffect(Unit) {
-        // Original synthesized intro (10.6 s): the prism turns with it, hits at 5.3 s, rests at 8.1 s, the music ends with the animation.
-        val player = runCatching {
-            val attributes = android.media.AudioAttributes.Builder()
-                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                .build()
-            MediaPlayer.create(context, R.raw.prism_intro, attributes, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE)?.apply {
-                val v = if (UiSounds.muted) 0f else UiSounds.MASTER
-                setVolume(v, v)
-                start()
+    LaunchedEffect(Unit) {
+        // Original synthesized intro (10.6 s): the prism turns with it, hits at 5.3 s, rests at 8.1 s, the music fades
+        // out with the last frames. It is prepared away from the screen thread so the first frames never stutter.
+        val player = withContext(Dispatchers.IO) {
+            runCatching {
+                val attributes = android.media.AudioAttributes.Builder()
+                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+                MediaPlayer.create(context, R.raw.prism_intro, attributes, android.media.AudioManager.AUDIO_SESSION_ID_GENERATE)
+            }.getOrNull()
+        }
+        music[0] = player
+        withTimeoutOrNull(PREPARE_TIMEOUT_MS) { snapshotFlow { images }.first { it != null } }
+        player?.let {
+            val v = if (UiSounds.muted) 0f else UiSounds.MASTER
+            runCatching { it.setVolume(v, v); it.start() }
+        }
+        val startedAt = withFrameNanos { it }
+        var correction = 0f
+        var frame = 0
+        var finished = false
+        while (true) {
+            val now = withFrameNanos { it }
+            var t = (now - startedAt) / 1e9f + correction
+            // Every few frames the picture is pulled gently towards where the music really is, so a slow start of
+            // the audio on the stick or a skipped frame never leaves them apart, without visible jumps.
+            if (++frame % 6 == 0 && t < SPLASH_SECONDS - 0.3f) {
+                val audio = runCatching { player?.takeIf { it.isPlaying }?.currentPosition?.div(1000f) }.getOrNull()
+                if (audio != null && audio > 0.1f) {
+                    val gap = audio - t
+                    if (kotlin.math.abs(gap) > 0.03f) {
+                        val step = gap.coerceIn(-0.05f, 0.05f)
+                        correction += step
+                        t += step
+                    }
+                }
             }
-        }.getOrNull()
-        onDispose {
-            runCatching { player?.stop() }
-            runCatching { player?.release() }
+            clock.floatValue = t
+            if (!finished && readyNow && t >= SPLASH_SECONDS - SPLASH_EXIT_MS / 1000f) {
+                finished = true
+                finish()
+            }
         }
     }
-
-    LaunchedEffect(Unit) {
-        progress.animateTo(1f, tween(durationMillis = SPLASH_MS, easing = LinearEasing))
-        snapshotFlow { readyNow }.first { it }
-        onFinished()
+    DisposableEffect(Unit) {
+        onDispose {
+            // The app has already faded in; let the last notes of the music fade out on their own.
+            val player = music[0] ?: return@onDispose
+            music[0] = null
+            runCatching {
+                if (player.isPlaying) player.setOnCompletionListener { it.release() } else player.release()
+            }.onFailure { runCatching { player.release() } }
+        }
+    }
+    // Leaving the app during the opening silences it.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        music[0]?.let { runCatching { it.stop(); it.release() } }
+        music[0] = null
     }
 
+    val t = { clock.floatValue }
+    val progress = { (clock.floatValue / SPLASH_SECONDS).coerceIn(0f, 1f) }
     Box(
         Modifier
             .fillMaxSize()
             .background(Color(0xFF02030A)),
     ) {
-        SpaceAndPrism(galaxy = galaxy, progress = { progress.value }, modifier = Modifier.fillMaxSize())
+        SpaceAndPrism(images = images, time = t, modifier = Modifier.fillMaxSize())
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
@@ -141,7 +195,7 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Column(
-                Modifier.graphicsLayer { alpha = fraction(progress.value * SPLASH_SECONDS, 6.2f, 1.4f) },
+                Modifier.graphicsLayer { alpha = fraction(t(), 6.2f, 1.4f) },
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 PrismText(
@@ -169,13 +223,28 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
                     .drawBehind {
                         drawRect(
                             brush = Brush.horizontalGradient(listOf(PrismColors.Accent, PrismColors.AccentAlt)),
-                            size = Size(size.width * progress.value, size.height),
+                            size = Size(size.width * progress(), size.height),
                         )
+                        // Still loading after the music: a soft light runs along the full bar until the lists are ready.
+                        val over = t() - SPLASH_SECONDS
+                        if (over > 0f) {
+                            val x = ((over / 1.4f) % 1f) * (size.width * 1.4f) - size.width * 0.2f
+                            drawRect(
+                                Brush.horizontalGradient(
+                                    listOf(Color.Transparent, Color.White.copy(alpha = 0.55f), Color.Transparent),
+                                    startX = x - size.width * 0.2f, endX = x + size.width * 0.2f,
+                                ),
+                                blendMode = BlendMode.Plus,
+                            )
+                        }
                     },
             )
         }
     }
 }
+
+/** The sky photo and a small soft copy of it for what the glass shows. */
+private class SplashImages(val sky: ImageBitmap, val glass: ImageBitmap)
 
 /**
  * The scene: a real photograph of the Milky Way (ESO/S. Brunier, CC BY 4.0, cropped and turned; see the README),
@@ -183,16 +252,18 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
  * refraction (see [PrismOptics]) so the colours follow every move of the glass. The turn itself is [PrismMotion].
  */
 @Composable
-private fun SpaceAndPrism(galaxy: ImageBitmap?, progress: () -> Float, modifier: Modifier = Modifier) {
+private fun SpaceAndPrism(images: SplashImages?, time: () -> Float, modifier: Modifier = Modifier) {
     Canvas(modifier) {
-        val t = progress() * SPLASH_SECONDS
+        val t = time()
+        val galaxy = images?.sky
+        val glassView = images?.glass
         val w = size.width
         val h = size.height
 
         // --- the sky: slowly drifting closer, fading in from black ------------------------------------------------
         val reveal = fraction(t, 0f, 1.8f)
         if (galaxy != null) {
-            val zoom = 1f + 0.07f * (t / SPLASH_SECONDS)
+            val zoom = 1f + 0.07f * (t / SPLASH_SECONDS).coerceAtMost(1.4f)
             withTransform({ scale(zoom, zoom, Offset(w * 0.45f, h * 0.5f)) }) {
                 drawImage(
                     galaxy,
@@ -237,64 +308,18 @@ private fun SpaceAndPrism(galaxy: ImageBitmap?, progress: () -> Float, modifier:
             radius = radius * 2.3f, center = center, blendMode = BlendMode.Plus,
         )
 
-        val corners = PrismOptics.triangle(theta)
-        val depth = Offset(-radius * 0.14f, -radius * 0.20f)
-        val front = corners.map { screen(it) + Offset(depth.x * 0.5f, depth.y * 0.5f) }
-        val back = corners.map { screen(it) - Offset(depth.x * 0.5f, depth.y * 0.5f) }
-
-        // back face and the three sides, lit from the upper left
-        val backPath = Path().apply { moveTo(back[0].x, back[0].y); lineTo(back[1].x, back[1].y); lineTo(back[2].x, back[2].y); close() }
-        drawPath(backPath, Color(0xFF9DBEFF).copy(alpha = 0.10f * appear))
-        for (i in 0 until 3) {
-            val j = (i + 1) % 3
-            val side = Path().apply {
-                moveTo(front[i].x, front[i].y); lineTo(front[j].x, front[j].y)
-                lineTo(back[j].x, back[j].y); lineTo(back[i].x, back[i].y); close()
-            }
-            val mx = ((corners[i].x + corners[j].x) / 2).toFloat()
-            val my = ((corners[i].y + corners[j].y) / 2).toFloat()
-            val norm = hypot(mx, my).coerceAtLeast(1e-3f)
-            val lit = (0.5f + 0.5f * ((mx / norm) * -0.6f + (my / norm) * -0.8f)).coerceIn(0f, 1f)
-            drawPath(side, Color(0xFFCFE2FF).copy(alpha = appear * (0.08f + 0.20f * lit)))
-            drawPath(side, Color.White.copy(alpha = 0.12f * appear), style = androidx.compose.ui.graphics.drawscope.Stroke(1.2.dp.toPx()))
-        }
-
-        // front face: glass tint plus a bright streak that slides across as the glass turns
-        val frontPath = Path().apply { moveTo(front[0].x, front[0].y); lineTo(front[1].x, front[1].y); lineTo(front[2].x, front[2].y); close() }
-        val axis = Offset(cos(theta.toFloat() + 0.8f), sin(theta.toFloat() + 0.8f))
-        drawPath(
-            frontPath,
-            Brush.linearGradient(
-                listOf(Color(0xFFEAF3FF).copy(alpha = appear * 0.34f), Color(0xFF6C9BE0).copy(alpha = appear * 0.12f), Color(0xFFBFD8FF).copy(alpha = appear * 0.26f)),
-                start = center - axis * radius, end = center + axis * radius,
-            ),
+        drawGlassPrism(
+            corners = PrismOptics.triangle(theta),
+            screen = { screen(it) },
+            center = center,
+            radius = radius,
+            theta = theta.toFloat(),
+            appear = appear,
+            flash = flash,
+            power = power,
+            sparkle = PrismMotion.sparkle(t.toDouble()).toFloat(),
+            glassView = glassView,
         )
-        val streakAt = 0.5f + 0.30f * sin(theta.toFloat() * 2.3f)
-        clipPath(frontPath) {
-            drawRect(
-                Brush.linearGradient(
-                    0f to Color.Transparent,
-                    (streakAt - 0.12f) to Color.Transparent,
-                    streakAt to Color.White.copy(alpha = 0.34f * appear),
-                    (streakAt + 0.12f) to Color.Transparent,
-                    1f to Color.Transparent,
-                    start = center - axis * radius, end = center + axis * radius,
-                ),
-                blendMode = BlendMode.Plus,
-            )
-            if (power > 0f) {
-                // the light leaving through the glass tints the face it passes
-                drawPath(frontPath, Color.White.copy(alpha = 0.10f * power), blendMode = BlendMode.Plus)
-            }
-        }
-        // bevelled edges: soft halo and crisp core, back edges fainter
-        for (i in 0 until 3) {
-            val j = (i + 1) % 3
-            drawLine(Color(0xFFBFD8FF).copy(alpha = appear * 0.26f), front[i], front[j], 9.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-            drawLine(Color.White.copy(alpha = appear * 0.95f), front[i], front[j], 2.4.dp.toPx(), StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = appear * 0.30f), back[i], back[j], 1.4.dp.toPx(), StrokeCap.Round)
-            drawLine(Color.White.copy(alpha = appear * 0.40f), front[i], back[i], 1.4.dp.toPx(), StrokeCap.Round)
-        }
 
         // --- the white beam: layered glow, climbing from the lower left to wherever it meets the glass --------------
         val entry = mid?.let { screen(it.entry) }

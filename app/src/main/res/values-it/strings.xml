@@ -152,6 +152,7 @@
     <string name="action_updates">Aggiornamenti e codec</string>
     <string name="updates_title">Aggiornamenti e codec</string>
     <string name="updates_check">Controlla ora</string>
+    <string name="updates_check_hint">Cerca sul web una nuova release dell\'app e del motore video.</string>
     <string name="updates_app">L\'app</string>
     <string name="updates_engine">Motore video e audio (Media3)</string>
     <string name="updates_device">Cosa decodifica questo dispositivo</string>

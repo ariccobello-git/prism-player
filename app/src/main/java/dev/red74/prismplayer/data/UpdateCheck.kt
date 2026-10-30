@@ -16,7 +16,15 @@ import kotlinx.serialization.json.jsonPrimitive
  */
 object UpdateCheck {
     const val RELEASES_URL = "https://api.github.com/repos/ariccobello-git/prism-player/releases?per_page=30"
-    const val MEDIA3_METADATA_URL = "https://repo1.maven.org/maven2/androidx/media3/media3-exoplayer/maven-metadata.xml"
+    /**
+     * Media3 is published only on Google's Maven repository (Maven Central has no androidx artifacts, which is why
+     * the old address always failed). The GitHub releases of androidx/media are the fallback.
+     */
+    val MEDIA3_METADATA_URLS = listOf(
+        "https://dl.google.com/android/maven2/androidx/media3/media3-exoplayer/maven-metadata.xml",
+        "https://maven.google.com/androidx/media3/media3-exoplayer/maven-metadata.xml",
+    )
+    const val MEDIA3_RELEASES_URL = "https://api.github.com/repos/androidx/media/releases?per_page=30"
     const val DOWNLOAD_BASE = "https://github.com/ariccobello-git/prism-player/releases/download/"
     const val APK_NAME = "prism-player-debug.apk"
 
@@ -63,14 +71,31 @@ object UpdateCheck {
         null
     }
 
+    /** Highest stable tag in a GitHub releases list ("1.6.0", not "1.7.0-alpha01"). */
+    fun latestStableTag(json: String): String? = try {
+        latestStable(
+            (Json.parseToJsonElement(json) as? JsonArray).orEmpty()
+                .mapNotNull { ((it as? JsonObject)?.get("tag_name"))?.jsonPrimitive?.content },
+        )
+    } catch (e: Exception) {
+        null
+    }
+
     fun mavenVersions(xml: String): List<String> = versionTag.findAll(xml).map { it.groupValues[1].trim() }.toList()
 
     fun latestStable(versions: List<String>): String? =
         versions.filter { isStable(it) && parts(it).isNotEmpty() }.maxWithOrNull { a, b -> compare(a, b) }
 
-    fun report(appLabel: String, engineVersion: String, releasesJson: String?, mavenXml: String?): Report {
+    fun report(
+        appLabel: String,
+        engineVersion: String,
+        releasesJson: String?,
+        mavenXml: String?,
+        engineReleasesJson: String? = null,
+    ): Report {
         val appLatest = releasesJson?.let(::latestReleaseTag)
         val engineLatest = mavenXml?.let { latestStable(mavenVersions(it)) }
+            ?: engineReleasesJson?.let(::latestStableTag)
         return Report(
             appCurrent = appLabel,
             appLatest = appLatest,
@@ -83,7 +108,16 @@ object UpdateCheck {
     }
 
     suspend fun check(appLabel: String, engineVersion: String): Report = withContext(Dispatchers.IO) {
-        report(appLabel, engineVersion, fetchText(RELEASES_URL), fetchText(MEDIA3_METADATA_URL))
+        val maven = MEDIA3_METADATA_URLS.firstNotNullOfOrNull { url ->
+            fetchText(url)?.takeIf { latestStable(mavenVersions(it)) != null }
+        }
+        report(
+            appLabel,
+            engineVersion,
+            fetchText(RELEASES_URL),
+            maven,
+            if (maven == null) fetchText(MEDIA3_RELEASES_URL) else null,
+        )
     }
 
     private fun fetchText(address: String): String? = try {

@@ -2,6 +2,7 @@ package dev.red74.prismplayer.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -51,18 +52,24 @@ fun UpdatesScreen(onBack: () -> Unit) {
                 }
                 LazyColumn(
                     Modifier.fillMaxSize().depthFocus().confineFocus(),
+                    // Room around the rows so the focus lift never pushes one past the panel's edge.
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    val r = report
                     item {
-                        GlassButton(
-                            text = stringResource(R.string.updates_check),
+                        // Same shape and size as every other row, only tinted, so the list reads as one column.
+                        InfoRow(
+                            title = stringResource(R.string.updates_check),
+                            body = stringResource(
+                                if (r == null) R.string.updates_checking else R.string.updates_check_hint,
+                            ),
+                            highlight = false,
+                            selected = true,
                             onClick = { attempt++ },
                             focusRequester = firstFocus,
-                            emphasized = true,
-                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
-                    val r = report
                     item {
                         InfoRow(
                             title = stringResource(R.string.updates_app),
@@ -127,9 +134,18 @@ fun UpdatesScreen(onBack: () -> Unit) {
 }
 
 @Composable
-private fun InfoRow(title: String, body: String, highlight: Boolean) {
+private fun InfoRow(
+    title: String,
+    body: String,
+    highlight: Boolean,
+    selected: Boolean = false,
+    onClick: () -> Unit = {},
+    focusRequester: FocusRequester? = null,
+) {
     GlassSurface(
-        onClick = {},
+        onClick = onClick,
+        focusRequester = focusRequester,
+        selected = selected,
         tint = if (highlight) PrismColors.Accent else null,
         modifier = Modifier.fillMaxWidth(),
     ) {

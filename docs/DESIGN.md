@@ -55,9 +55,11 @@ Testo: 22 sp semibold nei pulsanti, 20 sp corpo, 16 sp sottotitoli, 13 sp la ver
 
 ## 2. Splash: il raggio bianco che si scompone nei colori
 
-### Com'è fatto oggi (`ui/SplashScreen.kt`, `ui/PrismOptics.kt`, `ui/PrismMotion.kt`)
+### Com'è fatto oggi (`ui/SplashScreen.kt`, `ui/PrismGlass.kt`, `ui/PrismOptics.kt`, `ui/PrismMotion.kt`)
 
 - **Ottica reale in 2D.** Un prisma equilatero di vetro flint denso ruota; un raggio bianco arriva dal basso a sinistra con un angolo di 28°. Ogni colore ha il suo indice di rifrazione (rosso 1,612 … violetto 1,652), viene piegato con la legge di Snell all'entrata e all'uscita, perde luce secondo Fresnel e può riflettersi dentro il vetro (riflessione totale). I raggi si ricalcolano a ogni frame, quindi il ventaglio di colori segue la rotazione come davanti a un prisma vero.
+- **Prisma di vetro realistico** (`ui/PrismGlass.kt`, da v0.1.31). Visto un po' dall'alto a sinistra con prospettiva; dentro il vetro si vede il cielo sfocato, ingrandito e capovolto, che scorre mentre ruota; facce illuminate o in ombra secondo la luce in alto a sinistra; un'ombra morbida sulle stelle dietro; una faccia laterale riflette il cielo (riflessione totale); spessore verde-azzurro lungo gli spigoli, riflessi netti con una leggera frangia arcobaleno sugli spigoli illuminati; l'angolo più vicino alla luce scintilla sui colpi della musica (`PrismMotion.sparkle`).
+- **Orologio legato all'audio** (da v0.1.31). La musica viene preparata fuori dal thread dello schermo; immagine e suono partono sullo stesso frame quando foto e audio sono pronti (massimo 1,5 s di attesa) e il tempo dell'animazione viene riallineato dolcemente a `MediaPlayer.currentPosition`. Non dipende più dalla *Scala durata animazione* di sistema. La Home comincia a comparire 450 ms prima della fine, così la dissolvenza finisce insieme all'ultima nota; se le liste non sono pronte la scena resta ferma e una luce scorre sulla barra.
 - **Sette colori:** `#FF3B4E` rosso, `#FF9A3D` arancio, `#FFE14D` giallo, `#4DFF88` verde, `#3FE6FF` ciano, `#5F7BFF` blu, `#B765FF` violetto.
 - **Luce additiva.** Raggio, bagliori e spigoli usano `BlendMode.Plus`: dove i colori si sovrappongono tornano verso il bianco, come la luce vera.
 - **Tempi legati alla musica (10,6 s):**
@@ -71,7 +73,7 @@ Testo: 22 sp semibold nei pulsanti, 20 sp corpo, 16 sp sottotitoli, 13 sp la ver
 | 5,8–8,6 s | Sei bagliori brevi |
 | 8,1 s | Il prisma si ferma esattamente nella posizione classica |
 | 8,1–10,6 s | Quiete; il bagliore all'uscita «respira» |
-| 10,6 s | Fine musica, si passa alla Home |
+| 10,15–10,6 s | La Home compare in dissolvenza mentre la musica sfuma |
 
 ### Regole da mantenere
 
@@ -83,7 +85,7 @@ Testo: 22 sp semibold nei pulsanti, 20 sp corpo, 16 sp sottotitoli, 13 sp la ver
 
 ### Miglioramenti consigliati
 
-1. **Orologio legato all'audio** (il più importante). Oggi l'animazione è un `Animatable` con `tween` di 10,6 s e la musica è un `MediaPlayer` avviato a parte: se la stick perde frame all'avvio o la musica parte in ritardo, i due possono sfasarsi di qualche decimo, proprio sul colpo a 5,3 s. Inoltre le animazioni Compose seguono l'impostazione di sistema *Scala durata animazione*: se è ridotta o disattivata, l'animazione finisce subito mentre la musica continua. Conviene calcolare il tempo dell'animazione da `MediaPlayer.currentPosition` (con un orologio di frame come riserva se l'audio non parte). Da provare sulla TV.
+1. ~~**Orologio legato all'audio**~~ (fatto in v0.1.31). Prima l'animazione è un `Animatable` con `tween` di 10,6 s e la musica è un `MediaPlayer` avviato a parte: se la stick perde frame all'avvio o la musica parte in ritardo, i due possono sfasarsi di qualche decimo, proprio sul colpo a 5,3 s. Inoltre le animazioni Compose seguono l'impostazione di sistema *Scala durata animazione*: se è ridotta o disattivata, l'animazione finisce subito mentre la musica continua. Conviene calcolare il tempo dell'animazione da `MediaPlayer.currentPosition` (con un orologio di frame come riserva se l'audio non parte). Da provare sulla TV.
 2. **Calcoli fuori dal disegno.** I percorsi del prisma e dei raggi cambiano a ogni frame, ma pennelli, colori e forme fisse si possono preparare una volta con `drawWithCache`, riducendo il lavoro per frame.
 3. **Passaggio alla Home senza stacco.** L'ultimo frame (prisma fermo, spettro aperto) può dissolversi nello sfondo della Home in circa 400 ms, con il gradiente `Accent`→`AccentAlt` che riprende i colori blu e viola dello spettro. Evitare un frame nero o un salto di luminosità.
 4. **Spettro più morbido ai lati** (da provare). Una leggera sfumatura verso il trasparente sui bordi esterni del ventaglio rende l'aspetto più ottico e meno «a strisce».
