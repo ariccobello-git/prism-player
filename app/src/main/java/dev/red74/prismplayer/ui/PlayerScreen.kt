@@ -141,7 +141,7 @@ fun PlayerScreen(
     var liveFlag by remember { mutableStateOf(false) }
     var behindLiveMs by remember { mutableLongStateOf(0L) }
     var countdown by remember { mutableIntStateOf(-1) }
-    /** Fast scan like other players: 0 normal, +2/+4/+8 faster forward, -2/-4/-8 backwards. */
+    /** Fast scan like other players: 0 normal, +2 up to +128 faster forward, -2 up to -128 backwards (see FastScan.SPEEDS). */
     var scan by remember { mutableIntStateOf(0) }
     /** Where the scan clock is while scanning by pictures (see [FastScan]), -1 otherwise. */
     var scanPosMs by remember { mutableLongStateOf(-1L) }
@@ -391,6 +391,7 @@ fun PlayerScreen(
         var lastSeekAt = last - FastScan.MAX_SEEK_WAIT_MS
         var framesAtSeek = framesShown[0]
         var lastShownAt = 0L
+        var lastTarget = -1L
         while (true) {
             val now = withFrameMillis { it }
             pos = FastScan.advance(pos, scan, now - last)
@@ -404,9 +405,12 @@ fun PlayerScreen(
                 return@LaunchedEffect
             }
             val pictureShown = framesShown[0] != framesAtSeek || player.playbackState == Player.STATE_READY
-            if (FastScan.shouldSeek(now - lastSeekAt, pictureShown)) {
+            // Jumps by whole blocks (see FastScan.blockMs): a slow answer skips blocks, the speed never drops.
+            val target = FastScan.blockTarget(pos, scan).let { if (limit != null) it.coerceAtMost(limit) else it }
+            if (target != lastTarget && FastScan.shouldSeek(now - lastSeekAt, pictureShown)) {
                 framesAtSeek = framesShown[0]
-                player.seekTo(pos)
+                player.seekTo(target)
+                lastTarget = target
                 lastSeekAt = now
             }
             if (now - lastShownAt >= 100L) {
@@ -457,7 +461,7 @@ fun PlayerScreen(
         skipToast = (if (deltaMs > 0) "+" else "-") + (kotlin.math.abs(deltaMs) / 1000)
     }
 
-    /** Each press goes one step further (2x up to 48x, see FastScan.SPEEDS), then back to normal speed. */
+    /** Each press goes one step further (2x up to 128x, see FastScan.SPEEDS), then back to normal speed. */
     fun cycleScan(direction: Int) {
         if (!player.isCurrentMediaItemSeekable) return
         scan = FastScan.next(scan, direction)
@@ -1031,7 +1035,7 @@ private fun troubleText(trouble: Availability.Trouble?, http: Int?): String? {
     }
 }
 
-/** The 2x...48x sign in the middle of the picture, with the time it has reached. */
+/** The 2x...128x sign in the middle of the picture, with the time it has reached. */
 @Composable
 private fun ScanBadge(scan: Int, time: String?, modifier: Modifier = Modifier) {
     GlassPanel(modifier, cornerRadius = 28.dp) {
