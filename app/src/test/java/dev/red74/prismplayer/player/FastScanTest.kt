@@ -39,14 +39,33 @@ class FastScanTest {
     }
 
     @Test
-    fun eachPressGoesUpToFortyEightTimesThenBackToNormal() {
+    fun eachPressGoesUpTo128TimesThenBackToNormal() {
         var speed = 0
         val seen = mutableListOf<Int>()
-        repeat(7) { speed = FastScan.next(speed, +1); seen += speed }
-        assertEquals(listOf(2, 4, 8, 12, 24, 48, 0), seen)
+        repeat(9) { speed = FastScan.next(speed, +1); seen += speed }
+        assertEquals(listOf(2, 4, 8, 12, 24, 48, 64, 128, 0), seen)
         assertEquals(-2, FastScan.next(24, -1))
         assertEquals(-12, FastScan.next(-8, -1))
-        assertEquals(0, FastScan.next(-48, -1))
+        assertEquals(-64, FastScan.next(-48, -1))
+        assertEquals(0, FastScan.next(-128, -1))
         assertEquals(2, FastScan.next(-4, +1))
+    }
+
+    @Test
+    fun blocksGrowWithTheSpeed() {
+        assertEquals(2_000L, FastScan.blockMs(4))
+        assertEquals(24_000L, FastScan.blockMs(-48))
+        assertEquals(64_000L, FastScan.blockMs(128))
+    }
+
+    @Test
+    fun picturesLandOnTheNextBlockBoundaryInTheScanDirection() {
+        // Forward: the end of the block the clock is in.
+        assertEquals(192_000L, FastScan.blockTarget(150_000L, 128))
+        assertEquals(128_000L, FastScan.blockTarget(128_000L, 128))
+        // Backwards: the start of the block.
+        assertEquals(128_000L, FastScan.blockTarget(150_000L, -128))
+        assertEquals(128_000L, FastScan.blockTarget(128_000L, -128))
+        assertEquals(0L, FastScan.blockTarget(-5L, 8))
     }
 }
