@@ -21,7 +21,14 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.red74.prismplayer.player.PreviewPlayers
+import dev.red74.prismplayer.ui.IdleCountdown
+import dev.red74.prismplayer.ui.IdleExit
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -138,6 +145,38 @@ private fun PrismNavigation(
     }
     LaunchedEffect(library.error) { if (library.error != null) UiSounds.play(UiSounds.Kind.ERROR) }
 
+    // Closing when nobody uses the app. The full-screen player (playing or paused), a preview on screen, a list
+    // loading or being checked and the pairing page all count as "in use", so the countdown never shows over a
+    // content being watched.
+    val inUse by rememberUpdatedState(
+        current is Screen.Player || current is Screen.Pair || library.loading || verifying.isNotEmpty(),
+    )
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var idleSeconds by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(Unit) {
+        IdleExit.touch()
+        try {
+            while (true) {
+                val now = android.os.SystemClock.elapsedRealtime()
+                val resumed = lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+                if (inUse || !resumed || PreviewPlayers.anyPlaying()) IdleExit.touch(now)
+                val left = IdleExit.secondsLeft(now, IdleExit.lastActivityAt)
+                if (left != null && idleSeconds == null) UiSounds.play(UiSounds.Kind.FORWARD)
+                idleSeconds = left
+                IdleExit.countingDown = left != null
+                if (left == 0) {
+                    UiSounds.enabled = false
+                    activity?.finish()
+                    break
+                }
+                kotlinx.coroutines.delay(200)
+            }
+        } finally {
+            IdleExit.countingDown = false
+        }
+    }
+
+    Box {
     AnimatedContent(
         targetState = current,
         transitionSpec = {
@@ -255,6 +294,8 @@ private fun PrismNavigation(
             }
         }
         }
+    }
+    idleSeconds?.let { IdleCountdown(it) }
     }
 }
 
