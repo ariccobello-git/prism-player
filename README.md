@@ -25,7 +25,7 @@
 - **Scorciatoie**: apre le app installate sulla TV scelte dall'utente.
 - **Aggiornamenti e codec**: controlla se c'è una release più recente dell'app e di Media3 ed elenca i decoder del dispositivo.
 - **Interfaccia per telecomando**: movimento naturale del cursore tra le sezioni, la sezione attiva in primo piano e le altre arretrate, cursore ripristinato al rientro, riconoscimento del telecomando Xiaomi. Suoni d'interfaccia leggeri e disattivabili (mai nel player). Schermo sempre acceso con l'app in primo piano.
-- **Apertura e uscita**: splash di 10,6 s con una foto reale della Via Lattea, un prisma di vetro che ruota con la musica e un raggio bianco scomposto con rifrazione reale; musica originale sintetizzata. L'ultimo Indietro dalla Home chiede conferma, poi l'app si dissolve con un jingle di chiusura.
+- **Apertura e uscita**: splash di 12 s con una foto reale della Via Lattea, un prisma di vetro che ruota in 3D con la musica e un raggio bianco scomposto con rifrazione reale, i cui colori escono dallo schermo verso chi guarda; musica originale sintetizzata. L'ultimo Indietro dalla Home chiede conferma, poi un buco nero inghiotte la scena pezzo per pezzo, si chiude in un punto di luce che resta 2 s e lascia 1,5 s di nero (9 s di musica, 10,5 s in tutto).
 - **Italiano e inglese**. Compatibile Android TV / Google TV (`leanback`, banner e launcher TV).
 
 ### Telecomando

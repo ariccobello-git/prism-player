@@ -10,7 +10,6 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.unit.IntSize
@@ -20,20 +19,10 @@ import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-/** The key light: the bright core of the galaxy, up and to the left of the prism (unit vector, y down). */
-private val Light = Offset(-0.6f, -0.8f)
-
 /** Thick glass looks green-blue where you look through it edge-on. */
 private val GlassEdge = Color(0xFF4FA59B)
 private val GlassBody = Color(0xFFCFE6F2)
 private val GlassShadow = Color(0xFF020711)
-
-private fun Offset.dot(o: Offset): Float = x * o.x + y * o.y
-
-private fun Offset.unit(): Offset {
-    val d = hypot(x, y).coerceAtLeast(1e-4f)
-    return Offset(x / d, y / d)
-}
 
 private fun polygon(points: List<Offset>): Path = Path().apply {
     moveTo(points[0].x, points[0].y)
@@ -41,7 +30,12 @@ private fun polygon(points: List<Offset>): Path = Path().apply {
     close()
 }
 
-/** Convex hull (monotone chain) of the six corners: the outline of the whole glass block on screen. */
+private fun Offset.unit(): Offset {
+    val d = hypot(x, y).coerceAtLeast(1e-4f)
+    return Offset(x / d, y / d)
+}
+
+/** Convex hull (monotone chain): the outline of the whole glass block on screen. */
 private fun hull(points: List<Offset>): List<Offset> {
     val sorted = points.sortedWith(compareBy<Offset> { it.x }.thenBy { it.y })
     fun cross(o: Offset, a: Offset, b: Offset) = (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
@@ -58,24 +52,30 @@ private fun hull(points: List<Offset>): List<Offset> {
     return lower.dropLast(1) + upper.dropLast(1)
 }
 
+/** One flat face of the glass: its corners on screen, how it faces the viewer and the light, how far it is. */
+private class Face(
+    val corners: IntArray,
+    val visible: Boolean,
+    val lit: Float,
+    val depth: Double,
+    val cap: Boolean,
+)
+
 /**
- * A solid glass prism, drawn the way a real one looks against the sky:
- * - seen slightly from above and to the left, with perspective (the far triangle is smaller);
- * - the sky behind it shows through, blurred, magnified and turned over as real glass does, and swims as it turns;
- * - each face is lit by how much it faces the light, the faces turned away fall into shadow, and the block shades
- *   the stars just behind it;
- * - one side face mirrors the sky (total internal reflection), the thick edges go green-blue, the lit edges carry a
- *   crisp highlight with a faint rainbow fringe, and the corner nearest the light sparkles with the music.
+ * A solid glass prism in real 3D ([PrismView]): two triangular ends and three long side faces, turned by [theta]
+ * around its own length while the view swings by [yaw]. Faces turned to the viewer are shaded by how much they face
+ * the light, the hidden ones show faintly through the glass, the sky behind is seen blurred and turned over through
+ * it, the face most turned to the light mirrors the sky, the edges catch the light with a faint rainbow fringe, and
+ * the corner nearest the light sparkles with the music.
  *
- * [corners] are the prism's cross-section (circumradius 1) at angle [theta], [screen] maps them on screen.
- * [glassView] is a small, soft copy of the sky used for everything seen through or reflected by the glass.
+ * [project] maps a point of the prism's frame (x, y across the section, z along the length) on screen.
  */
-internal fun DrawScope.drawGlassPrism(
-    corners: Array<PrismOptics.Vec>,
-    screen: (PrismOptics.Vec) -> Offset,
+internal fun DrawScope.drawGlassPrism3D(
+    theta: Double,
+    yaw: Double,
+    project: (Double, Double, Double) -> Offset,
     center: Offset,
     radius: Float,
-    theta: Float,
     appear: Float,
     flash: Float,
     power: Float,
@@ -85,31 +85,52 @@ internal fun DrawScope.drawGlassPrism(
     if (appear <= 0f) return
     val w = size.width
     val h = size.height
-    // The far triangle sits down and to the right of the near one and is a little smaller.
-    val shift = Offset(radius * 0.14f, radius * 0.20f)
-    val front = corners.map { screen(it) - shift * 0.5f }
-    val backRaw = corners.map { screen(it) + shift * 0.5f }
-    val backCentre = Offset(backRaw.map { it.x }.average().toFloat(), backRaw.map { it.y }.average().toFloat())
-    val back = backRaw.map { backCentre + (it - backCentre) * 0.9f }
-    val outline = polygon(hull(front + back))
-    val frontPath = polygon(front)
-    val frontCentre = Offset(front.map { it.x }.average().toFloat(), front.map { it.y }.average().toFloat())
+    val section = PrismOptics.triangle(theta)
+    val half = PrismView.HALF_LENGTH
+    // Corners 0..2 are the near end (z = -half), 3..5 the far end.
+    val local = Array(6) { k -> Triple(section[k % 3].x, section[k % 3].y, if (k < 3) -half else half) }
+    val screen = local.map { (x, y, z) -> project(x, y, z) }
+    val view = local.map { (x, y, z) -> PrismView.toView(x, y, z, yaw) }
+
+    fun face(corners: IntArray, nx: Double, ny: Double, nz: Double, cap: Boolean): Face {
+        val n = PrismView.toView(nx, ny, nz, yaw).unit()
+        val cx = corners.sumOf { view[it].x } / corners.size
+        val cy = corners.sumOf { view[it].y } / corners.size
+        val cz = corners.sumOf { view[it].z } / corners.size
+        val toFace = PrismView.V(cx, cy, cz) - PrismView.EYE
+        val lit = (0.15 + 0.85 * n.dot(PrismView.LIGHT)).coerceIn(0.0, 1.0).toFloat()
+        return Face(corners, n.dot(toFace) < 0.0, lit, cz, cap)
+    }
+
+    val faces = ArrayList<Face>(5)
+    for (i in 0 until 3) {
+        val j = (i + 1) % 3
+        // For a triangle centred on the origin the middle of each side points straight out of that side.
+        val mx = (section[i].x + section[j].x) / 2
+        val my = (section[i].y + section[j].y) / 2
+        faces += face(intArrayOf(i, j, j + 3, i + 3), mx, my, 0.0, cap = false)
+    }
+    faces += face(intArrayOf(0, 1, 2), 0.0, 0.0, -1.0, cap = true)
+    faces += face(intArrayOf(3, 4, 5), 0.0, 0.0, 1.0, cap = true)
+    fun pathOf(f: Face) = polygon(f.corners.map { screen[it] })
 
     // --- shadow: the block hides part of the glow and the stars just behind it -------------------------------------
     val shadowAt = center + Offset(radius * 0.22f, radius * 0.30f)
     drawCircle(
         Brush.radialGradient(
             listOf(Color.Black.copy(alpha = 0.55f * appear), Color.Black.copy(alpha = 0.22f * appear), Color.Transparent),
-            center = shadowAt, radius = radius * 1.7f,
+            center = shadowAt, radius = radius * 1.9f,
         ),
-        radius = radius * 1.7f, center = shadowAt,
+        radius = radius * 1.9f, center = shadowAt,
     )
 
     // --- what is seen through the glass: the sky, magnified, turned over and drifting as the prism turns ----------
+    val outline = polygon(hull(screen))
+    val lightOnScreen = Offset(PrismView.LIGHT.x.toFloat(), PrismView.LIGHT.y.toFloat()).unit()
     clipPath(outline) {
         drawPath(outline, GlassShadow.copy(alpha = 0.55f * appear))
         if (glassView != null) {
-            val drift = Offset(cos(theta * 1.3f) * radius * 0.35f, sin(theta * 0.9f) * radius * 0.25f)
+            val drift = Offset(cos(theta.toFloat() * 1.3f) * radius * 0.35f, sin(theta.toFloat() * 0.9f + yaw.toFloat()) * radius * 0.25f)
             withTransform({ scale(-1.25f, 1.25f, center + drift) }) {
                 drawImage(
                     glassView,
@@ -120,138 +141,98 @@ internal fun DrawScope.drawGlassPrism(
                 )
             }
         }
-        // the glass body: brighter towards the light, deeper towards the shadow side
         drawPath(
             outline,
             Brush.linearGradient(
                 listOf(GlassBody.copy(alpha = 0.20f * appear), GlassBody.copy(alpha = 0.04f * appear), GlassShadow.copy(alpha = 0.35f * appear)),
-                start = center + Light * radius, end = center - Light * radius,
+                start = center + lightOnScreen * radius * 1.4f, end = center - lightOnScreen * radius * 1.4f,
             ),
         )
     }
 
-    // --- far triangle and the sides behind the near face (seen through the glass, faint) --------------------------
-    drawPath(polygon(back), GlassBody.copy(alpha = 0.05f * appear))
-    val sides = (0 until 3).map { i ->
-        val j = (i + 1) % 3
-        val normal = ((front[i] + front[j]) * 0.5f - frontCentre).unit()
-        Triple(i, j, normal)
-    }
-    for ((i, j, normal) in sides) {
-        if (normal.dot(shift) > 0f) continue
-        drawLine(Color.White.copy(alpha = 0.16f * appear), back[i], back[j], 1.2.dp.toPx(), StrokeCap.Round)
-    }
+    // --- the faces turned away, seen faintly through the glass -------------------------------------------------------
+    for (f in faces.filter { !it.visible }) drawPath(pathOf(f), GlassBody.copy(alpha = 0.04f * appear))
 
-    // --- the sides we see: lit, in shadow, or mirroring the sky ------------------------------------------------------
-    val visible = sides.filter { it.third.dot(shift) > 0f }
-    val mirror = visible.maxByOrNull { it.third.dot(Light) }
-    for (side in visible) {
-        val (i, j, normal) = side
-        val quad = polygon(listOf(front[i], front[j], back[j], back[i]))
-        val lit = (0.5f + 0.5f * normal.dot(Light)).coerceIn(0f, 1f)
-        val nearEdge = (front[i] + front[j]) * 0.5f
-        val farEdge = (back[i] + back[j]) * 0.5f
-        clipPath(quad) {
-            if (side == mirror && glassView != null) {
-                val pivot = (nearEdge + farEdge) * 0.5f
-                withTransform({ scale(1.4f, -1.4f, pivot) }) {
+    // --- the faces turned to the viewer, far to near --------------------------------------------------------------------
+    val visible = faces.filter { it.visible }.sortedByDescending { it.depth }
+    val mirror = visible.filter { !it.cap }.maxByOrNull { it.lit }
+    for (f in visible) {
+        val path = pathOf(f)
+        val pts = f.corners.map { screen[it] }
+        val mid = Offset(pts.map { it.x }.average().toFloat(), pts.map { it.y }.average().toFloat())
+        clipPath(path) {
+            if (f == mirror && glassView != null) {
+                withTransform({ scale(1.4f, -1.4f, mid) }) {
                     drawImage(
                         glassView,
                         dstSize = IntSize(w.roundToInt(), h.roundToInt()),
-                        alpha = (0.25f + 0.45f * lit) * appear,
+                        alpha = (0.20f + 0.45f * f.lit) * appear,
                         filterQuality = FilterQuality.Low,
                     )
                 }
             }
-            // light falls off from the near edge to the far one; faces turned away from the light stay dark
+            // light falls off across the face, away from the light
             drawPath(
-                quad,
+                path,
                 Brush.linearGradient(
-                    listOf(
-                        GlassBody.copy(alpha = (0.06f + 0.34f * lit) * appear),
-                        GlassBody.copy(alpha = (0.02f + 0.12f * lit) * appear),
+                    listOf(GlassBody.copy(alpha = (0.06f + 0.34f * f.lit) * appear), GlassBody.copy(alpha = (0.02f + 0.10f * f.lit) * appear)),
+                    start = mid + lightOnScreen * radius, end = mid - lightOnScreen * radius,
+                ),
+            )
+            drawPath(path, GlassShadow.copy(alpha = 0.45f * (1f - f.lit) * appear))
+            if (f.cap) {
+                // seen end-on the glass is thick: a green-blue band inside every edge of the triangle
+                for (k in pts.indices) {
+                    val a = pts[k]
+                    val b = pts[(k + 1) % pts.size]
+                    drawLine(GlassEdge.copy(alpha = (0.22f + 0.14f * (1f - f.lit)) * appear), a, b, radius * 0.15f)
+                }
+            } else {
+                // a reflection that slides along the long face as the glass turns
+                val along = pts[1] - pts[0]
+                val at = 0.5f + 0.42f * sin(theta.toFloat() * 1.7f + f.corners[0])
+                drawPath(
+                    path,
+                    Brush.linearGradient(
+                        0f to Color.Transparent,
+                        (at - 0.09f).coerceIn(0f, 1f) to Color.Transparent,
+                        at.coerceIn(0f, 1f) to Color.White.copy(alpha = (0.10f + 0.32f * f.lit) * appear),
+                        (at + 0.09f).coerceIn(0f, 1f) to Color.Transparent,
+                        1f to Color.Transparent,
+                        start = pts[0], end = pts[0] + along,
                     ),
-                    start = nearEdge, end = farEdge,
-                ),
-            )
-            drawPath(quad, GlassShadow.copy(alpha = 0.45f * (1f - lit) * appear))
-            // a reflection that slides along the face as the glass turns
-            val along = (front[j] - front[i])
-            val at = 0.5f + 0.42f * sin(theta * 1.7f + i)
-            drawPath(
-                quad,
-                Brush.linearGradient(
-                    0f to Color.Transparent,
-                    (at - 0.08f).coerceIn(0f, 1f) to Color.Transparent,
-                    at.coerceIn(0f, 1f) to Color.White.copy(alpha = (0.10f + 0.30f * lit) * appear),
-                    (at + 0.08f).coerceIn(0f, 1f) to Color.Transparent,
-                    1f to Color.Transparent,
-                    start = front[i], end = front[i] + along,
-                ),
-                blendMode = BlendMode.Plus,
-            )
-        }
-        drawPath(quad, Color.White.copy(alpha = (0.06f + 0.14f * lit) * appear), style = Stroke(1.dp.toPx()))
-    }
-
-    // --- the near face ------------------------------------------------------------------------------------------------
-    val axis = Offset(cos(theta + 0.8f), sin(theta + 0.8f))
-    drawPath(
-        frontPath,
-        Brush.linearGradient(
-            listOf(
-                Color(0xFFEAF3FF).copy(alpha = 0.26f * appear),
-                Color(0xFF6C9BE0).copy(alpha = 0.06f * appear),
-                Color(0xFFBFD8FF).copy(alpha = 0.16f * appear),
-            ),
-            start = frontCentre + Light * radius, end = frontCentre - Light * radius,
-        ),
-    )
-    clipPath(frontPath) {
-        // seen edge-on the glass is thick: a green-blue band inside every edge, darker on the shadow side
-        for ((i, j, normal) in sides) {
-            val lit = (0.5f + 0.5f * normal.dot(Light)).coerceIn(0f, 1f)
-            drawLine(GlassEdge.copy(alpha = (0.18f + 0.18f * (1f - lit)) * appear), front[i], front[j], radius * 0.16f)
-            drawLine(GlassShadow.copy(alpha = 0.30f * (1f - lit) * appear), front[i], front[j], radius * 0.07f)
-        }
-        val streakAt = 0.5f + 0.30f * sin(theta * 2.3f)
-        drawRect(
-            Brush.linearGradient(
-                0f to Color.Transparent,
-                (streakAt - 0.10f) to Color.Transparent,
-                streakAt to Color.White.copy(alpha = 0.30f * appear),
-                (streakAt + 0.10f) to Color.Transparent,
-                1f to Color.Transparent,
-                start = center - axis * radius, end = center + axis * radius,
-            ),
-            blendMode = BlendMode.Plus,
-        )
-        if (power > 0f) {
+                    blendMode = BlendMode.Plus,
+                )
+            }
             // the light crossing the glass lights it from the inside
-            drawPath(frontPath, Color.White.copy(alpha = 0.10f * power), blendMode = BlendMode.Plus)
+            if (power > 0f) drawPath(path, Color.White.copy(alpha = 0.08f * power), blendMode = BlendMode.Plus)
+            if (flash > 0f) drawPath(path, Color(0xFFBFD8FF).copy(alpha = 0.10f * flash.coerceAtMost(1f)), blendMode = BlendMode.Plus)
         }
-        if (flash > 0f) drawPath(frontPath, Color(0xFFBFD8FF).copy(alpha = 0.12f * flash.coerceAtMost(1f)), blendMode = BlendMode.Plus)
     }
 
-    // --- edges: crisp highlights where the light catches them, with a faint rainbow fringe; dim on the shadow side --
+    // --- edges: crisp highlights on the outside of the block, with a faint rainbow fringe; faint where hidden -------
+    val edges = listOf(0 to 1, 1 to 2, 2 to 0, 3 to 4, 4 to 5, 5 to 3, 0 to 3, 1 to 4, 2 to 5)
     val fringe = 1.6.dp.toPx()
-    for ((i, j, normal) in sides) {
-        val lit = (0.5f + 0.5f * normal.dot(Light)).coerceIn(0f, 1f)
-        val a = front[i]
-        val b = front[j]
-        drawLine(Color(0xFFBFD8FF).copy(alpha = (0.08f + 0.26f * lit) * appear), a, b, 9.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-        drawLine(Color(0xFFFF5A6A).copy(alpha = 0.22f * lit * appear), a + normal * fringe, b + normal * fringe, 1.2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-        drawLine(Color(0xFF5F8BFF).copy(alpha = 0.26f * lit * appear), a - normal * fringe, b - normal * fringe, 1.2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-        drawLine(Color.White.copy(alpha = (0.35f + 0.65f * lit) * appear), a, b, (1.4f + 1.4f * lit).dp.toPx(), StrokeCap.Round)
-        drawLine(Color.White.copy(alpha = (0.15f + 0.30f * lit) * appear), back[i], back[j], 1.2.dp.toPx(), StrokeCap.Round)
-    }
-    for (i in 0 until 3) {
-        val lit = (0.5f + 0.5f * (front[i] - frontCentre).unit().dot(Light)).coerceIn(0f, 1f)
-        drawLine(Color.White.copy(alpha = (0.18f + 0.40f * lit) * appear), front[i], back[i], 1.3.dp.toPx(), StrokeCap.Round)
+    for ((a, b) in edges) {
+        val owners = faces.filter { f -> a in f.corners && b in f.corners }
+        val seen = owners.any { it.visible }
+        val lit = owners.filter { it.visible }.maxOfOrNull { it.lit } ?: 0f
+        val p = screen[a]
+        val q = screen[b]
+        if (!seen) {
+            drawLine(Color.White.copy(alpha = 0.14f * appear), p, q, 1.1.dp.toPx(), StrokeCap.Round)
+            continue
+        }
+        val normal = Offset(-(q.y - p.y), q.x - p.x).unit()
+        drawLine(Color(0xFFBFD8FF).copy(alpha = (0.08f + 0.24f * lit) * appear), p, q, 8.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+        drawLine(Color(0xFFFF5A6A).copy(alpha = 0.20f * lit * appear), p + normal * fringe, q + normal * fringe, 1.2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+        drawLine(Color(0xFF5F8BFF).copy(alpha = 0.24f * lit * appear), p - normal * fringe, q - normal * fringe, 1.2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+        drawLine(Color.White.copy(alpha = (0.30f + 0.65f * lit) * appear), p, q, (1.3f + 1.4f * lit).dp.toPx(), StrokeCap.Round)
     }
 
-    // --- the corner nearest the light sparkles, brighter on every beat ------------------------------------------------
-    val corner = front.maxByOrNull { (it - frontCentre).dot(Light) } ?: return
+    // --- the visible corner nearest the light sparkles, brighter on every beat ----------------------------------------
+    val seenCorners = (0 until 6).filter { k -> faces.any { it.visible && k in it.corners } }
+    val corner = seenCorners.maxByOrNull { view[it].dot(PrismView.LIGHT) }?.let { screen[it] } ?: return
     val glow = appear * (0.35f + 0.65f * maxOf(sparkle, flash.coerceAtMost(1f)))
     val ray = 26.dp.toPx() * (0.6f + 0.8f * glow)
     drawCircle(
