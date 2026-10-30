@@ -1,8 +1,8 @@
 [versions]
 # Toolchain set pinned together: AGP 8.11.x needs Gradle >= 8.13 and JDK 17, supports compileSdk 36
-# (required by Media3 1.11), and pairs with Kotlin 2.0.x (Compose compiler plugin ships with Kotlin).
+# (required by Media3 1.11), and Kotlin 2.2.x (Media3 1.11 brings kotlin-stdlib 2.2; the Compose compiler plugin ships with Kotlin).
 agp = "8.11.1"
-kotlin = "2.0.21"
+kotlin = "2.2.10"
 composeBom = "2024.12.01"
 tvMaterial = "1.0.0"
 coreKtx = "1.15.0"
