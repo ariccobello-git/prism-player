@@ -525,7 +525,9 @@ private fun GroupBrowser(
         animationSpec = tween(320), label = "mainWeight",
     )
     val subWeight by animateFloatAsState(
-        targetValue = if (level == 1) 0.68f else 0.2f,
+        // Once a sub-group is open its column only shows short labels ([S], Tutti...): keep it narrow so the
+        // channel names get the room.
+        targetValue = if (level == 1) 0.68f else 0.12f,
         animationSpec = tween(320), label = "subWeight",
     )
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -560,7 +562,7 @@ private fun GroupBrowser(
             val up = GroupTree.levelUp(2, main.hasSubLevel)
             Box(
                 Modifier
-                    .weight(if (main.hasSubLevel) 0.6f else 0.73f)
+                    .weight(if (main.hasSubLevel) 0.68f else 0.73f)
                     .fillMaxHeight()
                     .onExitFocus(androidx.compose.ui.focus.FocusDirection.Left) {
                         onNav { it.copy(level = up, resume = true) }
@@ -783,10 +785,10 @@ private fun ChannelRow(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (unavailable) UnavailableSign()
-                    PrismText(text = channel.name, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                    PrismText(text = channel.name, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 2)
                 }
+                // The programme title is shown in full under the preview: the row keeps only the progress bar.
                 nowNext.now?.let {
-                    PrismText(text = it.title, size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
                     Box(
                         Modifier
                             .fillMaxWidth()
@@ -1341,7 +1343,7 @@ private fun FavoritesView(
                 ) {
                     if (missing) UnavailableSign()
                     Poster(entry.logo, entry.title, Modifier.size(56.dp), fit = entry.channel?.type == dev.red74.prismplayer.data.ContentType.LIVE)
-                    PrismText(text = entry.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 1)
+                    PrismText(text = entry.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 2)
                 }
             }
             StarButton(
