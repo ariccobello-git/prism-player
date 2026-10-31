@@ -57,4 +57,29 @@ class ContentInfoTest {
         val plot = PanelJson.filmPlot(StringReader("""{"info":{"plot":"$long"}}"""))!!
         assertEquals(true, plot.length <= 901 && plot.endsWith("…"))
     }
+
+    @Test
+    fun seriesKeepTheirPanelId() {
+        val json = """[{"name":"Dr. House","series_id":7,"plot":"Medico geniale."},{"name":"Senza trama","series_id":"8"}]"""
+        val series = PanelJson.series(StringReader(json))
+        assertEquals("7", series[PanelJson.titleKey("Dr. House")]!!.id)
+        assertEquals("8", series[PanelJson.titleKey("Senza trama")]!!.id)
+        assertNull(series[PanelJson.titleKey("Senza trama")]!!.plot)
+        assertEquals(
+            "http://panel.example:23000/player_api.php?username=demo&password=demo-pass&action=get_series_info&series_id=7",
+            PanelAddress.seriesInfo("http://panel.example:23000/series/demo/demo-pass/301.mkv", "7"),
+        )
+        assertEquals("301", PanelAddress.streamId("http://panel.example:23000/series/demo/demo-pass/301.mkv"))
+    }
+
+    @Test
+    fun episodeDetailsAreFoundByStreamId() {
+        val json = """{"seasons":[{"name":"Stagione 1","overview":"x"}],"info":{"name":"Dr. House","plot":"Serie"},""" +
+            """"episodes":{"1":[{"id":"301","episode_num":1,"title":"Pilota","info":{"plot":"Il primo caso.","duration":"00:44:10","releasedate":"2004-11-16"}},""" +
+            """{"id":302,"episode_num":2,"info":{"duration_secs":2600,"duration":"00:43:20"}},{"id":"303","info":[]}]}}"""
+        val episodes = PanelJson.episodes(StringReader(json))
+        assertEquals(EpisodeInfo("Il primo caso.", "00:44:10", "2004-11-16"), episodes["301"])
+        assertEquals(EpisodeInfo(null, "00:43:20", null), episodes["302"])
+        assertNull(episodes["303"])
+    }
 }
