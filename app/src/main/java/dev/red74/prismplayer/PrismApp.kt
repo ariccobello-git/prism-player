@@ -3,6 +3,8 @@ package dev.red74.prismplayer
 import android.app.Application
 import android.content.Context
 import androidx.media3.common.util.Log as MediaLog
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import dev.red74.prismplayer.data.AppSettings
 import dev.red74.prismplayer.data.CatalogStore
 import dev.red74.prismplayer.data.ContentInfo
@@ -10,12 +12,14 @@ import dev.red74.prismplayer.data.KeystoreKeyProvider
 import dev.red74.prismplayer.data.ListCache
 import dev.red74.prismplayer.data.PlaylistFetcher
 import dev.red74.prismplayer.data.PlaylistStore
+import dev.red74.prismplayer.data.ProviderImages
 import dev.red74.prismplayer.data.SecureBox
 import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.pairing.PairingManager
 import java.io.File
+import okhttp3.OkHttpClient
 
-class PrismApp : Application() {
+class PrismApp : Application(), ImageLoaderFactory {
     lateinit var container: AppContainer
         private set
 
@@ -28,6 +32,10 @@ class PrismApp : Application() {
         WatchProgress.init(this)
         ContentInfo.init(this)
     }
+
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .okHttpClient { OkHttpClient.Builder().addInterceptor(ProviderImages).build() }
+        .build()
 }
 
 /** Hand-wired dependencies; small enough that a DI framework would only add weight. */

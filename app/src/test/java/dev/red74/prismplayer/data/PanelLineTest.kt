@@ -73,4 +73,12 @@ class PanelLineTest {
         assertEquals("refused", result.exceptionOrNull()?.message)
         assertEquals(1, runs)
     }
+
+    @Test
+    fun picturesOnTheProviderHostAreRecognised() {
+        ProviderHosts.noteUrl("http://Panel.Example:8080/get.php?username=demo&password=demo")
+        assertEquals(true, "panel.example" in ProviderHosts)
+        assertEquals(true, "PANEL.example" in ProviderHosts)
+        assertFalse("images.example" in ProviderHosts)
+    }
 }

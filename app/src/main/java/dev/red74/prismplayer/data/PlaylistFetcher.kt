@@ -9,7 +9,9 @@ import java.net.ConnectException
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.URI
 import java.net.UnknownHostException
+import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.GZIPInputStream
 import javax.net.ssl.SSLException
 import kotlinx.coroutines.Dispatchers
@@ -36,11 +38,14 @@ class FetchException(val kind: Kind, val httpCode: Int? = null) : IOException(ki
 object PanelLine {
     private val mutex = Mutex()
     private val streams = MutableStateFlow(0)
-    @Volatile private var open: HttpURLConnection? = null
+    @Volatile private var close: (() -> Unit)? = null
     @Volatile private var preempted = false
 
     /** True when the running request was cut by a stream: its failure must not count as a real one. */
     val cut: Boolean get() = preempted
+
+    /** True while a preview or the full-screen player is open. */
+    val streaming: Boolean get() = streams.value > 0
 
     suspend fun <T> request(block: suspend () -> T): T {
         while (true) {
@@ -57,7 +62,7 @@ object PanelLine {
                     if (!preempted) throw e
                 }
             } finally {
-                open = null
+                close = null
                 mutex.unlock()
             }
         }
@@ -65,17 +70,22 @@ object PanelLine {
 
     /** Every panel connection is announced here, so a stream that starts can close it at once. */
     fun opened(connection: HttpURLConnection) {
-        open = connection
+        ProviderHosts.note(connection.url.host)
+        opened(connection::disconnect)
+    }
+
+    fun opened(closer: () -> Unit) {
+        close = closer
         if (preempted || streams.value > 0) {
             preempted = true
-            connection.disconnect()
+            closer()
         }
     }
 
     suspend fun beginStream() {
         streams.update { it + 1 }
         preempted = true
-        open?.disconnect()
+        close?.invoke()
         // Waits for a request still running to let go of its connection.
         mutex.withLock { }
     }
@@ -83,6 +93,22 @@ object PanelLine {
     fun endStream() {
         streams.update { (it - 1).coerceAtLeast(0) }
     }
+}
+
+/**
+ * Hosts the panel has been reached at (list, guide, plots). Pictures kept on those hosts are connections to the
+ * provider too, so they take their turn on [PanelLine] (see [ProviderImages]); pictures elsewhere load freely.
+ */
+object ProviderHosts {
+    private val hosts: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    fun note(host: String?) {
+        if (!host.isNullOrEmpty()) hosts += host.lowercase()
+    }
+
+    fun noteUrl(url: String) = note(runCatching { URI(url).host }.getOrNull())
+
+    operator fun contains(host: String): Boolean = host.lowercase() in hosts
 }
 
 /** One player's share of [PanelLine]: taken before the player opens a stream, given back when it stops. Main thread. */
