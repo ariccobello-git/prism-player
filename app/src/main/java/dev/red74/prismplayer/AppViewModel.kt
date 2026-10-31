@@ -175,6 +175,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private var loadJob: Job? = null
     private var epgJob: Job? = null
+    /** The quiet download of an old copy (see [refreshInBackground]); it stops when another list opens. */
+    private var refreshJob: Job? = null
 
     private val updater = AppUpdater(application)
     private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
@@ -252,6 +254,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (_library.value.playlistId == id) {
                 loadJob?.cancel()
                 epgJob?.cancel()
+                refreshJob?.cancel()
                 _library.value = LibraryState()
                 _epg.value = EpgData.Empty
                 retireCatalogs()
@@ -328,12 +331,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _nav.update { it.copy(resume = true) }
             return
         }
+        if (!force && current.playlistId == id && current.loading && loadJob?.isActive == true) {
+            // Back and in again while the list is still downloading: the download goes on, it never starts over.
+            return
+        }
         val playlist = store.find(id) ?: return
         ProviderHosts.noteUrl(playlist.url)
 
         if (current.playlistId != id) _nav.value = LibraryNav()
         loadJob?.cancel()
         epgJob?.cancel()
+        // The old list's quiet refresh would keep the one line to the panel busy while this list waits for it.
+        refreshJob?.cancel()
         _epg.value = EpgData.Empty
         _library.value = LibraryState(playlistId = id, playlistName = playlist.name, loading = true)
         retireCatalogs()
@@ -380,7 +389,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     /** The shown copy is old: download again quietly and swap it in only if the list really changed. */
     private fun refreshInBackground(playlist: SavedPlaylist, shownCount: Int) {
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             val loaded = load(playlist, keepChannels = true)
             val parsed = loaded.parsed ?: return@launch
             if (loaded.error != null || _library.value.playlistId != playlist.id) return@launch

@@ -63,6 +63,7 @@
     <string name="player_next">Successivo</string>
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Errore di riproduzione (%1$s)</string>
+    <string name="player_retry_hint">Premi ▶ per riprovare.</string>
     <string name="player_trouble_refused">Il fornitore rifiuta questo canale (HTTP %1$s): può essere spento o con troppe connessioni aperte.</string>
     <string name="player_trouble_missing">Il fornitore non ha più questo contenuto (HTTP %1$s).</string>
     <string name="player_trouble_server">Il server del fornitore ha un problema (HTTP %1$s). Riprova più tardi.</string>

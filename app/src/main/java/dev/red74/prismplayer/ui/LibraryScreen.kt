@@ -982,15 +982,18 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
             hold.release()
         }
     }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { exo.pause() }
+    /** False while the app is in the background (Home key, standby): the preview's connection is closed then. */
+    var inFront by remember { mutableStateOf(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { inFront = false }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) { inFront = true }
 
-    LaunchedEffect(channel?.url, active) {
+    LaunchedEffect(channel?.url, active, inFront) {
         failed = false
         showing = false
         // The previous channel stops right away (its line stays held, so no list or guide request slips in).
         exo.stop()
         exo.clearMediaItems()
-        if (channel == null || !active) {
+        if (channel == null || !active || !inFront) {
             hold.release()
             return@LaunchedEffect
         }
@@ -998,6 +1001,8 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
         firstStart = false
         // Any list, guide or plot request still talking to the panel is closed before the preview connects.
         hold.acquire()
+        // The previous stream's connection must be really closed before this one opens.
+        dev.red74.prismplayer.player.StreamConnections.awaitNone()
         ProviderHosts.noteUrl(channel.url)
         exo.setPlaybackSpeed(1f)
         exo.setMediaItem(previewItem(channel.url))
