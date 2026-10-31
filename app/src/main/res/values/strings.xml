@@ -45,6 +45,8 @@
     <string name="pair_starting">Starting pairing…</string>
     <string name="pair_expired">The code has expired or is no longer valid.</string>
     <string name="pair_done">Playlist received.</string>
+    <string name="pair_linked">TV linked to iPrism.</string>
+    <string name="notice_iprism_linked">TV linked to iPrism: the TV and the iPhone never use the same list at the same time.</string>
     <string name="pair_no_network">No local network found. Connect the TV to Wi-Fi or Ethernet.</string>
     <string name="pair_failed">Could not start pairing. Try again.</string>
 

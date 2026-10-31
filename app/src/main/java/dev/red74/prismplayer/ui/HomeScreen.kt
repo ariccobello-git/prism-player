@@ -231,6 +231,7 @@ private fun noticeText(notice: Notice): String = when (notice) {
     Notice.ADDED -> stringResource(R.string.notice_added)
     Notice.REMOVED -> stringResource(R.string.notice_removed)
     Notice.PAIRED -> stringResource(R.string.notice_paired)
+    Notice.IPRISM_LINKED -> stringResource(R.string.notice_iprism_linked)
     Notice.SAVE_FAILED -> stringResource(R.string.notice_save_failed)
     Notice.DUPLICATE -> stringResource(R.string.notice_duplicate)
     Notice.VERIFY_OK -> stringResource(R.string.notice_verify_ok)

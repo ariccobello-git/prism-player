@@ -250,6 +250,7 @@ private fun PrismNavigation(
                 }
                 LaunchedEffect(pairState) {
                     if (pairState is PairUiState.Done) viewModel.postNotice(Notice.PAIRED)
+                    if (pairState is PairUiState.Linked) viewModel.postNotice(Notice.IPRISM_LINKED)
                 }
                 PairScreen(
                     state = pairState,

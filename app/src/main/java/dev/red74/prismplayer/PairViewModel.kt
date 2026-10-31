@@ -31,6 +31,9 @@ sealed interface PairUiState {
 
     data object Expired : PairUiState
     data object Done : PairUiState
+
+    /** iPrism's code arrived: the TV now shares each list's turn with iPrism (no list was added). */
+    data object Linked : PairUiState
     data object NoNetwork : PairUiState
     data object Failed : PairUiState
 }
@@ -135,7 +138,7 @@ class PairViewModel(application: Application) : AndroidViewModel(application) {
             _state.value = try {
                 withContext(Dispatchers.IO) { container.iprismLink.save(link) }
                 SharedLine.setLink(link)
-                PairUiState.Done
+                PairUiState.Linked
             } catch (e: Exception) {
                 PairUiState.Failed
             }

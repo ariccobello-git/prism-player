@@ -45,6 +45,8 @@
     <string name="pair_starting">Avvio dell\'abbinamento…</string>
     <string name="pair_expired">Il codice è scaduto o non è più valido.</string>
     <string name="pair_done">Playlist ricevuta.</string>
+    <string name="pair_linked">TV collegata a iPrism.</string>
+    <string name="notice_iprism_linked">TV collegata a iPrism: TV e iPhone non usano mai la stessa lista insieme.</string>
     <string name="pair_no_network">Nessuna rete locale trovata. Collega la TV a Wi-Fi o Ethernet.</string>
     <string name="pair_failed">Impossibile avviare l\'abbinamento. Riprova.</string>
 
