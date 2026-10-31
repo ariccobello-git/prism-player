@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
@@ -27,7 +26,7 @@ import kotlinx.coroutines.withContext
  *
  * Every answer is kept on the stick (see [ContentInfoStore]), so a page seen once opens with its plot at once, even
  * after a restart. An answer older than its age limit is still shown straight away and asked for again in the
- * background, so the next visit has the update. Only one panel request runs at a time.
+ * background, so the next visit has the update. Requests wait their turn on [PanelLine] with list downloads.
  */
 object ContentInfo {
     /** Plots of films almost never change. */
@@ -36,7 +35,7 @@ object ContentInfo {
     const val SERIES_MAX_AGE_MS = 24L * 60 * 60 * 1000
 
     private var store: ContentInfoStore? = null
-    private val network = Mutex()
+    private val network = PanelLine.mutex
     private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val refreshing = Collections.synchronizedSet(HashSet<String>())
 

@@ -14,11 +14,21 @@ import java.util.zip.GZIPInputStream
 import javax.net.ssl.SSLException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** Download failure. The message never contains the URL (it may embed credentials or tokens). */
 class FetchException(val kind: Kind, val httpCode: Int? = null) : IOException(kind.name) {
     enum class Kind { NETWORK, HTTP, TOO_LARGE, REDIRECT, TIMEOUT, DNS, REFUSED, TLS }
+}
+
+/**
+ * The one line to the IPTV panel: list downloads, guide downloads and plot requests take turns on it, so the app
+ * never holds two connections to the provider at once (many panels refuse the second one, or the whole account).
+ */
+object PanelLine {
+    val mutex = Mutex()
 }
 
 class PlaylistFetcher {
@@ -44,7 +54,7 @@ class PlaylistFetcher {
         url: String,
         agents: List<String> = HttpAgent.LIST_AGENTS,
         consume: (InputStream) -> T,
-    ): Result<T> = withContext(Dispatchers.IO) {
+    ): Result<T> = PanelLine.mutex.withLock { withContext(Dispatchers.IO) {
         var last: FetchException? = null
         // A refusal (HTTP error) is retried with the next identity; other failures use the first one twice.
         var agentIndex = 0
@@ -73,7 +83,7 @@ class PlaylistFetcher {
             delay(RETRY_DELAY_MS)
         }
         Result.failure(last ?: FetchException(FetchException.Kind.NETWORK))
-    }
+    } }
 
     private fun classify(e: Exception): FetchException.Kind = when (e) {
         is SocketTimeoutException -> FetchException.Kind.TIMEOUT
