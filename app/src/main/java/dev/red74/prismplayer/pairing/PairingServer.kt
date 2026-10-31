@@ -78,6 +78,10 @@ class PairingServer(
             onIprismLink(link)
             return html(Response.Status.OK, PairPage.linked(lang))
         }
+        // iPrism's address that could not be read is never saved as a list: the page says what arrived instead.
+        if (IprismLink.looksLikeOne(field("u"))) {
+            return html(Response.Status.BAD_REQUEST, PairPage.iprismIncomplete(code, lang, IprismLink.describe(field("u"))))
+        }
 
         // A typo in the link must not burn the code: validate first, consume only when the input is good.
         val validated = PlaylistUrl.validate(PlaylistUrl.withDefaultScheme(field("u")))

@@ -56,6 +56,14 @@ class SharedLineTest {
         assertEquals(link, IprismLink.parse(link.encode()))
         assertNull(IprismLink.parse("http://iprism.example.workers.dev/api/tv-line#abc|def"))
         assertNull(IprismLink.parse("http://panel.example/get.php?username=a&password=b"))
+        // What a phone may do to it on the way: line breaks, encoded '#' and '|'.
+        assertEquals(link, IprismLink.parse("https://iprism.example.workers.dev/api/tv-line\n#abc.access|s3cret"))
+        assertEquals(link, IprismLink.parse("https://iprism.example.workers.dev/api/tv-line%23abc.access%7Cs3cret"))
+        // Cut short: not a link, but recognised as iPrism's address so it is never saved as a list.
+        assertNull(IprismLink.parse("https://iprism.example.workers.dev/api/tv-line"))
+        assertTrue(IprismLink.looksLikeOne("https://iprism.example.workers.dev/api/tv-line"))
+        assertEquals("#: no, |: no, caratteri dopo #: 0", IprismLink.describe("https://iprism.example.workers.dev/api/tv-line"))
+        assertTrue(!IprismLink.looksLikeOne("http://panel.example/get.php?username=a&password=b"))
     }
 
     @Test

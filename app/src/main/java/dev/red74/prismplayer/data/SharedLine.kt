@@ -90,8 +90,28 @@ data class IprismLink(val endpoint: String, val clientId: String, val secret: St
     companion object {
         private val FORMAT = Regex("""^(https://[^\s#]+/api/tv-line)#([^\s|]+)\|(\S+)$""")
 
+        /**
+         * Pasting on a phone can add spaces or line breaks, and some keyboards or pages encode '#' and '|':
+         * those are undone before reading the code.
+         */
         fun parse(text: String): IprismLink? =
-            FORMAT.matchEntire(text.trim())?.destructured?.let { (e, id, secret) -> IprismLink(e, id, secret) }
+            FORMAT.matchEntire(clean(text))?.destructured?.let { (e, id, secret) -> IprismLink(e, id, secret) }
+
+        /** True when [text] is meant as iPrism's code (its address), even if it arrived incomplete. */
+        fun looksLikeOne(text: String): Boolean = "/api/tv-line" in clean(text)
+
+        /** What arrived, for the error page, without showing the key itself. */
+        fun describe(text: String): String {
+            val c = clean(text)
+            val hash = c.indexOf('#')
+            val after = if (hash < 0) "" else c.substring(hash + 1)
+            return "#: ${if (hash < 0) "no" else "sì"}, |: ${if ('|' in after) "sì" else "no"}, " +
+                "caratteri dopo #: ${after.length}"
+        }
+
+        private fun clean(text: String): String = PlaylistUrl.stripInvisible(text)
+            .replace("%23", "#").replace("%7C", "|").replace("%7c", "|")
+            .replace("\uFF03", "#").replace("\uFF5C", "|").replace("\u2223", "|").replace("\u01C0", "|")
     }
 }
 
