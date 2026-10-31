@@ -1,22 +1,50 @@
 package dev.red74.prismplayer.data
 
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class TextCleanerTest {
-    @Test
-    fun keepsLettersDigitsAccentsAndNormalPunctuation() {
-        assertEquals("Perché Tutti Amano Raymond - 2ª Stagione (HD)", TextCleaner.clean("Perché Tutti Amano Raymond - 2ª Stagione (HD)"))
-        assertEquals("Cafe\u0301 del Mar", TextCleaner.clean("Cafe\u0301 del Mar"))
-        assertEquals("Mission: Impossible 2", TextCleaner.clean("Mission: Impossible 2"))
+    @After
+    fun forgetFonts() {
+        TextCleaner.canDraw = null
     }
 
     @Test
-    fun dropsEmojiFlagsDingbatsAndBrokenEncodingMarks() {
-        assertEquals("Rai 1 HD", TextCleaner.clean("\uD83C\uDDEE\uD83C\uDDF9 Rai 1 HD"))   // flag
-        assertEquals("Sport", TextCleaner.clean("\u26BD Sport \uD83D\uDD25"))                // ball, fire
-        assertEquals("Film", TextCleaner.clean("\u2605 Film \u2605"))                          // stars
-        assertEquals("Citt Antica", TextCleaner.clean("Citt\uFFFD Antica"))
+    fun keepsLettersDigitsAccentsAndNormalPunctuation() {
+        assertEquals("Perché Tutti Amano Raymond - 2ª Stagione (HD)", TextCleaner.clean("Perché Tutti Amano Raymond - 2ª Stagione (HD)"))
+        assertEquals("Café del Mar", TextCleaner.clean("Café del Mar"))
+        assertEquals("Mission: Impossible 2", TextCleaner.clean("Mission: Impossible 2"))
+        assertEquals("Rock & Roll <3 ~ !", TextCleaner.clean("Rock & Roll <3 ~ !"))
+    }
+
+    @Test
+    fun keepsEmojiFlagsAndSymbols() {
+        assertEquals("🇮🇹 Rai 1 HD", TextCleaner.clean("🇮🇹 Rai 1 HD"))   // flag
+        assertEquals("⚽ Sport 🔥", TextCleaner.clean("⚽ Sport 🔥"))                // ball, fire
+        assertEquals("★ Film ★", TextCleaner.clean("★ Film ★"))                              // stars
+        // Joined emoji stay whole: family (joiners), keycap one, red heart (variation selector).
+        val family = "👨‍👩‍👧"
+        assertEquals("$family 1️⃣ ❤️", TextCleaner.clean("$family 1️⃣ ❤️"))
+    }
+
+    @Test
+    fun dropsBrokenEncodingMarksControlsAndPrivateIcons() {
+        assertEquals("Citt Antica", TextCleaner.clean("Citt� Antica"))
+        assertEquals("Canale", TextCleaner.clean("\u0007Cana‎le"))
+    }
+
+    @Test
+    fun symbolsTheFontsCannotDrawBecomePlainLettersOrGo() {
+        // A TV font with no "mathematical" letters, superscripts, full-width letters or the new emoji.
+        TextCleaner.canDraw = { text ->
+            val cp = text.codePointAt(0)
+            !(cp in 0x1D400..0x1D7FF || cp in 0x1D2C..0x1D6A || cp in 0xFF00..0xFFEF || cp == 0x1FAE8)
+        }
+        assertEquals("Rai HD", TextCleaner.clean("𝐑𝐚𝐢 ᴴᴰ"))
+        assertEquals("RAI", TextCleaner.clean("ＲＡＩ"))
+        assertEquals("Nuovo", TextCleaner.clean("🫨 Nuovo"))
+        assertEquals("★ Film", TextCleaner.clean("★ Film"))
     }
 
     @Test
@@ -28,25 +56,10 @@ class TextCleanerTest {
     }
 
     @Test
-    fun playlistNamesAndGroupsAreCleanedWhenParsed() {
-        val text = "#EXTM3U\n#EXTINF:-1 tvg-id=\"a\" group-title=\"\uD83C\uDDEE\uD83C\uDDF9 Italia ?\",\u2605 Canale 5 ?\nhttp://h/1\n"
+    fun playlistNamesAndGroupsKeepTheirSymbolsWhenParsed() {
+        val text = "#EXTM3U\n#EXTINF:-1 tvg-id=\"a\" group-title=\"🇮🇹 Italia ?\",★ Canale 5 ?\nhttp://h/1\n"
         val channel = M3uParser.parse(text, "http://h/list.m3u").single()
-        assertEquals("Canale 5", channel.name)
-        assertEquals("Italia", channel.group)
-    }
-
-    @Test
-    fun filmAndSeriesFlagsBecomeLetters() {
-        assertEquals("[IT] Avatar", TextCleaner.cleanName("\uD83C\uDDEE\uD83C\uDDF9 Avatar"))
-        assertEquals("Avatar [GB]", TextCleaner.cleanName("Avatar\uD83C\uDDEC\uD83C\uDDE7"))
-        val text = "#EXTM3U\n" +
-            "#EXTINF:-1,\uD83C\uDDEE\uD83C\uDDF9 Avatar\nhttp://h/movie/u/p/1.mkv\n" +
-            "#EXTINF:-1,\uD83C\uDDEC\uD83C\uDDE7 Avatar\nhttp://h/movie/u/p/2.mkv\n" +
-            "#EXTINF:-1,\uD83C\uDDEE\uD83C\uDDF9 Rai 1\nhttp://h/live/u/p/3.ts\n"
-        val parsed = M3uParser.parse(text, "http://h/list.m3u")
-        assertEquals(listOf("[IT] Avatar", "[GB] Avatar", "Rai 1"), parsed.map { it.name })
-        assertEquals(listOf("ITA"), VariantTags.of(parsed[0].name).badges)
-        assertEquals(listOf("ENG"), VariantTags.of(parsed[1].name).badges)
-        assertEquals("Avatar", VariantTags.of(parsed[1].name).title)
+        assertEquals("★ Canale 5", channel.name)
+        assertEquals("🇮🇹 Italia", channel.group)
     }
 }

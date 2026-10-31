@@ -133,7 +133,6 @@ fun HomeScreen(
                         onClick = onAddUrl,
                         modifier = Modifier.fillMaxWidth().focusMemory("add"),
                         focusRequester = firstFocus,
-                        emphasized = true,
                     )
                     GlassButton(
                         text = stringResource(R.string.action_pair),

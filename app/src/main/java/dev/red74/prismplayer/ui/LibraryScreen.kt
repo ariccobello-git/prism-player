@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -450,12 +451,31 @@ private fun MovieGrid(
     onNav: NavChange,
 ) {
     val unavailable = LocalReachability.current.unavailable
+    // Copies of the same film: in a search all of them (at most a few hundred results), in a group the ones next to
+    // each other (a group can hold tens of thousands of films, read page by page, so it is never scanned whole).
+    val searchTwins = remember(items, restorable) {
+        if (restorable) null else items.groupBy { twinKey(it) }
+    }
     ItemGrid(items.size, nav, onNav) { i ->
         val item = items[i]
         val key = FavoriteKey.of(item)
         val tags = VariantTags.of(item.name)
-        val badges = VariantTags.merge(tags.badges, groupBadges[item.group].orEmpty())
-        GridEntry(tags.title, item.logo, key in favorites, unavailable = key in unavailable, badges = badges) {
+        var badges = VariantTags.merge(tags.badges, groupBadges[item.group].orEmpty())
+        val own = twinKey(item)
+        val twins = searchTwins?.get(own)?.filter { it !== item }
+            ?: listOfNotNull(items.getOrNull(i - 1), items.getOrNull(i + 1)).filter { twinKey(it) == own }
+        if (twins.isNotEmpty()) {
+            // What is left to tell them apart without asking anything: the file type and the group.
+            val extension = fileType(item.url)
+            if (extension != null && twins.any { fileType(it.url) != extension }) badges = badges + extension
+            val group = item.group?.takeIf { it.isNotBlank() }
+            if (group != null && twins.any { it.group != item.group }) badges = badges + shortLabel(group)
+        }
+        GridEntry(
+            tags.title, item.logo, key in favorites, unavailable = key in unavailable, badges = badges,
+            facts = { ask -> if (ask) ContentInfo.filmBadges(item.url) else ContentInfo.savedFilmBadges(item.url) },
+            factsKey = item.url,
+        ) {
             onNav {
                 // From a search, Back must bring the search back (see LibraryNav.origin).
                 val from = if (restorable) null else it.copy(itemIndex = i, resume = true, origin = null)
@@ -486,6 +506,23 @@ private fun ShowGrid(
         }
     }
 }
+
+/** Two entries with this same key are copies of one content: same title once the tags are set aside. */
+private fun twinKey(channel: Channel): String = dev.red74.prismplayer.data.PanelJson.titleKey(VariantTags.of(channel.name).title)
+
+/** "MKV", "MP4"... from the end of a film's address, or null. */
+private fun fileType(url: String): String? {
+    val path = url.substringBefore('?').substringAfterLast('/')
+    val dot = path.lastIndexOf('.')
+    if (dot < 0) return null
+    return path.substring(dot + 1).uppercase().takeIf { it.length in 2..4 && it.all { c -> c.isLetterOrDigit() } }
+}
+
+/** A group name short enough for a poster badge. */
+private fun shortLabel(text: String): String = if (text.length <= 14) text else text.take(13).trimEnd() + "…"
+
+/** How long the cursor rests on a poster before its real quality is asked of the panel. */
+private const val FACTS_DWELL_MS = 900L
 
 /** The tags of a channel's group that its name (always shown whole) does not already carry. */
 private fun groupOnlyBadges(name: String, group: List<String>?): List<String> {
@@ -1049,6 +1086,12 @@ private class GridEntry(
     val unavailable: Boolean = false,
     /** Language and quality tags (see [VariantTags]), drawn on the poster; the [title] no longer carries them. */
     val badges: List<String> = emptyList(),
+    /**
+     * What the panel measured on the file (resolution, audio language), for films: `false` reads only what is
+     * saved, `true` asks the panel if needed. Asked when the cursor rests on the poster for a moment.
+     */
+    val facts: (suspend (ask: Boolean) -> List<String>)? = null,
+    val factsKey: String? = null,
     val onClick: () -> Unit,
 )
 
@@ -1064,6 +1107,7 @@ private fun ItemGrid(
     val target = nav.itemIndex.coerceIn(0, (total - 1).coerceAtLeast(0))
     val sortAtStart = remember { nav.sort }
     LaunchedEffect(nav.sort) { if (nav.sort != sortAtStart) gridState.scrollToItem(0) }
+    var focusedIndex by remember { mutableIntStateOf(-1) }
 
     LaunchedEffect(nav.resume) {
         if (nav.resume) {
@@ -1085,8 +1129,23 @@ private fun ItemGrid(
         ) {
             items(total, key = { it }) { index ->
                 val item = entry(index)
+                var measured by remember(item.factsKey) { mutableStateOf(emptyList<String>()) }
+                val facts = item.facts
+                if (facts != null) {
+                    LaunchedEffect(item.factsKey) { measured = facts(false) }
+                    // Only the poster that gains or loses the cursor recomposes, not the whole grid.
+                    val focused by remember(index) { derivedStateOf { focusedIndex == index } }
+                    if (focused && measured.isEmpty()) {
+                        LaunchedEffect(item.factsKey) {
+                            delay(FACTS_DWELL_MS)
+                            measured = facts(true)
+                        }
+                    }
+                }
+                val badges = if (measured.isEmpty()) item.badges else VariantTags.withFacts(measured, item.badges)
                 GlassSurface(
                     onClick = item.onClick,
+                    onFocused = { focusedIndex = index },
                     focusRequester = if (index == target) itemFocus else null,
                     tint = if (item.favorite) PrismColors.Favorite else null,
                     contentPadding = PaddingValues(6.dp),
@@ -1097,7 +1156,7 @@ private fun ItemGrid(
                     ) {
                         Box {
                             Poster(item.logo, item.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
-                            Badges(item.badges, Modifier.align(Alignment.BottomStart).padding(4.dp), compact = true, max = 4)
+                            Badges(badges, Modifier.align(Alignment.BottomStart).padding(4.dp), compact = true, max = 4)
                             if (item.unavailable) UnavailableSign(Modifier.align(Alignment.TopEnd).padding(6.dp), size = 26)
                         }
                         PrismText(text = item.title, size = 15.sp, maxLines = 2)
