@@ -8,14 +8,12 @@ import coil.ImageLoaderFactory
 import dev.red74.prismplayer.data.AppSettings
 import dev.red74.prismplayer.data.CatalogStore
 import dev.red74.prismplayer.data.ContentInfo
-import dev.red74.prismplayer.data.IprismLinkStore
 import dev.red74.prismplayer.data.KeystoreKeyProvider
 import dev.red74.prismplayer.data.ListCache
 import dev.red74.prismplayer.data.PlaylistFetcher
 import dev.red74.prismplayer.data.PlaylistStore
 import dev.red74.prismplayer.data.ProviderImages
 import dev.red74.prismplayer.data.SecureBox
-import dev.red74.prismplayer.data.SharedLine
 import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.pairing.PairingManager
 import java.io.File
@@ -33,9 +31,6 @@ class PrismApp : Application(), ImageLoaderFactory {
         container = AppContainer(this)
         WatchProgress.init(this)
         ContentInfo.init(this)
-        val link = container.iprismLink
-        SharedLine.loader = link::load
-        SharedLine.checkInBackground() // at every start: is the TV still linked to iPrism?
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
@@ -58,7 +53,5 @@ class AppContainer(context: Context) {
     val catalogStore = CatalogStore(File(context.noBackupFilesDir, "lists"), keys::getOrCreateKey)
     val fetcher = PlaylistFetcher()
     val pairingManager = PairingManager()
-    /** The TV's key to iPrism's shared list semaphore (see [SharedLine]), pasted from the owner's iPrism page. */
-    val iprismLink = IprismLinkStore(File(context.noBackupFilesDir, "iprism.bin"), SecureBox(keys::getOrCreateKey))
     val settings = AppSettings(context)
 }

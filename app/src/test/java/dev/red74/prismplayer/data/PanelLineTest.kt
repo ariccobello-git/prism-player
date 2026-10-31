@@ -16,7 +16,7 @@ class PanelLineTest {
     @Test
     fun aRequestWaitsWhileAStreamIsOpen() = runBlocking(Dispatchers.Default) {
         PanelLine.beginStream()
-        val job = async { PanelLine.request(null) { "done" } }
+        val job = async { PanelLine.request { "done" } }
         delay(100)
         assertFalse(job.isCompleted)
         PanelLine.endStream()
@@ -28,7 +28,7 @@ class PanelLineTest {
         var runs = 0
         val started = CompletableDeferred<Unit>()
         val job = async {
-            PanelLine.request(null) {
+            PanelLine.request {
                 runs++
                 started.complete(Unit)
                 if (runs == 1) {
@@ -54,7 +54,7 @@ class PanelLineTest {
         var most = 0
         val jobs = List(8) {
             async {
-                PanelLine.request(null) {
+                PanelLine.request {
                     inside++
                     most = maxOf(most, inside)
                     delay(10)
@@ -69,7 +69,7 @@ class PanelLineTest {
     @Test
     fun aRealFailureIsReportedNotRetried() = runBlocking(Dispatchers.Default) {
         var runs = 0
-        val result = runCatching { PanelLine.request(null) { runs++; throw IOException("refused") } }
+        val result = runCatching { PanelLine.request { runs++; throw IOException("refused") } }
         assertEquals("refused", result.exceptionOrNull()?.message)
         assertEquals(1, runs)
     }

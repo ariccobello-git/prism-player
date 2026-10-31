@@ -47,25 +47,14 @@ object PanelLine {
     /** True while a preview or the full-screen player is open. */
     val streaming: Boolean get() = streams.value > 0
 
-    init {
-        // iPrism took the list after this app lost its turn: the request running must stop now.
-        SharedLine.onLost {
-            preempted = true
-            close?.invoke()
-        }
-    }
-
-    /** [lineKey]: the list's key on the semaphore shared with iPrism (see [SharedLine], [LineKey]). */
-    suspend fun <T> request(lineKey: String?, block: suspend () -> T): T {
+    suspend fun <T> request(block: suspend () -> T): T {
         while (true) {
             streams.first { it == 0 }
             mutex.lock()
-            var shared = false
             try {
                 if (streams.value != 0) continue
                 preempted = false
                 try {
-                    shared = SharedLine.take(lineKey) { preempted }
                     return block()
                 } catch (e: CancellationException) {
                     throw e
@@ -74,7 +63,6 @@ object PanelLine {
                 }
             } finally {
                 close = null
-                if (shared) SharedLine.release(lineKey)
                 mutex.unlock()
             }
         }
@@ -82,7 +70,7 @@ object PanelLine {
 
     /** Every panel connection is announced here, so a stream that starts can close it at once. */
     fun opened(connection: HttpURLConnection) {
-        ProviderHosts.noteUrl(connection.url.toString())
+        ProviderHosts.note(connection.url.host)
         opened(connection::disconnect)
     }
 
@@ -112,50 +100,30 @@ object PanelLine {
  * provider too, so they take their turn on [PanelLine] (see [ProviderImages]); pictures elsewhere load freely.
  */
 object ProviderHosts {
-    /** Host to the key of the list (account) last seen there, or "" when none was seen yet. */
-    private val hosts = ConcurrentHashMap<String, String>()
+    private val hosts: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    fun noteUrl(url: String) {
-        val host = runCatching { URI(url).host }.getOrNull()?.lowercase() ?: return
-        val account = LineKey.account(url)
-        if (account != null) hosts[host] = account else hosts.putIfAbsent(host, "")
+    fun note(host: String?) {
+        if (!host.isNullOrEmpty()) hosts += host.lowercase()
     }
 
-    operator fun contains(host: String): Boolean = hosts.containsKey(host.lowercase())
+    fun noteUrl(url: String) = note(runCatching { URI(url).host }.getOrNull())
 
-    /** The list a picture on [host] belongs to, for the semaphore shared with iPrism. */
-    fun lineKey(host: String): String? {
-        val account = hosts[host.lowercase()] ?: return null
-        return account.ifEmpty { LineKey.of("http://${host.lowercase()}/") }
-    }
+    operator fun contains(host: String): Boolean = host.lowercase() in hosts
 }
 
 /** One player's share of [PanelLine]: taken before the player opens a stream, given back when it stops. Main thread. */
 class StreamHold {
     private var held = false
-    private var shared = false
-    private var key: String? = null
 
-    /** Before the player connects to [url]: the panel line here, then the list's turn shared with iPrism. */
-    suspend fun acquire(url: String) {
-        val wanted = LineKey.of(url)
-        if (held && wanted == key) return
-        if (!held) {
-            held = true
-            PanelLine.beginStream()
-        }
-        if (shared) SharedLine.release(key)
-        shared = false
-        key = wanted
-        shared = SharedLine.take(wanted)
+    suspend fun acquire() {
+        if (held) return
+        held = true
+        PanelLine.beginStream()
     }
 
     fun release() {
         if (!held) return
         held = false
-        if (shared) SharedLine.release(key)
-        shared = false
-        key = null
         PanelLine.endStream()
     }
 }
@@ -183,7 +151,7 @@ class PlaylistFetcher {
         url: String,
         agents: List<String> = HttpAgent.LIST_AGENTS,
         consume: (InputStream) -> T,
-    ): Result<T> = PanelLine.request(LineKey.of(url)) { withContext(Dispatchers.IO) {
+    ): Result<T> = PanelLine.request { withContext(Dispatchers.IO) {
         var last: FetchException? = null
         // A refusal (HTTP error) is retried with the next identity; other failures use the first one twice.
         var agentIndex = 0

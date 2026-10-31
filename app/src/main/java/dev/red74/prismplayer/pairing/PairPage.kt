@@ -59,29 +59,6 @@ internal object PairPage {
         """.trimIndent(),
     )
 
-    fun iprismIncomplete(code: String, lang: Lang, detail: String): String = layout(
-        lang,
-        title = t(lang, "Codice di iPrism incompleto", "iPrism code incomplete"),
-        body = """
-            <h1>${t(lang, "Codice di iPrism incompleto", "iPrism code incomplete")}</h1>
-            <p>${t(lang, "La TV ha ricevuto l'indirizzo di iPrism ma non tutto il codice. In iPrism tocca di nuovo «Copia il codice» e incollalo qui, senza modificarlo.", "The TV got iPrism's address but not the whole code. In iPrism tap \"Copy the code\" again and paste it here unchanged.")}</p>
-            <p class="note">${esc(detail)}</p>
-            <form method="get" action="/pair">
-              <input type="hidden" name="c" value="${esc(code)}">
-              <button type="submit">${t(lang, "Riprova", "Try again")}</button>
-            </form>
-        """.trimIndent(),
-    )
-
-    fun linked(lang: Lang): String = layout(
-        lang,
-        title = t(lang, "TV collegata a iPrism", "TV linked to iPrism"),
-        body = """
-            <h1>${t(lang, "TV collegata a iPrism", "TV linked to iPrism")}</h1>
-            <p>${t(lang, "Da ora TV e iPhone non usano mai la stessa lista nello stesso momento. Questo codice non è più valido.", "From now on the TV and the iPhone never use the same list at the same time. This code is no longer valid.")}</p>
-        """.trimIndent(),
-    )
-
     fun success(lang: Lang): String = layout(
         lang,
         title = t(lang, "Fatto", "Done"),

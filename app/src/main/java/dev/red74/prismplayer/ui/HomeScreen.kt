@@ -1,6 +1,5 @@
 package dev.red74.prismplayer.ui
 
-import dev.red74.prismplayer.data.SharedLine
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -51,7 +50,6 @@ fun HomeScreen(
     playlists: List<SavedPlaylist>,
     verifying: Set<String>,
     notice: Notice?,
-    iprism: SharedLine.LinkStatus,
     onOpen: (String) -> Unit,
     onVerify: (String) -> Unit,
     onVerifyAll: () -> Unit,
@@ -114,7 +112,6 @@ fun HomeScreen(
                         size = 18.sp,
                         color = PrismColors.TextSecondary,
                     )
-                    IprismLinkLine(iprism)
                     Spacer(Modifier.height(20.dp))
                     GlassButton(
                         text = stringResource(R.string.action_add_url),
@@ -234,7 +231,6 @@ private fun noticeText(notice: Notice): String = when (notice) {
     Notice.ADDED -> stringResource(R.string.notice_added)
     Notice.REMOVED -> stringResource(R.string.notice_removed)
     Notice.PAIRED -> stringResource(R.string.notice_paired)
-    Notice.IPRISM_LINKED -> stringResource(R.string.notice_iprism_linked)
     Notice.SAVE_FAILED -> stringResource(R.string.notice_save_failed)
     Notice.DUPLICATE -> stringResource(R.string.notice_duplicate)
     Notice.VERIFY_OK -> stringResource(R.string.notice_verify_ok)
@@ -318,17 +314,4 @@ private fun PlaylistRow(
             )
         }
     }
-}
-
-/** Always on the first page: whether the TV shares each list's turn with iPrism, as checked at start. */
-@Composable
-private fun IprismLinkLine(status: SharedLine.LinkStatus) {
-    val (text, color) = when (status) {
-        SharedLine.LinkStatus.OK -> stringResource(R.string.iprism_link_ok) to PrismColors.Ok
-        SharedLine.LinkStatus.CHECKING -> stringResource(R.string.iprism_link_checking) to PrismColors.TextSecondary
-        SharedLine.LinkStatus.REFUSED -> stringResource(R.string.iprism_link_refused) to PrismColors.Danger
-        SharedLine.LinkStatus.UNREACHABLE -> stringResource(R.string.iprism_link_unreachable) to PrismColors.Warn
-        SharedLine.LinkStatus.NONE -> stringResource(R.string.iprism_link_none) to PrismColors.TextSecondary
-    }
-    PrismText(text = "\u25CF  $text", size = 18.sp, color = color)
 }
