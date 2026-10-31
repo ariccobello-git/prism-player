@@ -1,21 +1,29 @@
 package dev.red74.prismplayer.data
 
+import java.text.Normalizer
+import java.util.concurrent.ConcurrentHashMap
+
 /**
- * Makes titles and descriptions from a playlist or guide safe to show on a TV: symbols the screen font cannot draw
- * (emoji, flags, dingbats, broken-encoding marks) would appear as boxes or question marks, so they are dropped and
- * only the readable text is kept. Question marks are removed as well, because that is how those symbols usually
- * end up after a bad conversion.
+ * Makes titles and descriptions from a playlist or guide safe to show on a TV without losing what they say.
+ *
+ * Every character the screen can draw is kept: letters of any alphabet, emoji, flags, stars, arrows and other
+ * symbols the lists use. A character the TV's fonts cannot draw (it would show as an empty box or a mark in
+ * place of the symbol) is first turned into its plain form when it has one ("𝐑𝐚𝐢 ᴴᴰ" becomes "Rai HD",
+ * full-width letters become normal ones) and dropped only when it has none. Question marks are removed, because
+ * that is how symbols usually end up after a bad conversion of the list.
  */
 object TextCleaner {
     /**
-     * Like [clean], but a country flag becomes its two letters in brackets ("🇮🇹 Avatar" is "[IT] Avatar"): in film
-     * and series names a flag is often the only sign of the language (see [VariantTags]).
+     * Whether the screen fonts can draw a character, set by the app at start (Android's Paint.hasGlyph). Left
+     * null (unit tests, or before start) every character is taken as drawable.
      */
-    fun cleanName(text: String?): String = clean(text, flags = true)
+    @Volatile
+    var canDraw: ((String) -> Boolean)? = null
 
-    fun clean(text: String?): String = clean(text, flags = false)
+    /** Answers of [canDraw] per character: a list repeats the same few symbols thousands of times. */
+    private val drawable = ConcurrentHashMap<Int, Boolean>()
 
-    private fun clean(text: String?, flags: Boolean): String {
+    fun clean(text: String?): String {
         if (text.isNullOrEmpty()) return ""
         val out = StringBuilder(text.length)
         var lastWasSpace = true
@@ -25,22 +33,25 @@ object TextCleaner {
             index += Character.charCount(codePoint)
             when {
                 codePoint == '?'.code || codePoint == 0xFFFD -> Unit
-                flags && isRegional(codePoint) && index < text.length && isRegional(text.codePointAt(index)) -> {
-                    val second = text.codePointAt(index)
-                    index += Character.charCount(second)
-                    if (!lastWasSpace) out.append(' ')
-                    out.append('[').append('A' + (codePoint - REGIONAL_A)).append('A' + (second - REGIONAL_A)).append("] ")
-                    lastWasSpace = true
-                }
                 Character.isWhitespace(codePoint) || Character.isSpaceChar(codePoint) -> {
                     if (!lastWasSpace) out.append(' ')
                     lastWasSpace = true
                 }
-                keep(codePoint) -> {
+                isJoiner(codePoint) -> out.appendCodePoint(codePoint)
+                !isVisible(codePoint) -> Unit
+                // Latin letters, digits and the usual signs: every TV font has them.
+                codePoint < 0x250 -> {
                     out.appendCodePoint(codePoint)
                     lastWasSpace = false
                 }
-                else -> Unit
+                isRegional(codePoint) || draws(codePoint) -> {
+                    out.appendCodePoint(codePoint)
+                    lastWasSpace = false
+                }
+                else -> plainForm(codePoint)?.let {
+                    out.append(it)
+                    lastWasSpace = false
+                }
             }
         }
         return out.toString().trim()
@@ -48,23 +59,38 @@ object TextCleaner {
 
     fun cleanOrNull(text: String?): String? = clean(text).ifEmpty { null }
 
-    fun cleanNameOrNull(text: String?): String? = cleanName(text).ifEmpty { null }
+    private fun draws(codePoint: Int): Boolean {
+        val check = canDraw ?: return true
+        return drawable.getOrPut(codePoint) { runCatching { check(String(Character.toChars(codePoint))) }.getOrDefault(true) }
+    }
+
+    /** "𝐑" is "R", "ᴴ" is "H", "Ｒ" is "R": the same letter in a form every font has. Null when there is none. */
+    private fun plainForm(codePoint: Int): String? {
+        val original = String(Character.toChars(codePoint))
+        val plain = Normalizer.normalize(original, Normalizer.Form.NFKC)
+        if (plain == original || plain.isBlank()) return null
+        var i = 0
+        while (i < plain.length) {
+            val cp = plain.codePointAt(i)
+            i += Character.charCount(cp)
+            if (cp >= 0x250 && !draws(cp)) return null
+        }
+        return plain
+    }
+
+    /**
+     * Invisible pieces that build one emoji out of several: the joiner (family, professions), the variation
+     * selectors (colour or text form), the keycap frame (1️⃣), the tag letters of the Scotland and Wales flags.
+     */
+    private fun isJoiner(codePoint: Int): Boolean =
+        codePoint == 0x200D || codePoint in 0xFE00..0xFE0F || codePoint == 0x20E3 || codePoint in 0xE0020..0xE007F
+
+    /** Control characters, private-use icons and unassigned codes never draw anything readable. */
+    private fun isVisible(codePoint: Int): Boolean = when (Character.getType(codePoint).toByte()) {
+        Character.CONTROL, Character.FORMAT, Character.PRIVATE_USE, Character.SURROGATE, Character.UNASSIGNED -> false
+        else -> true
+    }
 
     /** Regional indicator letters: a pair of them is drawn as a flag. */
-    private const val REGIONAL_A = 0x1F1E6
-    private fun isRegional(codePoint: Int): Boolean = codePoint in REGIONAL_A..(REGIONAL_A + 25)
-
-    private fun keep(codePoint: Int): Boolean {
-        if (Character.isLetterOrDigit(codePoint)) return true
-        // Combining accents belong to the letter they follow.
-        return when (Character.getType(codePoint).toByte()) {
-            Character.NON_SPACING_MARK, Character.COMBINING_SPACING_MARK -> true
-            Character.CONNECTOR_PUNCTUATION, Character.DASH_PUNCTUATION,
-            Character.START_PUNCTUATION, Character.END_PUNCTUATION,
-            Character.INITIAL_QUOTE_PUNCTUATION, Character.FINAL_QUOTE_PUNCTUATION,
-            Character.OTHER_PUNCTUATION, Character.CURRENCY_SYMBOL -> true
-            Character.MATH_SYMBOL -> codePoint == '+'.code || codePoint == '='.code || codePoint == '|'.code
-            else -> false
-        }
-    }
+    private fun isRegional(codePoint: Int): Boolean = codePoint in 0x1F1E6..0x1F1FF
 }

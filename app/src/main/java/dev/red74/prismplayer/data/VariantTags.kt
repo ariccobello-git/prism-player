@@ -130,6 +130,9 @@ object VariantTags {
         return merge(facts, kept)
     }
 
+    /** True for picture and sound badges (4K, HEVC, HDR, 5.1...), which the screens colour differently. */
+    fun isQuality(badge: String): Boolean = rank(badge) in 2..5 || badge == "3D" || badge == "CAM" || badge.endsWith(" FPS")
+
     /** True for the badges that name a language, which the screens colour differently. */
     fun isLanguage(badge: String): Boolean = badge in LANGUAGE_LABELS
 

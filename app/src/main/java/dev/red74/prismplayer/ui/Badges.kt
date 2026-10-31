@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.red74.prismplayer.data.VariantTags
 
-/** Language badges are blue, picture and sound badges amber, so the two kinds read apart at a glance. */
+/** Language badges are blue, picture and sound badges amber, the rest (file type, group) grey. */
 private val LanguageColor = Color(0xFFB9C8FF)
 private val QualityColor = Color(0xFFFFD27A)
 
@@ -38,7 +38,11 @@ fun Badges(badges: List<String>, modifier: Modifier = Modifier, compact: Boolean
                     text = badge,
                     size = if (compact) 11.sp else 14.sp,
                     weight = FontWeight.Bold,
-                    color = if (VariantTags.isLanguage(badge)) LanguageColor else QualityColor,
+                    color = when {
+                        VariantTags.isLanguage(badge) -> LanguageColor
+                        VariantTags.isQuality(badge) -> QualityColor
+                        else -> PrismColors.TextSecondary
+                    },
                     maxLines = 1,
                 )
             }
