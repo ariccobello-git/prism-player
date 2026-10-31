@@ -1,14 +1,20 @@
 package dev.red74.prismplayer.data
 
+import android.content.Context
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.Reader
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import java.util.Collections
 import java.util.zip.GZIPInputStream
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -17,22 +23,39 @@ import kotlinx.coroutines.withContext
  * The plot of a film or series, asked of the IPTV panel only when its page is opened (playlists almost never carry
  * one). Works with Xtream-style panels, whose stream addresses are `/movie/<user>/<password>/<id>.<ext>` and
  * `/series/<user>/<password>/<id>.<ext>`: a film is asked for by its id; series are listed once per panel and
- * matched by title. The answers stay in memory only. Null means "no description".
+ * matched by title. Null means "no description".
+ *
+ * Every answer is kept on the stick (see [ContentInfoStore]), so a page seen once opens with its plot at once, even
+ * after a restart. An answer older than its age limit is still shown straight away and asked for again in the
+ * background, so the next visit has the update. Only one panel request runs at a time.
  */
 object ContentInfo {
-    private val films = HashMap<String, String?>()
-    private val seriesLists = HashMap<String, Map<String, PanelJson.SeriesEntry>>()
-    private val seriesEpisodes = HashMap<String, Map<String, EpisodeInfo>>()
-    private val lock = Mutex()
+    /** Plots of films almost never change. */
+    const val FILM_MAX_AGE_MS = 30L * 24 * 60 * 60 * 1000
+    /** New series and new episodes appear every day. */
+    const val SERIES_MAX_AGE_MS = 24L * 60 * 60 * 1000
+
+    private var store: ContentInfoStore? = null
+    private val network = Mutex()
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val refreshing = Collections.synchronizedSet(HashSet<String>())
+
+    fun init(context: Context) {
+        if (store == null) store = ContentInfoStore(File(context.applicationContext.noBackupFilesDir, "content_info.db"))
+    }
 
     suspend fun filmPlot(streamUrl: String): String? {
         val address = PanelAddress.vodInfo(streamUrl) ?: return null
-        lock.withLock { if (films.containsKey(streamUrl)) return films[streamUrl] }
+        val key = InfoKeys.film(streamUrl)
+        val saved = read(key)
+        if (saved != null) {
+            if (InfoKeys.isStale(saved.savedAt, System.currentTimeMillis(), FILM_MAX_AGE_MS)) {
+                refreshLater(key) { fetchFilm(address, key) }
+            }
+            return saved.a
+        }
         // A failed request is not remembered, so the next visit asks again.
-        val answer = withContext(Dispatchers.IO) { runCatching { request(address) { PanelJson.filmPlot(it) } } }
-        val plot = answer.getOrNull()
-        if (answer.isSuccess) lock.withLock { films[streamUrl] = plot }
-        return plot
+        return fetchFilm(address, key)?.a
     }
 
     suspend fun seriesPlot(episodeUrl: String?, title: String): String? =
@@ -43,22 +66,72 @@ object ContentInfo {
         val seriesId = seriesEntry(episodeUrl, title)?.id ?: return null
         val address = PanelAddress.seriesInfo(episodeUrl, seriesId) ?: return null
         val episodeId = PanelAddress.streamId(episodeUrl) ?: return null
-        val episodes = lock.withLock {
-            seriesEpisodes[address] ?: withContext(Dispatchers.IO) {
-                runCatching { request(address) { PanelJson.episodes(it) } }.getOrNull()
-            }?.also { seriesEpisodes[address] = it }
-        } ?: return null
-        return episodes[episodeId]
+        val group = InfoKeys.episodes(address)
+        if (!ensureGroup(group) { fetchEpisodes(address, group) }) return null
+        val row = read(InfoKeys.row(group, episodeId)) ?: return null
+        return EpisodeInfo(row.a, row.b, row.c)
     }
 
     private suspend fun seriesEntry(episodeUrl: String?, title: String): PanelJson.SeriesEntry? {
         val address = episodeUrl?.let { PanelAddress.seriesList(it) } ?: return null
-        val entries = lock.withLock {
-            seriesLists[address] ?: withContext(Dispatchers.IO) {
-                runCatching { request(address) { PanelJson.series(it) } }.getOrNull()
-            }?.also { seriesLists[address] = it }
-        } ?: return null
-        return entries[PanelJson.titleKey(title)]
+        val group = InfoKeys.seriesList(address)
+        if (!ensureGroup(group) { fetchSeries(address, group) }) return null
+        val row = read(InfoKeys.row(group, PanelJson.titleKey(title))) ?: return null
+        return PanelJson.SeriesEntry(row.a, row.b)
+    }
+
+    /** True when the group is on the stick (asking the panel first if it never was); a stale one is renewed later. */
+    private suspend fun ensureGroup(group: String, fetch: suspend () -> Boolean): Boolean {
+        val marker = read(group) ?: return fetch()
+        if (InfoKeys.isStale(marker.savedAt, System.currentTimeMillis(), SERIES_MAX_AGE_MS)) refreshLater(group) { fetch() }
+        return true
+    }
+
+    private suspend fun fetchFilm(address: String, key: String): ContentInfoStore.Row? = network.withLock {
+        withContext(Dispatchers.IO) {
+            val answer = runCatching { request(address) { PanelJson.filmPlot(it) } }
+            if (answer.isFailure) return@withContext null
+            // "No plot" is saved too, so a film without one does not ask the panel on every visit.
+            val row = ContentInfoStore.Row(answer.getOrNull(), null, null, System.currentTimeMillis())
+            runCatching { store?.put(key, row) }
+            row
+        }
+    }
+
+    private suspend fun fetchSeries(address: String, group: String): Boolean = network.withLock {
+        withContext(Dispatchers.IO) {
+            if (isFresh(group)) return@withContext true
+            val entries = runCatching { request(address) { PanelJson.series(it) } }.getOrNull() ?: return@withContext false
+            runCatching { store?.replaceGroup(group, entries.mapValues { (_, e) -> ContentInfoStore.Row(e.id, e.plot, null, 0) }) }.isSuccess
+        }
+    }
+
+    private suspend fun fetchEpisodes(address: String, group: String): Boolean = network.withLock {
+        withContext(Dispatchers.IO) {
+            if (isFresh(group)) return@withContext true
+            val episodes = runCatching { request(address) { PanelJson.episodes(it) } }.getOrNull() ?: return@withContext false
+            runCatching { store?.replaceGroup(group, episodes.mapValues { (_, e) -> ContentInfoStore.Row(e.plot, e.duration, e.released, 0) }) }.isSuccess
+        }
+    }
+
+    /** Another request may have filled the group while this one waited for its turn. */
+    private fun isFresh(group: String): Boolean {
+        val marker = runCatching { store?.get(group) }.getOrNull() ?: return false
+        return !InfoKeys.isStale(marker.savedAt, System.currentTimeMillis(), SERIES_MAX_AGE_MS)
+    }
+
+    private suspend fun read(key: String): ContentInfoStore.Row? =
+        withContext(Dispatchers.IO) { runCatching { store?.get(key) }.getOrNull() }
+
+    private fun refreshLater(key: String, work: suspend () -> Unit) {
+        if (!refreshing.add(key)) return
+        background.launch {
+            try {
+                work()
+            } finally {
+                refreshing.remove(key)
+            }
+        }
     }
 
     private fun <T> request(address: String, read: (Reader) -> T): T {
@@ -94,6 +167,24 @@ object ContentInfo {
     }
 
     private val AGENTS = listOf(HttpAgent.LIST_AGENTS[0], "okhttp/4.12.0", "IPTVSmartersPro")
+}
+
+/**
+ * Keys of the saved answers. Addresses carry the list's credentials, so only their hashes (see [FavoriteKey]) are
+ * used: `f:<film>`, a group marker `S:<series list>` or `E:<one series' episodes>` holding the time it was saved,
+ * and the group's rows under `<marker>:<title or episode id>`.
+ */
+object InfoKeys {
+    fun film(streamUrl: String): String = "f:" + FavoriteKey.ofUrl(streamUrl)
+    fun seriesList(address: String): String = "S:" + FavoriteKey.ofUrl(address)
+    fun episodes(address: String): String = "E:" + FavoriteKey.ofUrl(address)
+    fun row(group: String, item: String): String = "$group:$item"
+
+    /** The first key after every row of [group]: rows are `group:` + anything, and ';' follows ':'. */
+    fun groupEnd(group: String): String = "$group;"
+
+    /** Too old, or saved "in the future" (the clock was changed): ask again. */
+    fun isStale(savedAt: Long, now: Long, maxAgeMs: Long): Boolean = now - savedAt !in 0..maxAgeMs
 }
 
 /** What the panel says about one episode; each part may be missing. */
