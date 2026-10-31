@@ -12,6 +12,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,6 +59,7 @@ fun HomeScreen(
     onAddUrl: () -> Unit,
     onPair: () -> Unit,
     onUpdates: () -> Unit,
+    onCheckUpdates: () -> Unit,
     onShortcuts: () -> Unit,
     onNoticeShown: () -> Unit,
 ) {
@@ -91,8 +94,10 @@ fun HomeScreen(
                     .fillMaxHeight()
                     .depthFocus(),
             ) {
+                // Scrolls when the menu is taller than the screen, so the focused button is always brought into view.
                 Column(
                     Modifier
+                        .verticalScroll(rememberScrollState())
                         .padding(36.dp)
                         .confineFocus(),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -113,6 +118,11 @@ fun HomeScreen(
                         color = PrismColors.TextSecondary,
                     )
                     Spacer(Modifier.height(20.dp))
+                    GlassButton(
+                        text = stringResource(R.string.action_check_updates),
+                        onClick = onCheckUpdates,
+                        modifier = Modifier.fillMaxWidth().focusMemory("check_updates"),
+                    )
                     GlassButton(
                         text = stringResource(R.string.action_add_url),
                         onClick = onAddUrl,

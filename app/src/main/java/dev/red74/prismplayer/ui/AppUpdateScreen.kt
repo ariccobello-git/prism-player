@@ -30,7 +30,6 @@ fun AppUpdateScreen(
     state: UpdateState,
     onInstall: () -> Unit,
     onRetryCheck: () -> Unit,
-    onDetails: () -> Unit,
     onClose: () -> Unit,
 ) {
     BackHandler(enabled = true) { onClose() }
@@ -62,7 +61,6 @@ fun AppUpdateScreen(
             title = stringResource(R.string.update_ok_title)
             message = stringResource(R.string.update_ok_message, state.installed)
             main = stringResource(R.string.action_ok) to onClose
-            second = stringResource(R.string.update_details) to onDetails
         }
         is UpdateState.Available -> {
             title = stringResource(R.string.update_new_title)

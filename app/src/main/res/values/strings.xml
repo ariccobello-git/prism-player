@@ -159,7 +159,8 @@
     <string name="sort_az">A–Z</string>
     <string name="sort_za">Z–A</string>
     <string name="sort_recent">Latest</string>
-    <string name="action_updates">Check for updates</string>
+    <string name="action_updates">Updates and codecs</string>
+    <string name="action_check_updates">Check for updates</string>
     <string name="updates_title">Updates and codecs</string>
     <string name="updates_check">Check now</string>
     <string name="updates_check_hint">Looks on the web for a new app release and a new video engine.</string>
@@ -182,7 +183,6 @@
     <string name="update_offline">Could not reach GitHub. Check the connection and try again.</string>
     <string name="update_ok_title">Prism is up to date</string>
     <string name="update_ok_message">You already have the latest version (%1$s).</string>
-    <string name="update_details">Technical details</string>
     <string name="update_new_title">New version available</string>
     <string name="update_new_message">Prism %1$s is available (you have %2$s). Update now? Your lists stay as they are.</string>
     <string name="update_install">Update</string>

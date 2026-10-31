@@ -229,7 +229,8 @@ private fun PrismNavigation(
                 onDelete = viewModel::removePlaylist,
                 onAddUrl = { push(Screen.Import) },
                 onPair = { push(Screen.Pair) },
-                onUpdates = {
+                onUpdates = { push(Screen.Updates) },
+                onCheckUpdates = {
                     viewModel.checkForUpdate()
                     push(Screen.AppUpdate)
                 },
@@ -262,11 +263,6 @@ private fun PrismNavigation(
                 state = update,
                 onInstall = viewModel::installUpdate,
                 onRetryCheck = viewModel::checkForUpdate,
-                onDetails = {
-                    viewModel.dismissUpdate()
-                    stack.removeAt(stack.lastIndex)
-                    push(Screen.Updates)
-                },
                 onClose = {
                     viewModel.dismissUpdate()
                     pop()
