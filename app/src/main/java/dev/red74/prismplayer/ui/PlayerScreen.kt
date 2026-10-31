@@ -625,9 +625,7 @@ fun PlayerScreen(
         formatToast?.let { mode ->
             StatusChip(
                 text = stringResource(R.string.player_format, aspectLabel(mode)),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 140.dp),
+                modifier = Modifier.align(Alignment.Center),
             )
         }
 
