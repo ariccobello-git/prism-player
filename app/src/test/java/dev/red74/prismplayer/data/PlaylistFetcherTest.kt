@@ -2,7 +2,12 @@ package dev.red74.prismplayer.data
 
 import fi.iki.elonen.NanoHTTPD
 import java.io.InputStream
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -78,5 +83,27 @@ class PlaylistFetcherTest {
         assertEquals(FetchException.Kind.HTTP, failure.kind)
         assertEquals(404, failure.httpCode)
         assertTrue(failure.message!!.none { it == '/' })
+    }
+
+    @Test
+    fun aCancelledDownloadStopsAndFreesTheLineAtOnce() = runBlocking(Dispatchers.Default) {
+        // Tens of millions of entries: without stopping, this download would hold the line for minutes.
+        val base = start(50_000_000)
+        val read = AtomicInteger()
+        val started = CompletableDeferred<Unit>()
+        val download = async {
+            PlaylistFetcher().fetch("$base/big.m3u") { reader ->
+                M3uParser.parse(reader, "$base/big.m3u", keepChannels = false) { count ->
+                    read.set(count)
+                    started.complete(Unit)
+                }
+            }
+        }
+        started.await()
+        download.cancel()
+        // The next request gets the line within moments, so the old download really let go of its connection.
+        assertEquals("next", withTimeout(5_000) { PanelLine.request { "next" } })
+        assertTrue(download.isCancelled)
+        assertTrue(read.get() < 50_000_000)
     }
 }

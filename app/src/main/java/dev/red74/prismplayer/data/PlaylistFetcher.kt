@@ -16,7 +16,10 @@ import java.util.zip.GZIPInputStream
 import javax.net.ssl.SSLException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
@@ -152,6 +155,9 @@ class PlaylistFetcher {
         agents: List<String> = HttpAgent.LIST_AGENTS,
         consume: (InputStream) -> T,
     ): Result<T> = PanelLine.request { withContext(Dispatchers.IO) {
+        // A download nobody waits for any more (the list was left, another one opened, the app closed) stops at
+        // its next read: it frees the one line to the panel at once instead of running to the end in the background.
+        val job = currentCoroutineContext()[Job]
         var last: FetchException? = null
         // A refusal (HTTP error) is retried with the next identity; other failures use the first one twice.
         var agentIndex = 0
@@ -160,7 +166,9 @@ class PlaylistFetcher {
             val agent = agents[agentIndex.coerceAtMost(agents.lastIndex)]
             attempt++
             try {
-                return@withContext Result.success(download(url, agent, consume))
+                return@withContext Result.success(download(url, agent) { input -> consume(StopsWhenCancelled(input, job)) })
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: FetchException) {
                 if (PanelLine.cut) throw e
                 last = e
@@ -234,6 +242,28 @@ class PlaylistFetcher {
             }
         }
         throw FetchException(FetchException.Kind.REDIRECT)
+    }
+
+    /** Every read first checks that someone still wants the download; otherwise it ends with a cancellation. */
+    internal class StopsWhenCancelled(private val input: InputStream, private val job: Job?) : InputStream() {
+        override fun read(): Int {
+            job?.ensureActive()
+            return input.read()
+        }
+
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            job?.ensureActive()
+            return input.read(b, off, len)
+        }
+
+        override fun skip(n: Long): Long {
+            job?.ensureActive()
+            return input.skip(n)
+        }
+
+        override fun available(): Int = input.available()
+
+        override fun close() = input.close()
     }
 
     private companion object {

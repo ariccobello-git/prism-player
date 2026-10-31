@@ -29,6 +29,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameMillis
@@ -76,12 +77,14 @@ import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.player.AspectMode
 import dev.red74.prismplayer.player.FastScan
 import dev.red74.prismplayer.player.PreviewPlayers
+import dev.red74.prismplayer.player.StreamConnections
 import dev.red74.prismplayer.player.StreamIdentity
 import dev.red74.prismplayer.player.TrackPolicy
 import dev.red74.prismplayer.player.createPlayer
 import dev.red74.prismplayer.data.ProviderHosts
 import dev.red74.prismplayer.data.StreamHold
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.Locale
 
 private enum class PlayStatus { Loading, Ready, Ended, Error }
@@ -96,6 +99,12 @@ private fun holdStep(repeatCount: Int): Long = when {
     else -> SKIP_MS
 }
 private const val NEXT_COUNTDOWN_S = 8
+
+/**
+ * Pause after a change of channel before the new one connects: holding Up or Down runs through the channels and
+ * only the one the viewer stops on opens a connection.
+ */
+private const val ZAP_SETTLE_MS = 300L
 private const val LIVE_EDGE_MS = 6_000L
 
 /** A selectable audio or subtitle track. */
@@ -161,6 +170,11 @@ fun PlayerScreen(
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    /** [0]: the first content has been set up (later runs are channel changes). [1]: the app is in the background. */
+    val flags = remember { booleanArrayOf(false, false) }
+    /** True when the stream was closed because the app went to the background; it reconnects when it comes back. */
+    var parked by remember { mutableStateOf(false) }
 
     val current = channels[index]
     val isSeries = current.type == ContentType.SERIES
@@ -213,6 +227,12 @@ fun PlayerScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                // A live channel paused for long falls out of the provider's window: it simply goes back to live.
+                if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                    player.seekToDefaultPosition()
+                    if (flags[1]) parked = true else player.prepare()
+                    return
+                }
                 val http = generateSequence(error.cause) { it.cause }
                     .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
                     .firstOrNull()?.responseCode
@@ -246,9 +266,32 @@ fun PlayerScreen(
         onDispose { if (keepsProgress) saveProgress(player, url) }
     }
 
+    // In the background (Home key, TV switched to standby) the stream is closed, not just paused: the list's one
+    // connection is never left open while nobody watches. Coming back reconnects at the same point, paused.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        flags[1] = true
         player.pause()
         if (keepsProgress) saveProgress(player, current.url)
+        if (player.playbackState != Player.STATE_IDLE) {
+            player.stop()
+            parked = true
+        }
+        hold.release()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_START) {
+        flags[1] = false
+        val resume = parked
+        parked = false
+        if (resume) overlayVisible = true
+        scope.launch {
+            // Back in front, the player holds the line again (no list or guide download while it is open).
+            hold.acquire()
+            if (!resume) return@launch
+            StreamConnections.awaitNone()
+            if (flags[1]) { parked = true; hold.release(); return@launch }
+            if (player.isCurrentMediaItemLive) player.seekToDefaultPosition()
+            player.prepare()
+        }
     }
 
     // While playing, the point is kept every few seconds, in case the TV is switched off.
@@ -261,6 +304,10 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(index) {
+        val zapping = flags[0]
+        flags[0] = true
+        // Changing channel: the old one is closed at once (its connection ends on the player's own thread).
+        if (zapping) player.stop()
         onIndexChange(index)
         errorName = null
         trouble = null
@@ -290,6 +337,9 @@ fun PlayerScreen(
         canSeek = false
         positionMs = 0L
         durationMs = C.TIME_UNSET
+        if (zapping) delay(ZAP_SETTLE_MS)
+        // The preview's or the previous channel's connection must be really closed before this one opens.
+        StreamConnections.awaitNone()
         val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
         if (resumeMs != null && resumeMs > 0) {
             player.setMediaItem(MediaItem.fromUri(channels[index].url), resumeMs)
@@ -297,8 +347,14 @@ fun PlayerScreen(
         } else {
             player.setMediaItem(MediaItem.fromUri(channels[index].url))
         }
-        player.prepare()
         player.playWhenReady = true
+        // Gone to the background meanwhile: it connects when the app comes back.
+        if (flags[1]) {
+            parked = true
+            hold.release()
+            return@LaunchedEffect
+        }
+        player.prepare()
     }
 
     LaunchedEffect(retryRequest) {
@@ -307,7 +363,10 @@ fun PlayerScreen(
         delay(if (attempt == 1) Availability.RETRY_DELAY_MS else Availability.NEXT_IDENTITY_DELAY_MS)
         if (tryIndex != index) return@LaunchedEffect
         StreamIdentity.current = plan[attempt.coerceAtMost(plan.lastIndex)]
+        // In the background: the errored player keeps its item and tries again when the app comes back.
+        if (flags[1]) { parked = true; return@LaunchedEffect }
         hold.acquire()
+        StreamConnections.awaitNone()
         ProviderHosts.noteUrl(channels[index].url)
         val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
         if (resumeMs != null && resumeMs > 0) {
@@ -520,10 +579,37 @@ fun PlayerScreen(
         player.play()
     }
 
+    /**
+     * After an error (the line dropped, the provider refused) Play tries again: a film or an episode goes on from
+     * where it stopped, a live channel from its live point.
+     */
+    fun retryAfterError() {
+        errorName = null
+        trouble = null
+        troubleHttp = null
+        status = PlayStatus.Loading
+        attempt = 0
+        startedOk = false
+        plan = StreamIdentity.plan()
+        StreamIdentity.current = plan.first()
+        if (isLiveStream) player.seekToDefaultPosition()
+        player.playWhenReady = true
+        scope.launch {
+            hold.acquire()
+            StreamConnections.awaitNone()
+            if (flags[1]) { parked = true; hold.release(); return@launch }
+            player.prepare()
+        }
+    }
+
+    fun play() {
+        if (status == PlayStatus.Error && player.playbackState == Player.STATE_IDLE) retryAfterError() else player.play()
+    }
+
     fun togglePlay() {
         // Ending a scan resumes normal playback from where the scan arrived.
         if (scan != 0) { scan = 0; player.play(); return }
-        if (player.isPlaying) player.pause() else player.play()
+        if (player.isPlaying) player.pause() else play()
     }
 
     Box(
@@ -537,7 +623,7 @@ fun PlayerScreen(
                 // Media keys of the remote work whatever is on screen.
                 when (event.key) {
                     Key.MediaPlayPause -> { togglePlay(); return@onPreviewKeyEvent true }
-                    Key.MediaPlay -> { player.play(); return@onPreviewKeyEvent true }
+                    Key.MediaPlay -> { play(); return@onPreviewKeyEvent true }
                     Key.MediaPause -> { player.pause(); return@onPreviewKeyEvent true }
                     Key.MediaFastForward -> { cycleScan(+1); return@onPreviewKeyEvent true }
                     Key.MediaStepForward -> { skip(SKIP_MS); return@onPreviewKeyEvent true }
@@ -725,6 +811,7 @@ fun PlayerScreen(
                             size = 20.sp,
                             color = PrismColors.Danger,
                         )
+                        PrismText(text = stringResource(R.string.player_retry_hint), size = 16.sp, color = PrismColors.TextSecondary)
                     }
                     Timeline(
                         positionMs = positionMs,

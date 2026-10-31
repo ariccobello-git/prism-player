@@ -63,6 +63,7 @@
     <string name="player_next">Next</string>
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Playback error (%1$s)</string>
+    <string name="player_retry_hint">Press ▶ to try again.</string>
     <string name="player_trouble_refused">The provider refuses this channel (HTTP %1$s): it may be off, or too many connections are open.</string>
     <string name="player_trouble_missing">The provider no longer has this content (HTTP %1$s).</string>
     <string name="player_trouble_server">The provider\'s server has a problem (HTTP %1$s). Try again later.</string>

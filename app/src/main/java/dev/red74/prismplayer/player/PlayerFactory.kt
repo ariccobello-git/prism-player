@@ -5,6 +5,13 @@ import android.content.Context
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.TransferListener
+import android.net.Uri
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLivePlaybackSpeedControl
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -67,6 +74,73 @@ object PreviewPlayers {
 }
 
 /**
+ * Stream connections open right now, from every player of the app (preview and full screen). A player that stops
+ * closes its connection on its own thread a moment later; a new stream waits here until that has happened, so the
+ * provider never sees two connections of the same list at once, not even for an instant (zapping, preview to full
+ * screen).
+ */
+object StreamConnections {
+    private val open = MutableStateFlow(0)
+
+    val count: Int get() = open.value
+
+    /** Waits until no stream connection is open, at most [timeoutMs]; true when the line is free. */
+    suspend fun awaitNone(timeoutMs: Long = CLOSE_WAIT_MS): Boolean =
+        withTimeoutOrNull(timeoutMs) { open.first { it == 0 } } != null
+
+    /** Wraps a source so its connection is counted from the moment it starts opening until it is closed. */
+    fun counted(source: DataSource): DataSource = Counted(source)
+
+    internal fun opening() = open.update { it + 1 }
+
+    internal fun closed() = open.update { (it - 1).coerceAtLeast(0) }
+
+    private class Counted(private val source: DataSource) : DataSource {
+        private var counted = false
+
+        override fun addTransferListener(transferListener: TransferListener) = source.addTransferListener(transferListener)
+
+        override fun open(dataSpec: DataSpec): Long {
+            if (!counted) {
+                counted = true
+                opening()
+            }
+            try {
+                return source.open(dataSpec)
+            } catch (e: Exception) {
+                // A connection that failed to open is already closed by the source itself.
+                release()
+                throw e
+            }
+        }
+
+        private fun release() {
+            if (counted) {
+                counted = false
+                closed()
+            }
+        }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int = source.read(buffer, offset, length)
+
+        override fun getUri(): Uri? = source.uri
+
+        override fun getResponseHeaders(): Map<String, List<String>> = source.responseHeaders
+
+        override fun close() {
+            try {
+                source.close()
+            } finally {
+                release()
+            }
+        }
+    }
+
+    /** Longest wait for an old connection to close; past it the new stream starts anyway (it never hangs). */
+    const val CLOSE_WAIT_MS = 2_000L
+}
+
+/**
  * The identity (User-Agent) streams are asked with. Some panels serve part of their channels (often the HD and
  * FHD ones, from other servers) only to identities they know, and answer 403 or 404 to the others. The full-screen
  * player tries them in turn when a channel answers with an HTTP error, and the one that works is kept for the
@@ -94,13 +168,16 @@ private const val PREVIEW_MAX_BITRATE = 2_500_000
 /** One player setup for the full-screen view and (with [preview]) the small preview next to the channel list. */
 fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
     // A fresh source for every connection, so a change of identity applies to the next try (and to each HLS segment).
+    // Every connection is counted (see StreamConnections), so the next stream can wait for this one to close.
     val httpFactory = DataSource.Factory {
-        DefaultHttpDataSource.Factory()
-            .setAllowCrossProtocolRedirects(true)
-            .setConnectTimeoutMs(15_000)
-            .setReadTimeoutMs(30_000)
-            .setUserAgent(if (preview) StreamIdentity.preferred else StreamIdentity.current)
-            .createDataSource()
+        StreamConnections.counted(
+            DefaultHttpDataSource.Factory()
+                .setAllowCrossProtocolRedirects(true)
+                .setConnectTimeoutMs(15_000)
+                .setReadTimeoutMs(30_000)
+                .setUserAgent(if (preview) StreamIdentity.preferred else StreamIdentity.current)
+                .createDataSource(),
+        )
     }
     // Standard extractors and the library's own identity, as in the older player that handled live lists well.
     // More load retries (8) keep a live stream alive through the short hiccups panels often have.
