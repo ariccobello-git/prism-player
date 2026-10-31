@@ -121,10 +121,13 @@ object ProviderHosts {
         if (account != null) hosts[host] = account else hosts.putIfAbsent(host, "")
     }
 
-    operator fun contains(host: String): Boolean = host.lowercase() in hosts
+    operator fun contains(host: String): Boolean = hosts.containsKey(host.lowercase())
 
     /** The list a picture on [host] belongs to, for the semaphore shared with iPrism. */
-    fun lineKey(host: String): String? = hosts[host.lowercase()]?.takeIf { it.isNotEmpty() }
+    fun lineKey(host: String): String? {
+        val account = hosts[host.lowercase()] ?: return null
+        return account.ifEmpty { LineKey.of("http://${host.lowercase()}/") }
+    }
 }
 
 /** One player's share of [PanelLine]: taken before the player opens a stream, given back when it stops. Main thread. */
