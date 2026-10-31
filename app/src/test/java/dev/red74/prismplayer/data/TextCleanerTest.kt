@@ -39,11 +39,14 @@ class TextCleanerTest {
         // A TV font with no "mathematical" letters, superscripts, full-width letters or the new emoji.
         TextCleaner.canDraw = { text ->
             val cp = text.codePointAt(0)
-            !(cp in 0x1D400..0x1D7FF || cp in 0x1D2C..0x1D6A || cp in 0xFF00..0xFFEF || cp == 0x1FAE8)
+            !(cp in 0x1D400..0x1D7FF || cp in 0x1D2C..0x1D6A || cp in 0xFF00..0xFFEF || cp == 0x1FAE8 || cp == 0x1F13A)
         }
         assertEquals("Rai HD", TextCleaner.clean("𝐑𝐚𝐢 ᴴᴰ"))
         assertEquals("RAI", TextCleaner.clean("ＲＡＩ"))
-        assertEquals("Nuovo", TextCleaner.clean("🫨 Nuovo"))
+        // A new emoji stays even if the TV font lacks it: the app's own emoji font draws it.
+        assertEquals("🫨 Nuovo", TextCleaner.clean("🫨 Nuovo"))
+        // A squared K the font lacks becomes a plain K ("4K").
+        assertEquals("4K", TextCleaner.clean("4\uD83C\uDD3A"))
         assertEquals("★ Film", TextCleaner.clean("★ Film"))
     }
 

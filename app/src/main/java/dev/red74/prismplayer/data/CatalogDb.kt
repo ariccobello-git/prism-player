@@ -90,6 +90,8 @@ class CatalogDb private constructor(
     epgUrl: String?,
     truncated: Boolean,
     totalEntries: Int,
+    /** Written by an older app whose names had their symbols removed: shown, and renewed in the background. */
+    val outdated: Boolean = false,
 ) : Catalog(live, movies, series, epgUrl, truncated, totalEntries) {
 
     private fun runsOf(type: ContentType, categories: List<Int>): RowIds.Runs {
@@ -294,7 +296,9 @@ class CatalogDb private constructor(
     }
 
     companion object {
-        private const val VERSION = "1"
+        /** "2": names and groups keep their emoji and symbols (see [TextCleaner]). "1" has the same tables. */
+        private const val VERSION = "2"
+        private val READABLE = setOf("1", VERSION)
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
         private const val TAG_BYTES = 16
@@ -311,7 +315,8 @@ class CatalogDb private constructor(
                 val meta = HashMap<String, ByteArray>()
                 db.rawQuery("SELECT k, v FROM meta", null).use { c -> while (c.moveToNext()) meta[c.getString(0).orEmpty()] = c.getBlob(1) ?: ByteArray(0) }
                 fun text(key: String): String? = meta[key]?.let { String(it, Charsets.UTF_8) }
-                check(text("version") == VERSION) { "other version" }
+                val version = text("version")
+                check(version in READABLE) { "other version" }
                 val dataKey = unwrap(meta["key"] ?: error("no key"), keyProvider())
                 val rows = Rows(db, dataKey, text("fts") == "1")
 
@@ -334,6 +339,7 @@ class CatalogDb private constructor(
                     epgUrl = text("epg")?.ifEmpty { null },
                     truncated = text("truncated") == "1",
                     totalEntries = text("total")?.toIntOrNull() ?: 0,
+                    outdated = version != VERSION,
                 )
             } catch (e: Exception) {
                 db.close()

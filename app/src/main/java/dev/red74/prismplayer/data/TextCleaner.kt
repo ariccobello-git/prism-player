@@ -38,13 +38,18 @@ object TextCleaner {
                     lastWasSpace = true
                 }
                 isJoiner(codePoint) -> out.appendCodePoint(codePoint)
+                // Before the "unassigned" test: an older Android does not know the newest emoji, the app's font does.
+                isRegional(codePoint) || isEmoji(codePoint) -> {
+                    out.appendCodePoint(codePoint)
+                    lastWasSpace = false
+                }
                 !isVisible(codePoint) -> Unit
                 // Latin letters, digits and the usual signs: every TV font has them.
                 codePoint < 0x250 -> {
                     out.appendCodePoint(codePoint)
                     lastWasSpace = false
                 }
-                isRegional(codePoint) || draws(codePoint) -> {
+                draws(codePoint) -> {
                     out.appendCodePoint(codePoint)
                     lastWasSpace = false
                 }
@@ -90,6 +95,10 @@ object TextCleaner {
         Character.CONTROL, Character.FORMAT, Character.PRIVATE_USE, Character.SURROGATE, Character.UNASSIGNED -> false
         else -> true
     }
+
+    /** Emoji blocks: the app carries its own emoji font (see PrismApp), so they are always drawn. */
+    private fun isEmoji(codePoint: Int): Boolean =
+        codePoint in 0x1F300..0x1FAFF || codePoint in 0x2600..0x27BF || codePoint in 0x2300..0x23FF || codePoint in 0x2B00..0x2BFF
 
     /** Regional indicator letters: a pair of them is drawn as a flag. */
     private fun isRegional(codePoint: Int): Boolean = codePoint in 0x1F1E6..0x1F1FF

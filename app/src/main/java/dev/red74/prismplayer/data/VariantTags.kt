@@ -206,12 +206,21 @@ object VariantTags {
         var i = 0
         while (i < text.length) {
             val c = text[i]
+            val plain = plainLetters(text, i)
             when {
-                c.isLetterOrDigit() -> {
+                plain != null -> {
                     val start = i
-                    while (i < text.length && text[i].isLetterOrDigit()) i++
-                    val raw = text.substring(start, i)
-                    out += Word(start, i, raw.uppercase(), raw.none { it.isLowerCase() }, bracket)
+                    val upper = StringBuilder()
+                    var capitals = true
+                    var at = i
+                    while (at < text.length) {
+                        val piece = plainLetters(text, at) ?: break
+                        upper.append(piece)
+                        if (piece.any { it.isLowerCase() }) capitals = false
+                        at += Character.charCount(text.codePointAt(at))
+                    }
+                    i = at
+                    out += Word(start, i, upper.toString().uppercase(), capitals, bracket)
                     continue
                 }
                 c in OPEN -> bracket = groups++
@@ -220,6 +229,17 @@ object VariantTags {
             i++
         }
         return out
+    }
+
+    /**
+     * The plain letters or digits of the character at [index], or null if it is none. Lists often write tags with
+     * decorated letters ("𝟒𝐊", "ᶠᴴᴰ", "Ⓘⓣⓐ", "🄺"): they count as the letters they stand for.
+     */
+    private fun plainLetters(text: String, index: Int): String? {
+        val cp = text.codePointAt(index)
+        if (cp < 0x250) return if (Character.isLetterOrDigit(cp)) String(Character.toChars(cp)) else null
+        val plain = java.text.Normalizer.normalize(String(Character.toChars(cp)), java.text.Normalizer.Form.NFKC)
+        return plain.takeIf { it.isNotEmpty() && it.all { ch -> ch.isLetterOrDigit() } }
     }
 
     private fun isYear(word: Word): Boolean =

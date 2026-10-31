@@ -356,7 +356,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     _library.update { it.copy(loading = false, error = null, catalog = stored) }
                     loadGuide(playlist, stored)
                     val age = container.catalogStore.ageMs(id)
-                    if (age != null && age > COPY_FRESH_MS) refreshInBackground(playlist, stored.totalEntries)
+                    if (stored.outdated || (age != null && age > COPY_FRESH_MS)) refreshInBackground(playlist, stored.totalEntries, swap = stored.outdated)
                     return@launch
                 }
             }
@@ -388,7 +388,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** The shown copy is old: download again quietly and swap it in only if the list really changed. */
-    private fun refreshInBackground(playlist: SavedPlaylist, shownCount: Int) {
+    /** [swap]: show the renewed list even with the same number of entries (its names changed, see CatalogDb.outdated). */
+    private fun refreshInBackground(playlist: SavedPlaylist, shownCount: Int, swap: Boolean = false) {
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             val loaded = load(playlist, keepChannels = true)
@@ -397,7 +398,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             recordStatus(playlist.id, PlaylistStatus.OK, parsed.count, null, null)
             val catalog = buildCatalog(parsed)
             saveDatabase(playlist.id, catalog)
-            if (catalog.totalEntries != shownCount) {
+            if (swap || catalog.totalEntries != shownCount) {
                 _library.update { if (it.playlistId == playlist.id) it.copy(catalog = catalog) else it }
             }
         }

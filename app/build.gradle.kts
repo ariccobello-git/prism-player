@@ -119,6 +119,7 @@ dependencies {
     implementation(libs.zxing.core)
     implementation(libs.coil.compose)
     implementation(libs.nanohttpd)
+    implementation(libs.emoji2.bundled)
 
     testImplementation(libs.junit)
     // A real XmlPullParser for the guide tests (on the device the platform provides one).
