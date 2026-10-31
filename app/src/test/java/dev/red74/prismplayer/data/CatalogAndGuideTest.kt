@@ -134,7 +134,7 @@ class CatalogAndGuideTest {
         val rai1 = Channel(name = "Rai 1 HD", url = "http://h/1", tvgId = "RAI1.IT")
         val nowNext = epg.nowNext(rai1, now)
         assertEquals("Telegiornale", nowNext.now!!.title)
-        assertEquals("Notizie & sport", nowNext.now!!.description)
+        assertEquals("Notizie & sport ★", nowNext.now!!.description)
         assertEquals("Film", nowNext.next!!.title)
         assertEquals(0.5f, nowNext.progress(now), 0.001f)
         assertEquals(2, epg.programmes(rai1).size) // the old one is outside the window
