@@ -19,6 +19,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -82,9 +84,16 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
         value = withContext(Dispatchers.Default) { loadSplashImages(context) }
     }
     val music = remember { arrayOfNulls<MediaPlayer>(1) }
+    /** "Salta" was pressed: the opening ends as soon as the app data is ready. */
+    val skipped = remember { mutableStateOf(false) }
+    val skipFocus = remember { FocusRequester() }
 
-    // The animation is not interruptible; back is ignored for these few seconds.
+    // Back is ignored; the opening is skipped only with its own button.
     BackHandler(enabled = true) { }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { skipFocus.requestFocus() }
+    }
 
     LaunchedEffect(Unit) {
         // Original synthesized intro (12 s): the prism turns with it, hits at 6 s, rests at 9.2 s, the music fades
@@ -125,7 +134,7 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
                 }
             }
             clock.floatValue = t
-            if (!finished && readyNow && t >= SPLASH_SECONDS - SPLASH_EXIT_MS / 1000f) {
+            if (!finished && readyNow && (skipped.value || t >= SPLASH_SECONDS - SPLASH_EXIT_MS / 1000f)) {
                 finished = true
                 finish()
             }
@@ -207,6 +216,21 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
                     },
             )
         }
+        GlassButton(
+            text = stringResource(R.string.action_skip_intro),
+            onClick = {
+                if (!skipped.value) {
+                    skipped.value = true
+                    // The music stops with the opening instead of playing on over the app.
+                    music[0]?.let { runCatching { it.stop(); it.release() } }
+                    music[0] = null
+                }
+            },
+            focusRequester = skipFocus,
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 40.dp, bottom = 36.dp),
+        )
     }
 }
 

@@ -71,6 +71,7 @@ import dev.red74.prismplayer.data.Category
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentInfo
 import dev.red74.prismplayer.data.EpgData
+import dev.red74.prismplayer.data.EpisodeInfo
 import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.GroupTree
 import dev.red74.prismplayer.data.SortMode
@@ -199,6 +200,11 @@ private fun LibraryContent(
         UiSounds.play(UiSounds.Kind.BACK)
         onNav { it.origin?.copy(resume = true) ?: it.copy(movieUrl = null, showTitle = null, showGroup = null, season = -1, resume = true) }
     }
+    // Back from an episode page returns to the episodes of its series, with the cursor on that episode.
+    BackHandler(enabled = nav.episodeUrl != null) {
+        UiSounds.play(UiSounds.Kind.BACK)
+        onNav { it.copy(episodeUrl = null, played = it.episodeUrl, resume = true) }
+    }
 
     PrismBackground {
         GlassPanel(
@@ -295,7 +301,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
                             // A search belongs to the tab it was typed in: left in place it would also filter the
                             // next tab (Favourites showed "No results").
                             tab = tab, category = 0, level = 0, sub = 0, itemIndex = 0, movieUrl = null,
-                            showTitle = null, showGroup = null, season = -1, query = "", resume = true,
+                            showTitle = null, showGroup = null, episodeUrl = null, season = -1, query = "", resume = true,
                             origin = null, returnKey = null,
                         )
                     }
@@ -391,12 +397,16 @@ private fun LibraryBody(
             val show = remember(catalog, group, title) {
                 if (title == null) null else catalog.findShow(group, title)
             }
+            val episode = remember(show, nav.episodeUrl) {
+                nav.episodeUrl?.let { url -> show?.episodes?.firstOrNull { it.url == url } }
+            }
             val results by produceState(emptyList<Show>(), catalog, query) {
                 value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.IO) {
                     catalog.searchShows(query, SEARCH_LIMIT)
                 }
             }
             when {
+                show != null && episode != null -> EpisodeDetail(show, episode, onNav, onPlay)
                 show != null -> ShowDetail(show, nav, favorites, onNav, onPlay, onToggleFavorite)
                 catalog.series.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
@@ -1065,6 +1075,70 @@ private fun Description(key: Any, maxLines: Int, load: suspend () -> String?) {
     }
 }
 
+/** One episode, laid out like a film: resume or play, play from the start, and what the panel says about it. */
+@Composable
+private fun EpisodeDetail(
+    show: Show,
+    episode: Channel,
+    onNav: NavChange,
+    onPlay: (List<Channel>, Int, Boolean) -> Unit,
+) {
+    val playFocus = remember { FocusRequester() }
+    RequestFocusOnEnter(playFocus, key = episode.url)
+    val episodes = remember(show, episode.season) { show.episodesOf(episode.season) }
+    val start = episodes.indexOfFirst { it.url == episode.url }.coerceAtLeast(0)
+    val play = {
+        onNav { it.copy(resume = false) }
+        onPlay(episodes, start, false)
+    }
+    val info by produceState<Pair<Boolean, EpisodeInfo?>>(false to null, episode.url) {
+        value = true to ContentInfo.episodeInfo(episode.url, show.title)
+    }
+    Row(Modifier.fillMaxSize().confineFocus(horizontal = true), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        Poster(episode.logo ?: show.logo, show.title, Modifier.width(240.dp).aspectRatio(2f / 3f))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            PrismText(text = show.title, size = 32.sp, weight = FontWeight.Bold, maxLines = 2)
+            val where = listOfNotNull(
+                episode.season.takeIf { it > 0 }?.let { stringResource(R.string.season_n, it) },
+                episode.episode.takeIf { it > 0 }?.let { stringResource(R.string.episode_n, it) },
+            ).joinToString(" · ")
+            if (where.isNotEmpty()) PrismText(text = where, size = 18.sp, color = PrismColors.Accent, maxLines = 1)
+            PrismText(text = episode.name, size = 20.sp, maxLines = 2)
+            val facts = listOfNotNull(info.second?.duration, info.second?.released).joinToString(" · ")
+            if (facts.isNotEmpty()) PrismText(text = facts, size = 16.sp, color = PrismColors.TextSecondary, maxLines = 1)
+            if (FavoriteKey.of(episode) in LocalReachability.current.unavailable) {
+                PrismText(text = stringResource(R.string.unavailable_note), size = 16.sp, color = PrismColors.Danger, maxLines = 2)
+            }
+            val point = remember(episode.url, WatchProgress.version) { WatchProgress.get(episode.url) }
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                GlassButton(
+                    text = point?.let { stringResource(R.string.action_resume, formatTime(WatchProgress.resumeFrom(it))) }
+                        ?: stringResource(R.string.action_play),
+                    onClick = play,
+                    focusRequester = playFocus,
+                    emphasized = true,
+                )
+                if (point != null) {
+                    GlassButton(
+                        text = stringResource(R.string.action_from_start),
+                        onClick = {
+                            WatchProgress.clear(episode.url)
+                            play()
+                        },
+                    )
+                }
+            }
+            point?.let { ProgressLine(it.fraction, Modifier.width(320.dp)) }
+            val (loaded, details) = info
+            when {
+                details?.plot != null -> PrismText(text = details.plot, size = 18.sp, maxLines = 8)
+                loaded -> PrismText(text = stringResource(R.string.description_missing), size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                else -> PrismText(text = stringResource(R.string.description_loading), size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
+            }
+        }
+    }
+}
+
 @Composable
 private fun ShowDetail(
     show: Show,
@@ -1088,6 +1162,10 @@ private fun ShowDetail(
     }
     val unavailable = LocalReachability.current.unavailable
     val progressVersion = WatchProgress.version
+    // "Continua a guardare" for the series: the episode left most recently, played from where it was left.
+    val lastWatched = remember(show, progressVersion) {
+        show.episodes.mapNotNull { e -> WatchProgress.get(e.url)?.let { e to it } }.maxByOrNull { it.second.savedAt }
+    }
     val key = FavoriteKey.ofShow(show)
     var enterEpisodes by remember { mutableStateOf(false) }
     var episodesFocused by remember { mutableStateOf(false) }
@@ -1116,6 +1194,19 @@ private fun ShowDetail(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(vertical = 6.dp),
             ) {
+                lastWatched?.let { (episode, point) ->
+                    item {
+                        GlassButton(
+                            text = stringResource(R.string.action_resume_episode, episode.season, episode.episode, formatTime(WatchProgress.resumeFrom(point))),
+                            onClick = {
+                                val list = show.episodesOf(episode.season)
+                                onNav { it.copy(season = episode.season, resume = false) }
+                                onPlay(list, list.indexOf(episode).coerceAtLeast(0), false)
+                            },
+                            emphasized = true,
+                        )
+                    }
+                }
                 item { StarButton(key in favorites, { onToggleFavorite(key) }) }
                 itemsIndexed(seasons) { index, number ->
                     GlassButton(
@@ -1136,10 +1227,7 @@ private fun ShowDetail(
                     val missing = FavoriteKey.of(episode) in unavailable
                     GlassSurface(
                         focusRequester = if (index == episodeTarget) episodeFocus else null,
-                        onClick = {
-                            onNav { it.copy(resume = false) }
-                            onPlay(episodes, index, false)
-                        },
+                        onClick = { onNav { it.copy(episodeUrl = episode.url, season = season, resume = false) } },
                         modifier = Modifier.fillMaxWidth(),
                         focusScale = 1.02f,
                     ) {

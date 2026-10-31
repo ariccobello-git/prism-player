@@ -21,7 +21,8 @@ import kotlinx.coroutines.withContext
  */
 object ContentInfo {
     private val films = HashMap<String, String?>()
-    private val seriesPlots = HashMap<String, Map<String, String>>()
+    private val seriesLists = HashMap<String, Map<String, PanelJson.SeriesEntry>>()
+    private val seriesEpisodes = HashMap<String, Map<String, EpisodeInfo>>()
     private val lock = Mutex()
 
     suspend fun filmPlot(streamUrl: String): String? {
@@ -34,14 +35,30 @@ object ContentInfo {
         return plot
     }
 
-    suspend fun seriesPlot(episodeUrl: String?, title: String): String? {
-        val address = episodeUrl?.let { PanelAddress.seriesList(it) } ?: return null
-        val plots = lock.withLock {
-            seriesPlots[address] ?: withContext(Dispatchers.IO) {
-                runCatching { request(address) { PanelJson.seriesPlots(it) } }.getOrNull()
-            }?.also { seriesPlots[address] = it }
+    suspend fun seriesPlot(episodeUrl: String?, title: String): String? =
+        seriesEntry(episodeUrl, title)?.plot
+
+    /** Plot, length and date of one episode: the series is found by title, then its episodes are asked for once. */
+    suspend fun episodeInfo(episodeUrl: String, title: String): EpisodeInfo? {
+        val seriesId = seriesEntry(episodeUrl, title)?.id ?: return null
+        val address = PanelAddress.seriesInfo(episodeUrl, seriesId) ?: return null
+        val episodeId = PanelAddress.streamId(episodeUrl) ?: return null
+        val episodes = lock.withLock {
+            seriesEpisodes[address] ?: withContext(Dispatchers.IO) {
+                runCatching { request(address) { PanelJson.episodes(it) } }.getOrNull()
+            }?.also { seriesEpisodes[address] = it }
         } ?: return null
-        return plots[PanelJson.titleKey(title)]
+        return episodes[episodeId]
+    }
+
+    private suspend fun seriesEntry(episodeUrl: String?, title: String): PanelJson.SeriesEntry? {
+        val address = episodeUrl?.let { PanelAddress.seriesList(it) } ?: return null
+        val entries = lock.withLock {
+            seriesLists[address] ?: withContext(Dispatchers.IO) {
+                runCatching { request(address) { PanelJson.series(it) } }.getOrNull()
+            }?.also { seriesLists[address] = it }
+        } ?: return null
+        return entries[PanelJson.titleKey(title)]
     }
 
     private fun <T> request(address: String, read: (Reader) -> T): T {
@@ -79,6 +96,9 @@ object ContentInfo {
     private val AGENTS = listOf(HttpAgent.LIST_AGENTS[0], "okhttp/4.12.0", "IPTVSmartersPro")
 }
 
+/** What the panel says about one episode; each part may be missing. */
+data class EpisodeInfo(val plot: String?, val duration: String?, val released: String?)
+
 /** Builds the panel requests for [ContentInfo] from a stream address; null for anything not Xtream-style. */
 object PanelAddress {
     fun vodInfo(streamUrl: String): String? {
@@ -90,6 +110,15 @@ object PanelAddress {
         val (base, user, password, _) = parts(episodeUrl, "series") ?: return null
         return "$base/player_api.php?username=$user&password=$password&action=get_series"
     }
+
+    fun seriesInfo(episodeUrl: String, seriesId: String): String? {
+        val (base, user, password, _) = parts(episodeUrl, "series") ?: return null
+        if (seriesId.isEmpty() || !seriesId.all { it.isDigit() }) return null
+        return "$base/player_api.php?username=$user&password=$password&action=get_series_info&series_id=$seriesId"
+    }
+
+    /** The number at the end of an Xtream episode or film address. */
+    fun streamId(url: String): String? = (parts(url, "series") ?: parts(url, "movie"))?.get(3)
 
     private fun parts(url: String, kind: String): List<String>? {
         val uri = runCatching { URI(url) }.getOrNull() ?: return null
@@ -126,25 +155,63 @@ object PanelJson {
         return plot ?: description
     }
 
-    /** `get_series`: series title (as [titleKey]) to plot, for the series that have one. */
-    fun seriesPlots(reader: Reader): Map<String, String> {
-        val out = HashMap<String, String>()
+    class SeriesEntry(val id: String?, val plot: String?)
+
+    /** `get_series`: series title (as [titleKey]) to its panel id and plot. */
+    fun series(reader: Reader): Map<String, SeriesEntry> {
+        val out = HashMap<String, SeriesEntry>()
         var name: String? = null
         var plot: String? = null
-        JsonScan(reader).run(
+        var id: String? = null
+        JsonScan(reader, numbers = true).run(
             onEnd = { depth ->
                 if (depth == 2) {
                     val n = name
-                    val p = plot
-                    if (n != null && p != null) out.putIfAbsent(titleKey(n), p)
+                    if (n != null && (plot != null || id != null)) out.putIfAbsent(titleKey(n), SeriesEntry(id, plot))
                     name = null
                     plot = null
+                    id = null
                 }
             },
         ) { depth, key, value ->
             if (depth == 2) when (key.lowercase()) {
                 "name" -> name = value
                 "plot" -> plot = clean(value)
+                "series_id" -> id = value
+            }
+        }
+        return out
+    }
+
+    /** `get_series`: series title (as [titleKey]) to plot, for the series that have one. */
+    fun seriesPlots(reader: Reader): Map<String, String> =
+        series(reader).mapNotNull { (k, v) -> v.plot?.let { k to it } }.toMap()
+
+    /**
+     * `get_series_info`: episode stream id to its details. Episodes sit in `episodes` → season → list, so their own
+     * fields are at depth 4 and their `info` at depth 5.
+     */
+    fun episodes(reader: Reader): Map<String, EpisodeInfo> {
+        val out = HashMap<String, EpisodeInfo>()
+        var id: String? = null
+        var plot: String? = null
+        var duration: String? = null
+        var released: String? = null
+        JsonScan(reader, numbers = true).run(
+            onEnd = { depth ->
+                if (depth == 4) {
+                    id?.let { if (plot != null || duration != null || released != null) out[it] = EpisodeInfo(plot, duration, released) }
+                    id = null; plot = null; duration = null; released = null
+                }
+            },
+        ) { depth, key, value ->
+            when {
+                depth == 4 && key == "id" -> id = value
+                depth == 5 -> when (key.lowercase()) {
+                    "plot" -> if (plot == null) plot = clean(value)
+                    "duration" -> duration = value.trim().takeIf { it.isNotEmpty() && it != "00:00:00" }
+                    "releasedate", "air_date" -> if (released == null) released = value.trim().takeIf { it.isNotEmpty() }
+                }
             }
         }
         return out
@@ -164,9 +231,9 @@ object PanelJson {
 
 /**
  * A small streaming JSON reader: reports every string value with its key and depth (see [run]) and the end of every
- * object. Numbers, booleans and nulls are skipped. Malformed input simply stops the scan.
+ * object. Numbers are reported only with `numbers`, booleans and nulls are skipped. Malformed input simply stops the scan.
  */
-internal class JsonScan(private val reader: Reader) {
+internal class JsonScan(private val reader: Reader, private val numbers: Boolean = false) {
     private var peeked = -2
 
     private fun peek(): Int {
@@ -228,12 +295,14 @@ internal class JsonScan(private val reader: Reader) {
             '"'.code -> onString(depth, key, string())
             -1 -> error("end")
             else -> {
-                // number, true, false, null
+                // number, true, false, null: numbers are reported only when asked (ids are often numbers)
+                val text = StringBuilder()
                 while (true) {
                     val c = peek()
                     if (c == -1 || c == ','.code || c == '}'.code || c == ']'.code || c <= ' '.code) break
-                    next()
+                    text.append(next().toChar())
                 }
+                if (numbers && text.isNotEmpty() && (text[0].isDigit() || text[0] == '-')) onString(depth, key, text.toString())
             }
         }
     }

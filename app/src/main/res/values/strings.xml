@@ -101,12 +101,15 @@
     <string name="fav_add">Add to favorites</string>
     <string name="fav_remove">Remove from favorites</string>
     <string name="action_play">Play</string>
+    <string name="action_skip_intro">Skip</string>
     <string name="action_resume">Resume from %1$s</string>
     <string name="action_from_start">From the start</string>
     <string name="resume_toast">Resuming from %1$s</string>
     <string name="season_n">Season %1$d</string>
     <string name="description_missing">Description not available</string>
     <string name="description_loading">Loading the description…</string>
+    <string name="episode_n">Episode %1$d</string>
+    <string name="action_resume_episode">Resume S%1$d E%2$d · %3$s</string>
     <string name="season_none">Episodes</string>
     <string name="library_empty">Nothing here yet.</string>
     <string name="search_none">No results.</string>

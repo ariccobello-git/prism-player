@@ -77,6 +77,8 @@ data class LibraryNav(
     val showTitle: String? = null,
     val showGroup: String? = null,
     val movieUrl: String? = null,
+    /** The episode whose page is open inside [showTitle] (kept in memory only). */
+    val episodeUrl: String? = null,
     val season: Int = -1,
     val itemIndex: Int = 0,
     /** True right after starting playback, so coming back puts the cursor on the item that was played. */
@@ -508,7 +510,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setLastIndex(index: Int) {
         val queue = _queue.value
         val played = queue.items.getOrNull(index)?.url
-        _nav.update { if (queue.follow) it.copy(itemIndex = index, played = played) else it.copy(played = played) }
+        _nav.update {
+            // An episode page follows the player when it goes on to the next episode by itself.
+            val episode = if (it.episodeUrl != null && played != null) played else it.episodeUrl
+            if (queue.follow) it.copy(itemIndex = index, played = played, episodeUrl = episode)
+            else it.copy(played = played, episodeUrl = episode)
+        }
     }
 
     /** A content started: its mark (if any) goes, and the network is proved to work. */
