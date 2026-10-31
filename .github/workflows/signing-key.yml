@@ -51,15 +51,19 @@ jobs:
             exit 1
           fi
           AS="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          # The key store takes ASCII passwords only, and an iPhone passphrase may hold accents or
+          # curly quotes: the store password is the SHA-256 of the passphrase.
+          K="$(printf '%s' "${P}" | sha256sum | cut -d' ' -f1)"
+          export K
           work="$(mktemp -d)"
           trap 'rm -rf "${work}"' EXIT
           keytool -genkeypair -storetype pkcs12 -keystore "${work}/new.p12" -alias prism \
             -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=Prism Player, O=Red-74" \
-            -storepass:env P -keypass:env P
+            -storepass:env K -keypass:env K
           "${AS}" rotate --out signing/lineage.bin \
             --old-signer --ks app/prism-debug.p12 --ks-key-alias prism --ks-pass pass:prismdebug --key-pass pass:prismdebug \
               --set-rollback false \
-            --new-signer --ks "${work}/new.p12" --ks-key-alias prism --ks-pass env:P --key-pass env:P
+            --new-signer --ks "${work}/new.p12" --ks-key-alias prism --ks-pass env:K --key-pass env:K
           "${AS}" lineage --in signing/lineage.bin --print-certs -v
           openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:P \
             -in "${work}/new.p12" -out signing/prism-release.p12.enc
