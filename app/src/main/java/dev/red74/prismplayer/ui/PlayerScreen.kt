@@ -79,6 +79,7 @@ import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.StreamIdentity
 import dev.red74.prismplayer.player.TrackPolicy
 import dev.red74.prismplayer.player.createPlayer
+import dev.red74.prismplayer.data.ProviderHosts
 import dev.red74.prismplayer.data.StreamHold
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -271,6 +272,7 @@ fun PlayerScreen(
         PreviewPlayers.stopAll()
         // Any list, guide or plot request still talking to the panel is closed before the stream opens.
         hold.acquire()
+        ProviderHosts.noteUrl(channels[index].url)
         // Every content starts in Italian without subtitles (see TrackPolicy); the tracks decide the rest.
         autoTracks = true
         appliedTracks[0] = null
@@ -306,6 +308,7 @@ fun PlayerScreen(
         if (tryIndex != index) return@LaunchedEffect
         StreamIdentity.current = plan[attempt.coerceAtMost(plan.lastIndex)]
         hold.acquire()
+        ProviderHosts.noteUrl(channels[index].url)
         val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
         if (resumeMs != null && resumeMs > 0) {
             player.setMediaItem(MediaItem.fromUri(channels[index].url), resumeMs)

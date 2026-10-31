@@ -79,6 +79,7 @@ import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.NowNext
 import dev.red74.prismplayer.data.Show
 import dev.red74.prismplayer.data.WatchProgress
+import dev.red74.prismplayer.data.ProviderHosts
 import dev.red74.prismplayer.data.StreamHold
 import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.createPlayer
@@ -912,6 +913,7 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
         firstStart = false
         // Any list, guide or plot request still talking to the panel is closed before the preview connects.
         hold.acquire()
+        ProviderHosts.noteUrl(channel.url)
         exo.setPlaybackSpeed(1f)
         exo.setMediaItem(previewItem(channel.url))
         exo.prepare()
