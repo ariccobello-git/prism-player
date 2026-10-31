@@ -52,20 +52,15 @@
     <string name="channels_retry">Riprova</string>
     <string name="load_error_network">Server non raggiungibile. Controlla la connessione e il link.</string>
     <string name="load_error_http">Il server ha rifiutato la richiesta (HTTP %1$d).</string>
-    <string name="load_error_too_large">La playlist è troppo grande da caricare.</string>
     <string name="load_error_empty">Nessuna voce riproducibile in questa playlist.</string>
     <string name="load_error_unknown">Errore durante il caricamento della playlist.</string>
 
     <string name="player_format">Formato: %1$s</string>
     <string name="aspect_auto">Auto</string>
-    <string name="aspect_16_9">16:9</string>
-    <string name="aspect_4_3">4:3</string>
     <string name="aspect_zoom">Zoom (ritaglia)</string>
     <string name="aspect_fit_screen">Adatta allo schermo</string>
     <string name="player_previous">Precedente</string>
     <string name="player_next">Successivo</string>
-    <string name="player_play">Riproduci</string>
-    <string name="player_pause">Pausa</string>
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Errore di riproduzione (%1$s)</string>
     <string name="player_trouble_refused">Il fornitore rifiuta questo canale (HTTP %1$s): può essere spento o con troppe connessioni aperte.</string>
@@ -98,8 +93,6 @@
     <string name="category_other">Altro</string>
     <string name="now_label">Ora</string>
     <string name="next_label">Dopo</string>
-    <string name="fav_add">Aggiungi ai preferiti</string>
-    <string name="fav_remove">Rimuovi dai preferiti</string>
     <string name="action_play">Guarda</string>
     <string name="action_skip_intro">Salta</string>
     <string name="action_resume">Riprendi da %1$s</string>
@@ -125,7 +118,6 @@
     <string name="load_error_not_a_playlist">Il server ha risposto, ma non con una playlist. Controlla il link e l\'account.</string>
     <string name="err_short_network">Non raggiungibile</string>
     <string name="err_short_http">HTTP %1$d</string>
-    <string name="err_short_too_large">Troppo grande</string>
     <string name="err_short_empty">Lista vuota</string>
     <string name="err_short_unknown">Errore</string>
     <string name="err_short_timeout">Tempo scaduto</string>
@@ -136,8 +128,6 @@
     <string name="np_audio_subs">Audio e sottotitoli</string>
     <string name="np_episodes">Episodi</string>
     <string name="np_next_episode">Episodio successivo</string>
-    <string name="np_back_10">Indietro di 10 secondi</string>
-    <string name="np_fwd_10">Avanti di 10 secondi</string>
     <string name="np_audio">Audio</string>
     <string name="np_subtitles">Sottotitoli</string>
     <string name="np_subtitles_off">Disattivati</string>
@@ -151,7 +141,6 @@
     <string name="player_hint_hold">Tieni premuto ◀ ▶ per scorrere più veloce · ⏪ ⏩ 2× → 48× (pulsanti) · ▲ ▼ cambia canale · OK comandi · Indietro chiude</string>
     <string name="sound_on">Suoni dei tasti: attivi</string>
     <string name="sound_off">Suoni dei tasti: silenziati</string>
-    <string name="action_go_lists">Le mie playlist</string>
     <string name="channels_loading_count">Caricamento della playlist… %1$d voci lette</string>
     <string name="group_all">Tutti</string>
     <string name="sort_label">Ordina:</string>

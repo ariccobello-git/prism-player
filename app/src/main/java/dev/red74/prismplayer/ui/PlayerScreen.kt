@@ -157,7 +157,7 @@ fun PlayerScreen(
 
     val player = remember { createPlayer(context) }
     val hold = remember { StreamHold() }
-    val remote = remember { DeviceProfile.get(context) }
+    val remote = remember { DeviceProfile.get() }
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
     val panelFocus = remember { FocusRequester() }

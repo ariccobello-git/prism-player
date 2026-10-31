@@ -18,7 +18,7 @@ import javax.crypto.spec.SecretKeySpec
  * group needs no query at all until its rows are drawn.
  *
  * The stream addresses carry the account credentials: each one is sealed with AES-256-GCM using a random key made
- * for this database, and that key is stored sealed by the Android Keystore key (as in [ListCache]). Names, groups
+ * for this database, and that key is stored sealed by the Android Keystore key. Names, groups
  * and logos are stored as they are. The files live in the app's private, not-backed-up folder.
  */
 class CatalogStore(private val dir: File, private val keyProvider: () -> SecretKey) {
@@ -68,11 +68,14 @@ class CatalogStore(private val dir: File, private val keyProvider: () -> SecretK
         runCatching { File(file.path + "-journal").delete() }
     }
 
-    /** Removes files of older versions (the compact snapshots) and half-written databases. */
+    /**
+     * Removes what older versions left in the folder (the text copies `list-*.bin` and the compact snapshots
+     * `snap-*`, both replaced by the databases) and half-written files.
+     */
     fun cleanUp() {
         runCatching {
             dir.listFiles()?.forEach { f ->
-                if (f.name.startsWith("snap-") || (f.name.startsWith("tmp-") && f.name.contains(".sqlite"))) f.delete()
+                if (f.name.startsWith("snap-") || f.name.startsWith("list-") || f.name.startsWith("tmp-")) f.delete()
             }
         }
     }
@@ -88,8 +91,6 @@ class CatalogDb private constructor(
     truncated: Boolean,
     totalEntries: Int,
 ) : Catalog(live, movies, series, epgUrl, truncated, totalEntries) {
-
-    override val quickSort: Boolean get() = true
 
     private fun runsOf(type: ContentType, categories: List<Int>): RowIds.Runs {
         val all = if (type == ContentType.MOVIE) movies else live

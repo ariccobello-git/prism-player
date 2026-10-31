@@ -52,20 +52,15 @@
     <string name="channels_retry">Try again</string>
     <string name="load_error_network">Could not reach the server. Check the connection and the link.</string>
     <string name="load_error_http">The server refused the request (HTTP %1$d).</string>
-    <string name="load_error_too_large">The playlist is too large to load.</string>
     <string name="load_error_empty">No playable entries were found in this playlist.</string>
     <string name="load_error_unknown">Something went wrong while loading the playlist.</string>
 
     <string name="player_format">Format: %1$s</string>
     <string name="aspect_auto">Auto</string>
-    <string name="aspect_16_9">16:9</string>
-    <string name="aspect_4_3">4:3</string>
     <string name="aspect_zoom">Zoom (crop)</string>
     <string name="aspect_fit_screen">Fit to screen</string>
     <string name="player_previous">Previous</string>
     <string name="player_next">Next</string>
-    <string name="player_play">Play</string>
-    <string name="player_pause">Pause</string>
     <string name="player_buffering">Buffering…</string>
     <string name="player_error">Playback error (%1$s)</string>
     <string name="player_trouble_refused">The provider refuses this channel (HTTP %1$s): it may be off, or too many connections are open.</string>
@@ -98,8 +93,6 @@
     <string name="category_other">Other</string>
     <string name="now_label">Now</string>
     <string name="next_label">Next</string>
-    <string name="fav_add">Add to favorites</string>
-    <string name="fav_remove">Remove from favorites</string>
     <string name="action_play">Play</string>
     <string name="action_skip_intro">Skip</string>
     <string name="action_resume">Resume from %1$s</string>
@@ -125,7 +118,6 @@
     <string name="load_error_not_a_playlist">The server answered, but not with a playlist. Check the link and the account.</string>
     <string name="err_short_network">Unreachable</string>
     <string name="err_short_http">HTTP %1$d</string>
-    <string name="err_short_too_large">Too large</string>
     <string name="err_short_empty">Empty list</string>
     <string name="err_short_unknown">Error</string>
     <string name="err_short_timeout">Timed out</string>
@@ -136,8 +128,6 @@
     <string name="np_audio_subs">Audio and subtitles</string>
     <string name="np_episodes">Episodes</string>
     <string name="np_next_episode">Next episode</string>
-    <string name="np_back_10">Back 10 seconds</string>
-    <string name="np_fwd_10">Forward 10 seconds</string>
     <string name="np_audio">Audio</string>
     <string name="np_subtitles">Subtitles</string>
     <string name="np_subtitles_off">Off</string>
@@ -151,7 +141,6 @@
     <string name="player_hint_hold">Hold ◀ ▶ to skip faster · ⏪ ⏩ 2× → 48× (buttons) · ▲ ▼ change channel · OK controls · Back close</string>
     <string name="sound_on">Key sounds: on</string>
     <string name="sound_off">Key sounds: muted</string>
-    <string name="action_go_lists">My playlists</string>
     <string name="channels_loading_count">Loading playlist… %1$d entries read</string>
     <string name="group_all">All</string>
     <string name="sort_label">Sort:</string>

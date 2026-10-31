@@ -10,7 +10,6 @@ import dev.red74.prismplayer.R
 fun loadErrorText(error: LoadError, httpCode: Int?): String = when (error) {
     LoadError.NETWORK -> stringResource(R.string.load_error_network)
     LoadError.HTTP -> stringResource(R.string.load_error_http, httpCode ?: 0)
-    LoadError.TOO_LARGE -> stringResource(R.string.load_error_too_large)
     LoadError.EMPTY -> stringResource(R.string.load_error_empty)
     LoadError.UNKNOWN -> stringResource(R.string.load_error_unknown)
     LoadError.TIMEOUT -> stringResource(R.string.load_error_timeout)
@@ -27,7 +26,6 @@ fun loadErrorShort(savedName: String, httpCode: Int): String? {
     return when (error) {
         LoadError.NETWORK -> stringResource(R.string.err_short_network)
         LoadError.HTTP -> stringResource(R.string.err_short_http, httpCode)
-        LoadError.TOO_LARGE -> stringResource(R.string.err_short_too_large)
         LoadError.EMPTY -> stringResource(R.string.err_short_empty)
         LoadError.UNKNOWN -> stringResource(R.string.err_short_unknown)
         LoadError.TIMEOUT -> stringResource(R.string.err_short_timeout)
