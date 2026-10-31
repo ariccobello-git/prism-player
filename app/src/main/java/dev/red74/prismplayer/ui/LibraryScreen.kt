@@ -79,6 +79,7 @@ import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.NowNext
 import dev.red74.prismplayer.data.Show
 import dev.red74.prismplayer.data.WatchProgress
+import dev.red74.prismplayer.data.StreamHold
 import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.createPlayer
 import dev.red74.prismplayer.player.previewItem
@@ -870,6 +871,7 @@ private fun PreviewPane(
 private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val exo = remember { createPlayer(context, preview = true) }
+    val hold = remember { StreamHold() }
     var failed by remember { mutableStateOf(false) }
     val reachability = LocalReachability.current
     val currentChannel by androidx.compose.runtime.rememberUpdatedState(channel)
@@ -888,11 +890,12 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
             }
         }
         exo.addListener(listener)
-        PreviewPlayers.register(exo)
+        PreviewPlayers.register(exo, hold)
         onDispose {
             PreviewPlayers.unregister(exo)
             exo.removeListener(listener)
             exo.release()
+            hold.release()
         }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { exo.pause() }
@@ -902,10 +905,13 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
         if (channel == null || !active) {
             exo.stop()
             exo.clearMediaItems()
+            hold.release()
             return@LaunchedEffect
         }
         delay(if (firstStart) PREVIEW_DELAY_MS * 2 else PREVIEW_DELAY_MS)
         firstStart = false
+        // Any list, guide or plot request still talking to the panel is closed before the preview connects.
+        hold.acquire()
         exo.setPlaybackSpeed(1f)
         exo.setMediaItem(previewItem(channel.url))
         exo.prepare()

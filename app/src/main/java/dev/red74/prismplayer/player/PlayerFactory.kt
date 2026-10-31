@@ -1,5 +1,6 @@
 package dev.red74.prismplayer.player
 
+import dev.red74.prismplayer.data.StreamHold
 import android.content.Context
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.MediaItem
@@ -45,20 +46,21 @@ object BufferPlan {
 
 /** The preview playing next to the lists, so the full-screen player can close its connection before opening its own. */
 object PreviewPlayers {
-    private val active = mutableSetOf<ExoPlayer>()
+    private val active = mutableMapOf<ExoPlayer, StreamHold>()
 
-    fun register(player: ExoPlayer) { active += player }
+    fun register(player: ExoPlayer, hold: StreamHold) { active[player] = hold }
 
-    fun unregister(player: ExoPlayer) { active -= player }
+    fun unregister(player: ExoPlayer) { active.remove(player) }
 
     /** True while a preview is showing a content (it counts as the app being in use). Main thread only. */
-    fun anyPlaying(): Boolean = active.any { it.isPlaying || it.playbackState == androidx.media3.common.Player.STATE_BUFFERING }
+    fun anyPlaying(): Boolean = active.keys.any { it.isPlaying || it.playbackState == androidx.media3.common.Player.STATE_BUFFERING }
 
     /** Panels often allow one connection per account: a preview still open would make the channel answer 403. */
     fun stopAll() {
-        for (player in active) {
+        for ((player, hold) in active) {
             player.stop()
             player.clearMediaItems()
+            hold.release()
         }
     }
 }
