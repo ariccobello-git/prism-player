@@ -101,6 +101,9 @@
     <string name="fav_add">Add to favorites</string>
     <string name="fav_remove">Remove from favorites</string>
     <string name="action_play">Play</string>
+    <string name="action_resume">Resume from %1$s</string>
+    <string name="action_from_start">From the start</string>
+    <string name="resume_toast">Resuming from %1$s</string>
     <string name="season_n">Season %1$d</string>
     <string name="description_missing">Description not available</string>
     <string name="description_loading">Loading the description…</string>
