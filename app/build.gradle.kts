@@ -38,6 +38,12 @@ android {
     }
 
     buildTypes {
+        // The published test builds are debug builds: make them non-debuggable all the same, so no one with a
+        // cable or adb can attach a debugger or `run-as` into the app's private files and read the lists.
+        // A non-debuggable app is also compiled ahead of time by Android, so it runs faster on the stick.
+        debug {
+            isDebuggable = false
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true

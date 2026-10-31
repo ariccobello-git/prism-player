@@ -2,6 +2,7 @@ package dev.red74.prismplayer
 
 import android.app.Application
 import android.content.Context
+import androidx.media3.common.util.Log as MediaLog
 import dev.red74.prismplayer.data.AppSettings
 import dev.red74.prismplayer.data.CatalogStore
 import dev.red74.prismplayer.data.KeystoreKeyProvider
@@ -19,6 +20,9 @@ class PrismApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // The player's own messages can carry stream addresses (with the list's credentials): keep them out of
+        // the system log, where other tools could read them. Nothing is formatted either, so it costs nothing.
+        MediaLog.setLogLevel(MediaLog.LOG_LEVEL_OFF)
         container = AppContainer(this)
         WatchProgress.init(this)
     }
