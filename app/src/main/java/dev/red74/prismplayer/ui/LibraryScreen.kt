@@ -82,6 +82,7 @@ import dev.red74.prismplayer.data.SortMode
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.NowNext
 import dev.red74.prismplayer.data.Show
+import dev.red74.prismplayer.data.VariantTags
 import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.data.ProviderHosts
 import dev.red74.prismplayer.data.StreamHold
@@ -329,6 +330,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
 private data class Entry(val channel: Channel?, val show: Show?) {
     val title: String get() = channel?.name ?: show?.title.orEmpty()
     val logo: String? get() = channel?.logo ?: show?.logo
+    val group: String? get() = channel?.group ?: show?.group
 }
 
 @Composable
@@ -357,13 +359,15 @@ private fun LibraryBody(
                 GroupBrowser(names, counts, nav, onNav) { cats ->
                     val all = remember(cats, catalog) { catalog.channels(ContentType.LIVE, cats) }
                     val items = sortedAsync(all, nav.sort, catalog::sorted)
-                    LiveView(items, true, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
+                    val groups = remember(cats, names) { VariantTags.distinctGroupBadges(cats.map { names[it] }) }
+                    LiveView(items, true, nav, epg, favorites, groups, onNav, onPlay, onToggleFavorite)
                 }
             } else if (results.isEmpty()) {
                 EmptyNote(R.string.search_none)
             } else {
                 val sorted = sortedAsync(results, nav.sort, catalog::sorted)
-                LiveView(sorted, false, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
+                val groups = remember(results) { VariantTags.distinctGroupBadges(results.map { it.group }) }
+                LiveView(sorted, false, nav, epg, favorites, groups, onNav, onPlay, onToggleFavorite)
             }
         }
 
@@ -386,11 +390,13 @@ private fun LibraryBody(
                 query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
                     val all = remember(cats, catalog) { catalog.channels(ContentType.MOVIE, cats) }
                     val items = sortedAsync(all, nav.sort, catalog::sorted)
-                    MovieGrid(items, true, favorites, nav, onNav)
+                    val groups = remember(cats, names) { VariantTags.distinctGroupBadges(cats.map { names[it] }) }
+                    MovieGrid(items, true, favorites, groups, nav, onNav)
                 }
                 else -> {
                     val sorted = sortedAsync(results, nav.sort, catalog::sorted)
-                    MovieGrid(sorted, false, favorites, nav, onNav)
+                    val groups = remember(results) { VariantTags.distinctGroupBadges(results.map { it.group }) }
+                    MovieGrid(sorted, false, favorites, groups, nav, onNav)
                 }
             }
         }
@@ -419,11 +425,13 @@ private fun LibraryBody(
                 query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
                     val all = remember(cats, catalog) { catalog.shows(cats) }
                     val items = sortedAsync(all, nav.sort, catalog::sortedShows)
-                    ShowGrid(items, true, favorites, nav, onNav)
+                    val groups = remember(cats, names) { VariantTags.distinctGroupBadges(cats.map { names[it] }) }
+                    ShowGrid(items, true, favorites, groups, nav, onNav)
                 }
                 else -> {
                     val sorted = sortedAsync(results, nav.sort, catalog::sortedShows)
-                    ShowGrid(sorted, false, favorites, nav, onNav)
+                    val groups = remember(results) { VariantTags.distinctGroupBadges(results.map { it.group }) }
+                    ShowGrid(sorted, false, favorites, groups, nav, onNav)
                 }
             }
         }
@@ -433,12 +441,21 @@ private fun LibraryBody(
 }
 
 @Composable
-private fun MovieGrid(items: List<Channel>, restorable: Boolean, favorites: Set<String>, nav: LibraryNav, onNav: NavChange) {
+private fun MovieGrid(
+    items: List<Channel>,
+    restorable: Boolean,
+    favorites: Set<String>,
+    groupBadges: Map<String, List<String>>,
+    nav: LibraryNav,
+    onNav: NavChange,
+) {
     val unavailable = LocalReachability.current.unavailable
     ItemGrid(items.size, nav, onNav) { i ->
         val item = items[i]
         val key = FavoriteKey.of(item)
-        GridEntry(item.name, item.logo, key in favorites, unavailable = key in unavailable) {
+        val tags = VariantTags.of(item.name)
+        val badges = VariantTags.merge(tags.badges, groupBadges[item.group].orEmpty())
+        GridEntry(tags.title, item.logo, key in favorites, unavailable = key in unavailable, badges = badges) {
             onNav {
                 // From a search, Back must bring the search back (see LibraryNav.origin).
                 val from = if (restorable) null else it.copy(itemIndex = i, resume = true, origin = null)
@@ -449,16 +466,32 @@ private fun MovieGrid(items: List<Channel>, restorable: Boolean, favorites: Set<
 }
 
 @Composable
-private fun ShowGrid(items: List<Show>, restorable: Boolean, favorites: Set<String>, nav: LibraryNav, onNav: NavChange) {
+private fun ShowGrid(
+    items: List<Show>,
+    restorable: Boolean,
+    favorites: Set<String>,
+    groupBadges: Map<String, List<String>>,
+    nav: LibraryNav,
+    onNav: NavChange,
+) {
     ItemGrid(items.size, nav, onNav) { i ->
         val item = items[i]
-        GridEntry(item.title, item.logo, FavoriteKey.ofShow(item) in favorites) {
+        val tags = VariantTags.of(item.title)
+        val badges = VariantTags.merge(tags.badges, groupBadges[item.group].orEmpty())
+        GridEntry(tags.title, item.logo, FavoriteKey.ofShow(item) in favorites, badges = badges) {
             onNav {
                 val from = if (restorable) null else it.copy(itemIndex = i, resume = true, origin = null)
                 it.copy(showTitle = item.title, showGroup = item.group, season = -1, itemIndex = if (restorable) i else 0, resume = true, origin = from)
             }
         }
     }
+}
+
+/** The tags of a channel's group that its name (always shown whole) does not already carry. */
+private fun groupOnlyBadges(name: String, group: List<String>?): List<String> {
+    if (group.isNullOrEmpty()) return emptyList()
+    val own = VariantTags.of(name).badges
+    return group.filter { it !in own }
 }
 
 /** Index of the entry with [url] within [radius] rows of [hint], or -1: reads at most a few pages of a long list. */
@@ -715,6 +748,7 @@ private fun LiveView(
     nav: LibraryNav,
     epg: EpgData,
     favorites: Set<String>,
+    groupBadges: Map<String, List<String>>,
     onNav: NavChange,
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
     onToggleFavorite: (String) -> Unit,
@@ -755,6 +789,7 @@ private fun LiveView(
             itemsIndexed(list, key = { index, _ -> index }) { index, channel ->
                 ChannelRow(
                     channel = channel,
+                    badges = groupOnlyBadges(channel.name, groupBadges[channel.group]),
                     nowNext = epg.nowNext(channel, nowMs),
                     nowMs = nowMs,
                     isFavorite = FavoriteKey.of(channel) in favorites,
@@ -787,6 +822,7 @@ private fun LiveView(
 @Composable
 private fun ChannelRow(
     channel: Channel,
+    badges: List<String>,
     nowNext: NowNext,
     nowMs: Long,
     isFavorite: Boolean,
@@ -813,7 +849,14 @@ private fun ChannelRow(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (unavailable) UnavailableSign()
-                    PrismText(text = channel.name, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 2)
+                    PrismText(
+                        text = channel.name,
+                        modifier = Modifier.weight(1f, fill = false),
+                        size = 20.sp,
+                        weight = FontWeight.SemiBold,
+                        maxLines = 2,
+                    )
+                    Badges(badges)
                 }
                 // The programme title is shown in full under the preview: the row keeps only the progress bar.
                 nowNext.now?.let {
@@ -984,6 +1027,8 @@ private class GridEntry(
     val logo: String?,
     val favorite: Boolean,
     val unavailable: Boolean = false,
+    /** Language and quality tags (see [VariantTags]), drawn on the poster; the [title] no longer carries them. */
+    val badges: List<String> = emptyList(),
     val onClick: () -> Unit,
 )
 
@@ -1032,6 +1077,7 @@ private fun ItemGrid(
                     ) {
                         Box {
                             Poster(item.logo, item.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+                            Badges(item.badges, Modifier.align(Alignment.BottomStart).padding(4.dp), compact = true, max = 4)
                             if (item.unavailable) UnavailableSign(Modifier.align(Alignment.TopEnd).padding(6.dp), size = 26)
                         }
                         PrismText(text = item.title, size = 15.sp, maxLines = 2)
@@ -1053,10 +1099,16 @@ private fun MovieDetail(
     val playFocus = remember { FocusRequester() }
     RequestFocusOnEnter(playFocus)
     val key = FavoriteKey.of(movie)
+    val tags = remember(movie.name) { VariantTags.of(movie.name) }
+    // One panel answer gives both the plot and what the file really is (resolution, audio language).
+    val info by produceState<Pair<Boolean, dev.red74.prismplayer.data.FilmInfo?>>(false to null, movie.url) {
+        value = true to ContentInfo.film(movie.url)
+    }
     Row(Modifier.fillMaxSize().confineFocus(horizontal = true), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
         Poster(movie.logo, movie.name, Modifier.width(240.dp).aspectRatio(2f / 3f))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            PrismText(text = movie.name, size = 32.sp, weight = FontWeight.Bold, maxLines = 3)
+            PrismText(text = tags.title, size = 32.sp, weight = FontWeight.Bold, maxLines = 3)
+            Badges(VariantTags.withFacts(info.second?.badges.orEmpty(), tags.badges), max = 7)
             movie.group?.takeIf { it.isNotBlank() }?.let {
                 PrismText(text = it, size = 18.sp, color = PrismColors.Accent, maxLines = 1)
             }
@@ -1088,7 +1140,7 @@ private fun MovieDetail(
                 StarButton(key in favorites, { onToggleFavorite(key) })
             }
             point?.let { ProgressLine(it.fraction, Modifier.width(320.dp)) }
-            Description(movie.url, maxLines = 10) { ContentInfo.filmPlot(movie.url) }
+            PlotText(info.first, info.second?.plot, maxLines = 10)
         }
     }
 }
@@ -1105,7 +1157,12 @@ private fun ProgressLine(fraction: Float, modifier: Modifier = Modifier) {
 @Composable
 private fun Description(key: Any, maxLines: Int, load: suspend () -> String?) {
     val state by produceState<Pair<Boolean, String?>>(false to null, key) { value = true to load() }
-    val (loaded, text) = state
+    PlotText(state.first, state.second, maxLines)
+}
+
+/** The plot, or a "loading" or "missing" note while [loaded] is false or the panel had none. */
+@Composable
+private fun PlotText(loaded: Boolean, text: String?, maxLines: Int) {
     when {
         text != null -> PrismText(text = text, size = 18.sp, maxLines = maxLines)
         loaded -> PrismText(text = stringResource(R.string.description_missing), size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
@@ -1135,13 +1192,15 @@ private fun EpisodeDetail(
     Row(Modifier.fillMaxSize().confineFocus(horizontal = true), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
         Poster(episode.logo ?: show.logo, show.title, Modifier.width(240.dp).aspectRatio(2f / 3f))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            PrismText(text = show.title, size = 32.sp, weight = FontWeight.Bold, maxLines = 2)
+            PrismText(text = VariantTags.of(show.title).title, size = 32.sp, weight = FontWeight.Bold, maxLines = 2)
             val where = listOfNotNull(
                 episode.season.takeIf { it > 0 }?.let { stringResource(R.string.season_n, it) },
                 episode.episode.takeIf { it > 0 }?.let { stringResource(R.string.episode_n, it) },
             ).joinToString(" · ")
             if (where.isNotEmpty()) PrismText(text = where, size = 18.sp, color = PrismColors.Accent, maxLines = 1)
-            PrismText(text = episode.name, size = 20.sp, maxLines = 2)
+            PrismText(text = VariantTags.of(episode.name).title, size = 20.sp, maxLines = 2)
+            val nameTags = remember(episode.name, show.title) { VariantTags.merge(VariantTags.of(show.title).badges, VariantTags.of(episode.name).badges) }
+            Badges(VariantTags.withFacts(info.second?.badges.orEmpty(), nameTags), max = 7)
             val facts = listOfNotNull(info.second?.duration, info.second?.released).joinToString(" · ")
             if (facts.isNotEmpty()) PrismText(text = facts, size = 16.sp, color = PrismColors.TextSecondary, maxLines = 1)
             if (FavoriteKey.of(episode) in LocalReachability.current.unavailable) {
@@ -1167,12 +1226,7 @@ private fun EpisodeDetail(
                 }
             }
             point?.let { ProgressLine(it.fraction, Modifier.width(320.dp)) }
-            val (loaded, details) = info
-            when {
-                details?.plot != null -> PrismText(text = details.plot, size = 18.sp, maxLines = 8)
-                loaded -> PrismText(text = stringResource(R.string.description_missing), size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
-                else -> PrismText(text = stringResource(R.string.description_loading), size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
-            }
+            PlotText(info.first, info.second?.plot, maxLines = 8)
         }
     }
 }
@@ -1225,7 +1279,9 @@ private fun ShowDetail(
             Poster(show.logo, show.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            PrismText(text = show.title, size = 30.sp, weight = FontWeight.Bold, maxLines = 2)
+            val tags = remember(show.title) { VariantTags.of(show.title) }
+            PrismText(text = tags.title, size = 30.sp, weight = FontWeight.Bold, maxLines = 2)
+            Badges(tags.badges)
             Description(show, maxLines = 4) { ContentInfo.seriesPlot(show.episodes.firstOrNull()?.url, show.title) }
             LazyRow(
                 Modifier.depthFocus().confineFocus(),
@@ -1324,6 +1380,7 @@ private fun FavoritesView(
         return
     }
     val playable = remember(entries) { entries.mapNotNull { it.channel } }
+    val groupBadges = remember(entries) { VariantTags.distinctGroupBadges(entries.map { it.group }) }
     val firstFocus = remember { FocusRequester() }
     // The cursor goes to the favourite watched or opened last; when a favourite is removed, to the row that takes
     // its place, so it never disappears from the page (and Back keeps working from there).
@@ -1370,8 +1427,19 @@ private fun FavoritesView(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (missing) UnavailableSign()
-                    Poster(entry.logo, entry.title, Modifier.size(56.dp), fit = entry.channel?.type == dev.red74.prismplayer.data.ContentType.LIVE)
-                    PrismText(text = entry.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 2)
+                    val live = entry.channel?.type == dev.red74.prismplayer.data.ContentType.LIVE
+                    Poster(entry.logo, entry.title, Modifier.size(56.dp), fit = live)
+                    // Channels keep their whole name; films and series show their tags as badges instead.
+                    val tags = VariantTags.of(entry.title)
+                    val group = groupBadges[entry.group]
+                    PrismText(
+                        text = if (live) entry.title else tags.title,
+                        modifier = Modifier.weight(1f, fill = false),
+                        size = 20.sp,
+                        weight = FontWeight.SemiBold,
+                        maxLines = 2,
+                    )
+                    Badges(if (live) groupOnlyBadges(entry.title, group) else VariantTags.merge(tags.badges, group.orEmpty()))
                 }
             }
             StarButton(

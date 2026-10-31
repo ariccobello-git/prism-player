@@ -34,4 +34,19 @@ class TextCleanerTest {
         assertEquals("Canale 5", channel.name)
         assertEquals("Italia", channel.group)
     }
+
+    @Test
+    fun filmAndSeriesFlagsBecomeLetters() {
+        assertEquals("[IT] Avatar", TextCleaner.cleanName("\uD83C\uDDEE\uD83C\uDDF9 Avatar"))
+        assertEquals("Avatar [GB]", TextCleaner.cleanName("Avatar\uD83C\uDDEC\uD83C\uDDE7"))
+        val text = "#EXTM3U\n" +
+            "#EXTINF:-1,\uD83C\uDDEE\uD83C\uDDF9 Avatar\nhttp://h/movie/u/p/1.mkv\n" +
+            "#EXTINF:-1,\uD83C\uDDEC\uD83C\uDDE7 Avatar\nhttp://h/movie/u/p/2.mkv\n" +
+            "#EXTINF:-1,\uD83C\uDDEE\uD83C\uDDF9 Rai 1\nhttp://h/live/u/p/3.ts\n"
+        val parsed = M3uParser.parse(text, "http://h/list.m3u")
+        assertEquals(listOf("[IT] Avatar", "[GB] Avatar", "Rai 1"), parsed.map { it.name })
+        assertEquals(listOf("ITA"), VariantTags.of(parsed[0].name).badges)
+        assertEquals(listOf("ENG"), VariantTags.of(parsed[1].name).badges)
+        assertEquals("Avatar", VariantTags.of(parsed[1].name).title)
+    }
 }
