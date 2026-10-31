@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -472,7 +473,7 @@ private fun MovieGrid(
         }
         GridEntry(
             tags.title, item.logo, key in favorites, unavailable = key in unavailable, badges = badges,
-            facts = { ContentInfo.savedFilmBadges(item.url) },
+            facts = { ask -> if (ask) ContentInfo.filmBadges(item.url) else ContentInfo.savedFilmBadges(item.url) },
             factsKey = item.url,
         ) {
             onNav {
@@ -519,6 +520,9 @@ private fun fileType(url: String): String? {
 
 /** A group name short enough for a poster badge. */
 private fun shortLabel(text: String): String = if (text.length <= 14) text else text.take(13).trimEnd() + "…"
+
+/** How long the cursor rests on a poster before its real quality is asked of the panel. */
+private const val FACTS_DWELL_MS = 900L
 
 /** The tags of a channel's group that its name (always shown whole) does not already carry. */
 private fun groupOnlyBadges(name: String, group: List<String>?): List<String> {
@@ -1147,10 +1151,10 @@ private class GridEntry(
     /** Language and quality tags (see [VariantTags]), drawn on the poster; the [title] no longer carries them. */
     val badges: List<String> = emptyList(),
     /**
-     * What the panel says about the file (resolution, audio language), for films: only what is already saved on
-     * the stick from an opened page, so the grid never asks the panel anything.
+     * What the panel measured on the file (resolution, audio language), for films: `false` reads only what is
+     * saved, `true` asks the panel if needed. Asked when the cursor rests on the poster for a moment.
      */
-    val facts: (suspend () -> List<String>)? = null,
+    val facts: (suspend (ask: Boolean) -> List<String>)? = null,
     val factsKey: String? = null,
     val onClick: () -> Unit,
 )
@@ -1167,6 +1171,7 @@ private fun ItemGrid(
     val target = nav.itemIndex.coerceIn(0, (total - 1).coerceAtLeast(0))
     val sortAtStart = remember { nav.sort }
     LaunchedEffect(nav.sort) { if (nav.sort != sortAtStart) gridState.scrollToItem(0) }
+    var focusedIndex by remember { mutableIntStateOf(-1) }
 
     LaunchedEffect(nav.resume) {
         if (nav.resume) {
@@ -1190,10 +1195,21 @@ private fun ItemGrid(
                 val item = entry(index)
                 var measured by remember(item.factsKey) { mutableStateOf(emptyList<String>()) }
                 val facts = item.facts
-                if (facts != null) LaunchedEffect(item.factsKey) { measured = facts() }
+                if (facts != null) {
+                    LaunchedEffect(item.factsKey) { measured = facts(false) }
+                    // Only the poster that gains or loses the cursor recomposes, not the whole grid.
+                    val focused by remember(index) { derivedStateOf { focusedIndex == index } }
+                    if (focused && measured.isEmpty()) {
+                        LaunchedEffect(item.factsKey) {
+                            delay(FACTS_DWELL_MS)
+                            measured = facts(true)
+                        }
+                    }
+                }
                 val badges = if (measured.isEmpty()) item.badges else VariantTags.withFacts(measured, item.badges)
                 GlassSurface(
                     onClick = item.onClick,
+                    onFocused = { focusedIndex = index },
                     focusRequester = if (index == target) itemFocus else null,
                     tint = if (item.favorite) PrismColors.Favorite else null,
                     contentPadding = PaddingValues(6.dp),
