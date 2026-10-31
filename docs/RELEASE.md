@@ -47,6 +47,8 @@ git ls-remote --tags origin | sed 's#.*refs/tags/##' | grep -v '\^{}' | sort -V 
 e la pagina *Releases* del repo (una release in corso può non avere ancora il tag).
 
 **Risultato atteso:** l'ultimo è, per esempio, `v0.1.29-debug`. Il prossimo è `v0.1.30-debug`.
+**Versione finale:** un tag senza `-debug` (per esempio `v1.0.0`) viene pubblicato come release vera e segnata come «Latest» invece che come pre-release; si installa sopra le build di debug con la stessa firma.
+
 **Regola:** formato `v0.1.NN-debug`, numero sempre più alto dell'ultimo esistente, mai riusato (`v0.1.10` ha già fatto fallire un rilascio). Se un altro thread sta per pubblicare, coordinarsi prima e lasciargli il suo numero.
 
 ### Passo 3: aspettare la CI verde del push
