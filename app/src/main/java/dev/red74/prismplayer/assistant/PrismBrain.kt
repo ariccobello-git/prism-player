@@ -199,7 +199,8 @@ object PrismBrain {
         if (words.isEmpty()) return null
         val no = setOf("no", "non", "sbagliato", "sbagliata", "errato", "negativo", "nope", "ripeti", "riprova")
         val yes = setOf("si", "sì", "esatto", "esattamente", "giusto", "certo", "ok", "okay", "corretto", "confermo", "perfetto", "bene", "yes", "certamente", "proprio")
-        if (words.any { it in no }) return false
+        // "Nò", "noo", "no no": every spelling the recogniser gives of a no.
+        if (words.any { it in no || Regex("""n[oò]+""").matches(it) }) return false
         if (words.any { it in yes }) return true
         return null
     }

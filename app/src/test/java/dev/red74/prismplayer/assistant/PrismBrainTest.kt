@@ -76,6 +76,8 @@ class PrismBrainTest {
         assertEquals(true, PrismBrain.yesOrNo("si esatto"))
         assertEquals(true, PrismBrain.yesOrNo("Sì, va bene"))
         assertEquals(false, PrismBrain.yesOrNo("No"))
+        assertEquals(false, PrismBrain.yesOrNo("Nò."))
+        assertEquals(false, PrismBrain.yesOrNo("noo"))
         assertEquals(false, PrismBrain.yesOrNo("non è giusto"))
         assertEquals(false, PrismBrain.yesOrNo("no non va bene"))
         assertNull(PrismBrain.yesOrNo("forse"))

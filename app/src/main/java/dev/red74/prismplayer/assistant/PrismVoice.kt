@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -82,15 +83,43 @@ class PrismVoice(context: Context) {
         }
     }
 
-    /** Listens for one sentence; [onPartial] receives the words while they are spoken. */
+    /**
+     * Listens for one sentence; [onPartial] receives the words while they are spoken. Every listen uses a new
+     * recogniser after a short pause: reusing the one that has just answered (as the confirmation right after the
+     * question did) can leave it busy, and the second listen then failed. A busy or dropped recogniser is tried once more.
+     */
     suspend fun listen(onPartial: (String) -> Unit): Heard {
         if (!canListen) return Heard.Unavailable
-        val r = recognizer ?: runCatching { SpeechRecognizer.createSpeechRecognizer(app) }.getOrNull()?.also { recognizer = it }
-            ?: return Heard.Unavailable
+        var result: Heard = Heard.Unavailable
+        for (attempt in 0..1) {
+            delay(if (attempt == 0) 350L else 700L)
+            val outcome = listenOnce(onPartial)
+            result = outcome.heard
+            if (!outcome.retry) break
+        }
+        return result
+    }
+
+    private class Outcome(val heard: Heard, val retry: Boolean)
+
+    private suspend fun listenOnce(onPartial: (String) -> Unit): Outcome {
+        runCatching { recognizer?.destroy() }
+        recognizer = null
+        val r = runCatching { SpeechRecognizer.createSpeechRecognizer(app) }.getOrNull()?.also { recognizer = it }
+            ?: return Outcome(Heard.Unavailable, retry = false)
+        var lastPartial: String? = null
+        var lastWordsAt = 0L
+        val startedAt = SystemClock.uptimeMillis()
         return suspendCancellableCoroutine { cont ->
-            fun finish(result: Heard) {
+            lateinit var watchdog: Runnable
+            fun finish(result: Outcome) {
+                main.removeCallbacks(watchdog)
+                // The microphone is closed before Prism speaks again.
+                runCatching { r.cancel() }
                 if (cont.isActive) cont.resume(result)
             }
+            // Short answers such as "no" sometimes come only as a partial result, with an empty or "no match" end.
+            fun heardOrPartial(): Heard = lastPartial?.let { Heard.Words(it) } ?: Heard.Nothing
             r.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) = Unit
                 override fun onBeginningOfSpeech() = Unit
@@ -99,17 +128,21 @@ class PrismVoice(context: Context) {
                 override fun onEndOfSpeech() = Unit
                 override fun onEvent(eventType: Int, params: Bundle?) = Unit
                 override fun onPartialResults(partialResults: Bundle?) {
-                    best(partialResults)?.let { text -> main.post { onPartial(text) } }
+                    best(partialResults)?.let { text ->
+                        lastPartial = text
+                        lastWordsAt = SystemClock.uptimeMillis()
+                        main.post { onPartial(text) }
+                    }
                 }
                 override fun onResults(results: Bundle?) {
-                    finish(best(results)?.let { Heard.Words(it) } ?: Heard.Nothing)
+                    finish(Outcome(best(results)?.let { Heard.Words(it) } ?: heardOrPartial(), retry = false))
                 }
                 override fun onError(error: Int) {
                     finish(
                         when (error) {
-                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> Heard.NoPermission
-                            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> Heard.Nothing
-                            else -> Heard.Unavailable
+                            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> Outcome(Heard.NoPermission, retry = false)
+                            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> Outcome(heardOrPartial(), retry = false)
+                            else -> lastPartial?.let { Outcome(Heard.Words(it), retry = false) } ?: Outcome(Heard.Unavailable, retry = true)
                         },
                     )
                 }
@@ -120,8 +153,19 @@ class PrismVoice(context: Context) {
                 .putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                 .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, app.packageName)
-            runCatching { r.startListening(intent) }.onFailure { finish(Heard.Unavailable) }
-            cont.invokeOnCancellation { main.post { runCatching { r.cancel() } } }
+            // On the TV the recogniser does not always send its final result when the remote's microphone closes,
+            // and Prism waited for it forever: a pause after the last words ends the sentence, and so does a cap.
+            watchdog = Runnable {
+                val now = SystemClock.uptimeMillis()
+                when {
+                    lastPartial != null && now - lastWordsAt >= SILENCE_MS -> finish(Outcome(heardOrPartial(), retry = false))
+                    now - startedAt >= MAX_LISTEN_MS -> finish(Outcome(heardOrPartial(), retry = false))
+                    else -> main.postDelayed(watchdog, 250)
+                }
+            }
+            main.postDelayed(watchdog, 250)
+            runCatching { r.startListening(intent) }.onFailure { finish(Outcome(Heard.Unavailable, retry = true)) }
+            cont.invokeOnCancellation { main.post { main.removeCallbacks(watchdog); runCatching { r.cancel() } } }
         }
     }
 
@@ -142,6 +186,10 @@ class PrismVoice(context: Context) {
         bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
 
     companion object {
+        /** Silence after the last words that ends a sentence. */
+        const val SILENCE_MS = 2_000L
+        const val MAX_LISTEN_MS = 15_000L
+
         /** About how long it takes to read [text] on screen. */
         fun readingTimeMs(text: String): Long = (1_200L + text.length * 55L).coerceIn(1_500L, 12_000L)
     }
