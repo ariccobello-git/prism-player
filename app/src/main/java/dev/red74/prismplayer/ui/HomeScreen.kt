@@ -124,6 +124,11 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth().focusMemory("check_updates"),
                     )
                     GlassButton(
+                        text = stringResource(R.string.action_updates),
+                        onClick = onUpdates,
+                        modifier = Modifier.fillMaxWidth().focusMemory("updates"),
+                    )
+                    GlassButton(
                         text = stringResource(R.string.action_add_url),
                         onClick = onAddUrl,
                         modifier = Modifier.fillMaxWidth().focusMemory("add"),
@@ -146,11 +151,6 @@ fun HomeScreen(
                         text = stringResource(R.string.action_shortcuts),
                         onClick = onShortcuts,
                         modifier = Modifier.fillMaxWidth().focusMemory("shortcuts"),
-                    )
-                    GlassButton(
-                        text = stringResource(R.string.action_updates),
-                        onClick = onUpdates,
-                        modifier = Modifier.fillMaxWidth().focusMemory("updates"),
                     )
                     GlassButton(
                         text = stringResource(if (muted) R.string.sound_off else R.string.sound_on),
