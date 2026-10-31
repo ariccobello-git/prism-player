@@ -65,7 +65,7 @@ Regole del codice (applicate in `PairingManager` e coperte da test):
 **Playlist salvate**
 
 - Salvate in un unico file cifrato **AES-256-GCM**. La chiave sta nell'Android Keystore e non è esportabile.
-- La copia scaricata di ogni lista è compressa e cifrata a blocchi (AES-256-GCM). Nel database della lista gli indirizzi dei flussi (che contengono le credenziali) sono cifrati uno per uno con una chiave casuale del file, a sua volta cifrata dalla chiave del Keystore; nomi, gruppi e loghi sono in chiaro. Tutto sta in `noBackupFilesDir`.
+- Ogni lista scaricata è tenuta solo nel suo database sul dispositivo (non c'è più una seconda copia di testo). Nel database della lista gli indirizzi dei flussi (che contengono le credenziali) sono cifrati uno per uno con una chiave casuale del file, a sua volta cifrata dalla chiave del Keystore; nomi, gruppi e loghi sono in chiaro. Tutto sta in `noBackupFilesDir`.
 - Il file è in `noBackupFilesDir`, escluso da backup e trasferimenti; `allowBackup` è disattivato.
 - Un file illeggibile (corrotto o chiave persa) viene messo da parte come `.corrupt` senza far crashare l'app.
 - Nella schermata delle liste si vedono solo il **nome** e il **numero di contenuti**, mai l'indirizzo. Dove serve un riferimento (es. un link singolo) si mostra solo l'host, mai percorso o query (spesso contengono token). L'URL non viene mai scritto nei log né nei messaggi di errore.
@@ -194,7 +194,7 @@ Test unitari JVM (JUnit 4), eseguiti da `testDebugUnitTest`:
 - **Server di abbinamento** (vero server su loopback): form e header di sicurezza, un solo invio per codice, errore di battitura che non brucia il codice, limite di dimensione, nessun URL salvato servito dalla rete.
 - **Cifratura e storage**: andata e ritorno, IV casuale, rilevamento di manomissioni e chiave errata, nessun URL in chiaro nel file, ripristino da file corrotto.
 - **Parser M3U e validazione URL**: attributi, URL relativi, flussi HLS singoli, schemi non http scartati; pannello Xtream simulato.
-- **Catalogo e liste grandi**: gruppi a livelli, ordinamenti, ricerche e preferiti; lettura a pagine (`RowList`) e testo della ricerca a parole (`FtsQuery`); copia cifrata a blocchi (`ListCache`).
+- **Catalogo e liste grandi**: gruppi a livelli, ordinamenti, ricerche e preferiti; lettura a pagine (`RowList`) e testo della ricerca a parole (`FtsQuery`).
 - **Formati video**, **QR**, **pulizia del testo incollato**, **controllo aggiornamenti**, **Scorciatoie**, **ottica e movimento del prisma**.
 
 **Non coperto da test automatici:** interfaccia Compose, riproduzione Media3, database SQLite reale (le query girano solo sul dispositivo), Keystore Android reale, navigazione col telecomando e comportamento su Xiaomi TV Stick. Servono prove manuali o test strumentati, non ancora presenti.

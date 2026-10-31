@@ -41,9 +41,6 @@ open class Catalog(
 ) {
     val isEmpty: Boolean get() = live.isEmpty() && movies.isEmpty() && series.isEmpty()
 
-    /** True when [sorted] and [sortedShows] are quick (a database query), so they can run while drawing. */
-    open val quickSort: Boolean get() = false
-
     private fun categoriesOf(type: ContentType): List<Category> = if (type == ContentType.MOVIE) movies else live
 
     /** The entries of the given categories ([type] LIVE or MOVIE), one category after the other. */

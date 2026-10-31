@@ -281,10 +281,6 @@ object PanelJson {
         return out
     }
 
-    /** `get_series`: series title (as [titleKey]) to plot, for the series that have one. */
-    fun seriesPlots(reader: Reader): Map<String, String> =
-        series(reader).mapNotNull { (k, v) -> v.plot?.let { k to it } }.toMap()
-
     /**
      * `get_series_info`: episode stream id to its details. Episodes sit in `episodes` → season → list, so their own
      * fields are at depth 4 and their `info` at depth 5.

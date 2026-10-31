@@ -46,7 +46,7 @@ class ContentInfoTest {
     fun seriesPlotsAreMatchedByTitle() {
         val json = """[{"num":1,"name":"Dr. House","series_id":7,"plot":"Medico geniale.","backdrop_path":["a","b"]},""" +
             """{"name":"Senza trama","plot":null},{"name":"Altra","plot":"Storia","info":{"plot":"interna"}}]"""
-        val plots = PanelJson.seriesPlots(StringReader(json))
+        val plots = PanelJson.series(StringReader(json)).mapNotNull { (k, v) -> v.plot?.let { k to it } }.toMap()
         assertEquals("Medico geniale.", plots[PanelJson.titleKey("DR HOUSE")])
         assertEquals("Storia", plots[PanelJson.titleKey("Altra")])
         assertNull(plots[PanelJson.titleKey("Senza trama")])

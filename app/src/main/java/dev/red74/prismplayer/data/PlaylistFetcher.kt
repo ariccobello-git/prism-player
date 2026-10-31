@@ -26,7 +26,7 @@ import kotlinx.coroutines.withContext
 
 /** Download failure. The message never contains the URL (it may embed credentials or tokens). */
 class FetchException(val kind: Kind, val httpCode: Int? = null) : IOException(kind.name) {
-    enum class Kind { NETWORK, HTTP, TOO_LARGE, REDIRECT, TIMEOUT, DNS, REFUSED, TLS }
+    enum class Kind { NETWORK, HTTP, REDIRECT, TIMEOUT, DNS, REFUSED, TLS }
 }
 
 /**

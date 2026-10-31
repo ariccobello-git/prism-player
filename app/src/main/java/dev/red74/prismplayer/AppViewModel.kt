@@ -15,7 +15,6 @@ import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.FavoriteList
 import dev.red74.prismplayer.data.FetchException
 import dev.red74.prismplayer.data.HttpAgent
-import dev.red74.prismplayer.data.ListCache
 import dev.red74.prismplayer.data.M3uParser
 import dev.red74.prismplayer.data.PlaylistStatus
 import dev.red74.prismplayer.data.ProviderHosts
@@ -40,8 +39,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import org.xmlpull.v1.XmlPullParser
 
 enum class Notice {
@@ -76,7 +73,7 @@ sealed interface UpdateState {
     data class Failed(val release: UpdateCheck.AppRelease?, val problem: AppUpdater.Problem) : UpdateState
 }
 
-enum class LoadError { NETWORK, HTTP, TOO_LARGE, EMPTY, UNKNOWN, TIMEOUT, DNS, REFUSED, TLS, NOT_A_PLAYLIST }
+enum class LoadError { NETWORK, HTTP, EMPTY, UNKNOWN, TIMEOUT, DNS, REFUSED, TLS, NOT_A_PLAYLIST }
 
 /** The opened playlist, organised as Live / Movies / Series. */
 data class LibraryState(
@@ -249,7 +246,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removePlaylist(id: String) {
         viewModelScope.launch {
-            container.listCache.delete(id)
             withContext(Dispatchers.IO) { container.catalogStore.delete(id) }
             _notice.value = runCatching { store.remove(id) }
                 .fold(onSuccess = { Notice.REMOVED }, onFailure = { Notice.SAVE_FAILED })
@@ -270,17 +266,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun load(
         playlist: SavedPlaylist,
         keepChannels: Boolean,
-        saveCopy: Boolean = false,
         onProgress: ((Int) -> Unit)? = null,
     ): Loaded {
-        var last = Loaded(null, LoadError.UNKNOWN, null)
         // Some panels refuse one identity or answer a web page to it: try the next identity for those cases only.
         // If every identity is refused (HTTP error), the same request is retried in other common spellings.
-        val first = tryAgents(playlist, playlist.url, keepChannels, saveCopy, onProgress)
+        val first = tryAgents(playlist, playlist.url, keepChannels, onProgress)
         if (first.error != LoadError.HTTP) return first
-        last = first
+        var last = first
         for (alt in PlaylistUrl.alternatives(playlist.url)) {
-            val again = tryAgents(playlist, alt, keepChannels, saveCopy, onProgress, quick = true)
+            val again = tryAgents(playlist, alt, keepChannels, onProgress, quick = true)
             if (again.error == null) return again
             if (again.error != LoadError.HTTP) last = again
         }
@@ -291,28 +285,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         playlist: SavedPlaylist,
         url: String,
         keepChannels: Boolean,
-        saveCopy: Boolean,
         onProgress: ((Int) -> Unit)?,
         quick: Boolean = false,
     ): Loaded {
         var last = Loaded(null, LoadError.UNKNOWN, null)
         val agents = if (quick) HttpAgent.LIST_AGENTS.take(3) else HttpAgent.LIST_AGENTS
         for (agent in agents) {
-            val result = container.fetcher.fetchBytes(url, listOf(agent)) { input ->
-                // While the list is read it is also kept (compressed and encrypted) for the next opening.
-                val writer = if (saveCopy) container.listCache.writer(playlist.id) else null
-                try {
-                    val source = if (writer != null) ListCache.Tee(input, writer) else input
-                    val reader = BufferedReader(InputStreamReader(source, Charsets.UTF_8), 64 * 1024)
-                    val parsed = M3uParser.parse(reader, playlist.url, keepChannels, onProgress)
-                    if (writer != null) {
-                        if (parsed.count > 0 && parsed.sawPlaylistMarker) writer.commit() else writer.abort()
-                    }
-                    parsed
-                } catch (e: Throwable) {
-                    writer?.abort()
-                    throw e
-                }
+            val result = container.fetcher.fetch(url, listOf(agent)) { reader ->
+                M3uParser.parse(reader, playlist.url, keepChannels, onProgress)
             }
             val parsed = result.getOrNull()
             if (parsed == null) {
@@ -333,7 +313,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun FetchException.Kind?.toLoadError(): LoadError = when (this) {
         FetchException.Kind.HTTP -> LoadError.HTTP
-        FetchException.Kind.TOO_LARGE -> LoadError.TOO_LARGE
         FetchException.Kind.TIMEOUT -> LoadError.TIMEOUT
         FetchException.Kind.DNS -> LoadError.DNS
         FetchException.Kind.REFUSED -> LoadError.REFUSED
@@ -373,19 +352,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
 
-            // No database yet (first opening after an update): the saved text copy, if any, is read once.
-            val cachedAge = if (force) null else container.listCache.ageMs(id)
-            val fromCopy = if (cachedAge != null) readCopy(playlist) else null
-            if (fromCopy != null) {
-                val catalog = buildCatalog(fromCopy)
-                _library.update { it.copy(loading = false, error = null, catalog = catalog) }
-                loadGuide(playlist, catalog)
-                saveDatabase(id, catalog)
-                if (cachedAge != null && cachedAge > COPY_FRESH_MS) refreshInBackground(playlist, catalog.totalEntries)
-                return@launch
-            }
-
-            val loaded = load(playlist, keepChannels = true, saveCopy = true) { count ->
+            val loaded = load(playlist, keepChannels = true) { count ->
                 _library.update { if (it.playlistId == id && it.loading) it.copy(loadedCount = count) else it }
             }
             val parsed = loaded.parsed
@@ -406,23 +373,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         CatalogBuilder.build(parsed.channels, parsed.epgUrl, parsed.truncated)
     }
 
-    /** Reads the saved text copy of a list; null if it is missing or damaged (it is then deleted and the list downloaded). */
-    private suspend fun readCopy(playlist: SavedPlaylist): M3uParser.Result? = withContext(Dispatchers.IO) {
-        val stream = container.listCache.open(playlist.id) ?: return@withContext null
-        val result: M3uParser.Result? = try {
-            stream.use {
-                val reader = BufferedReader(InputStreamReader(it, Charsets.UTF_8), 64 * 1024)
-                val parsed = M3uParser.parse(reader, playlist.url, keepChannels = true)
-                if (parsed.count > 0) parsed else null
-            }
-        } catch (e: Exception) {
-            null
-        }
-        if (result == null) container.listCache.delete(playlist.id)
-        result
-    }
-
-    /** Stores the list in its database for the next opening; a failure just means the next opening reads the text copy. */
+    /** Stores the list in its database for the next opening; a failure just means the next opening downloads it again. */
     private suspend fun saveDatabase(id: String, catalog: Catalog) = withContext(Dispatchers.IO) {
         runCatching { container.catalogStore.write(id, catalog) }
     }
@@ -430,7 +381,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** The shown copy is old: download again quietly and swap it in only if the list really changed. */
     private fun refreshInBackground(playlist: SavedPlaylist, shownCount: Int) {
         viewModelScope.launch {
-            val loaded = load(playlist, keepChannels = true, saveCopy = true)
+            val loaded = load(playlist, keepChannels = true)
             val parsed = loaded.parsed ?: return@launch
             if (loaded.error != null || _library.value.playlistId != playlist.id) return@launch
             recordStatus(playlist.id, PlaylistStatus.OK, parsed.count, null, null)
