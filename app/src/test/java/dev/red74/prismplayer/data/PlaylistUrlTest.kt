@@ -36,6 +36,8 @@ class PlaylistUrlTest {
         )
         assertEquals(PlaylistUrl.Reason.BAD_FORMAT, reason("http://"))
         assertEquals(PlaylistUrl.Reason.BAD_FORMAT, reason("http:///path"))
+        assertEquals(PlaylistUrl.Reason.BAD_FORMAT, reason(PlaylistUrl.withDefaultScheme("Q47H-8VBC")))
+        assertTrue(PlaylistUrl.validate("http://[::1]:8080/a.m3u") is PlaylistUrl.Result.Valid)
     }
 
     @Test
