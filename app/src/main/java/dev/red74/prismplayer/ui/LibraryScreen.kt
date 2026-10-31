@@ -201,7 +201,12 @@ private fun LibraryContent(
 
     val prism = remember { PrismSession() }
     PrismBackground {
-        Box(Modifier.fillMaxSize()) {
+        // The remote's voice key calls Prism from anywhere in the list, when the TV lets the app have it.
+        Box(Modifier.fillMaxSize().onPreviewKeyEvent { event ->
+            val call = !state.loading && state.error == null && PrismSession.isVoiceKey(event)
+            if (call) prism.requestStart()
+            call
+        }) {
         GlassPanel(
             Modifier
                 .fillMaxSize()
@@ -230,7 +235,7 @@ private fun LibraryContent(
                         size = 30.sp, weight = FontWeight.Bold, maxLines = 1,
                     )
                 }
-                if (!state.loading && state.error == null) TopBar(nav, onNav, tabFocus, prism, state.catalog, epg)
+                if (!state.loading && state.error == null) TopBar(nav, onNav, tabFocus, prism, state.catalog, epg, onPlay)
                 }
 
                 when {
@@ -275,7 +280,15 @@ private fun LibraryContent(
 }
 
 @Composable
-private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester, prism: PrismSession, catalog: Catalog, epg: EpgData) {
+private fun TopBar(
+    nav: LibraryNav,
+    onNav: NavChange,
+    tabFocus: FocusRequester,
+    prism: PrismSession,
+    catalog: Catalog,
+    epg: EpgData,
+    onPlay: (items: List<Channel>, index: Int, follow: Boolean) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -314,7 +327,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester, 
             modifier = Modifier.weight(1f),
             imeAction = androidx.compose.ui.text.input.ImeAction.Search,
         )
-        PrismAssistantButton(prism, catalog, epg)
+        PrismAssistantButton(prism, catalog, epg, onNav, onPlay)
     }
 }
 
