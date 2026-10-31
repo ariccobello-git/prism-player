@@ -44,6 +44,7 @@ import dev.red74.prismplayer.ui.ShortcutsScreen
 import dev.red74.prismplayer.ui.SPLASH_EXIT_MS
 import dev.red74.prismplayer.ui.SplashScreen
 import dev.red74.prismplayer.ui.UpdatesScreen
+import dev.red74.prismplayer.ui.AppUpdateScreen
 import dev.red74.prismplayer.ui.UiSounds
 
 private sealed interface Screen {
@@ -51,6 +52,7 @@ private sealed interface Screen {
     data object Import : Screen
     data object Pair : Screen
     data object Updates : Screen
+    data object AppUpdate : Screen
     data object Shortcuts : Screen
     data object Exit : Screen
     data class Library(val playlistId: String) : Screen
@@ -131,6 +133,7 @@ private fun PrismNavigation(
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val aspect by viewModel.aspect.collectAsStateWithLifecycle()
     val verifying by viewModel.verifying.collectAsStateWithLifecycle()
+    val update by viewModel.update.collectAsStateWithLifecycle()
 
     val current: Screen = if (confirmExit) Screen.Exit else stack.last()
     val focusMemory = remember { dev.red74.prismplayer.ui.FocusMemory() }
@@ -145,13 +148,26 @@ private fun PrismNavigation(
             else -> UiSounds.play(UiSounds.Kind.SELECT)
         }
     }
+    // The automatic update check (once every 3 days) starts a few seconds after the home page is on screen, so the
+    // opening stays as quick as before. When it finds a newer version, the "Update?" card opens over the home page.
+    val onHome = current is Screen.Home
+    LaunchedEffect(onHome) {
+        if (onHome) {
+            kotlinx.coroutines.delay(AUTO_UPDATE_DELAY_MS)
+            viewModel.autoCheckForUpdate()
+        }
+    }
+    LaunchedEffect(update is UpdateState.Available, onHome) {
+        if (update is UpdateState.Available && onHome) push(Screen.AppUpdate)
+    }
     LaunchedEffect(library.error) { if (library.error != null) UiSounds.play(UiSounds.Kind.ERROR) }
 
     // Closing when nobody uses the app. The full-screen player (playing or paused), a preview on screen, a list
     // loading or being checked and the pairing page all count as "in use", so the countdown never shows over a
     // content being watched.
     val inUse by rememberUpdatedState(
-        current is Screen.Player || current is Screen.Pair || library.loading || verifying.isNotEmpty(),
+        current is Screen.Player || current is Screen.Pair || library.loading || verifying.isNotEmpty() ||
+            update is UpdateState.Downloading,
     )
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var idleSeconds by remember { mutableStateOf<Int?>(null) }
@@ -214,6 +230,10 @@ private fun PrismNavigation(
                 onAddUrl = { push(Screen.Import) },
                 onPair = { push(Screen.Pair) },
                 onUpdates = { push(Screen.Updates) },
+                onCheckUpdates = {
+                    viewModel.checkForUpdate()
+                    push(Screen.AppUpdate)
+                },
                 onShortcuts = { push(Screen.Shortcuts) },
                 onNoticeShown = viewModel::clearNotice,
             )
@@ -238,6 +258,16 @@ private fun PrismNavigation(
             )
 
             Screen.Updates -> UpdatesScreen(onBack = ::pop)
+
+            Screen.AppUpdate -> AppUpdateScreen(
+                state = update,
+                onInstall = viewModel::installUpdate,
+                onRetryCheck = viewModel::checkForUpdate,
+                onClose = {
+                    viewModel.dismissUpdate()
+                    pop()
+                },
+            )
 
             Screen.Shortcuts -> ShortcutsScreen(onBack = ::pop)
 
@@ -306,12 +336,15 @@ private fun PrismNavigation(
     }
 }
 
+private const val AUTO_UPDATE_DELAY_MS = 5_000L
+
 /** One name per kind of screen, for [dev.red74.prismplayer.ui.FocusMemory]. */
 private fun screenKey(screen: Screen): String = when (screen) {
     Screen.Home -> "home"
     Screen.Import -> "import"
     Screen.Pair -> "pair"
     Screen.Updates -> "updates"
+    Screen.AppUpdate -> "app_update"
     Screen.Shortcuts -> "shortcuts"
     Screen.Exit -> "exit"
     is Screen.Library -> "library"

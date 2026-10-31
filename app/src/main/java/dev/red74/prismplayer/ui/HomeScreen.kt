@@ -12,6 +12,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,6 +59,7 @@ fun HomeScreen(
     onAddUrl: () -> Unit,
     onPair: () -> Unit,
     onUpdates: () -> Unit,
+    onCheckUpdates: () -> Unit,
     onShortcuts: () -> Unit,
     onNoticeShown: () -> Unit,
 ) {
@@ -91,8 +94,10 @@ fun HomeScreen(
                     .fillMaxHeight()
                     .depthFocus(),
             ) {
+                // Scrolls when the menu is taller than the screen, so the focused button is always brought into view.
                 Column(
                     Modifier
+                        .verticalScroll(rememberScrollState())
                         .padding(36.dp)
                         .confineFocus(),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -113,6 +118,16 @@ fun HomeScreen(
                         color = PrismColors.TextSecondary,
                     )
                     Spacer(Modifier.height(20.dp))
+                    GlassButton(
+                        text = stringResource(R.string.action_check_updates),
+                        onClick = onCheckUpdates,
+                        modifier = Modifier.fillMaxWidth().focusMemory("check_updates"),
+                    )
+                    GlassButton(
+                        text = stringResource(R.string.action_updates),
+                        onClick = onUpdates,
+                        modifier = Modifier.fillMaxWidth().focusMemory("updates"),
+                    )
                     GlassButton(
                         text = stringResource(R.string.action_add_url),
                         onClick = onAddUrl,
@@ -136,11 +151,6 @@ fun HomeScreen(
                         text = stringResource(R.string.action_shortcuts),
                         onClick = onShortcuts,
                         modifier = Modifier.fillMaxWidth().focusMemory("shortcuts"),
-                    )
-                    GlassButton(
-                        text = stringResource(R.string.action_updates),
-                        onClick = onUpdates,
-                        modifier = Modifier.fillMaxWidth().focusMemory("updates"),
                     )
                     GlassButton(
                         text = stringResource(if (muted) R.string.sound_off else R.string.sound_on),
@@ -237,6 +247,7 @@ private fun noticeText(notice: Notice): String = when (notice) {
     Notice.VERIFY_FAILED -> stringResource(R.string.notice_verify_failed)
     Notice.VERIFY_ALL_OK -> stringResource(R.string.notice_verify_all_ok)
     Notice.VERIFY_SOME_FAILED -> stringResource(R.string.notice_verify_some_failed)
+    Notice.UPDATE_UP_TO_DATE -> stringResource(R.string.notice_update_ok)
 }
 
 @Composable
