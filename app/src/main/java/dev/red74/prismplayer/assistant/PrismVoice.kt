@@ -2,6 +2,7 @@ package dev.red74.prismplayer.assistant
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -36,12 +37,39 @@ class PrismVoice(context: Context) {
             TextToSpeech(app) { status ->
                 val ok = status == TextToSpeech.SUCCESS && tts?.let { engine ->
                     val result = engine.setLanguage(Locale.ITALIAN)
-                    result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
+                    val usable = result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED
+                    if (usable) tune(engine)
+                    usable
                 } == true
                 ready.complete(ok)
             }
         }.getOrNull()
         if (tts == null) ready.complete(false)
+    }
+
+    /**
+     * A warmer, less robotic voice: the most natural Italian voice installed (Google's neural voices when present,
+     * a male one first for a deeper tone), a slightly lower pitch and a natural pace.
+     */
+    private fun tune(engine: TextToSpeech) {
+        runCatching {
+            engine.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+        }
+        runCatching {
+            val voices = engine.voices.orEmpty().filter { v ->
+                v.locale.language == "it" && TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED !in v.features.orEmpty()
+            }
+            VoicePick.best(voices.map { VoicePick.Option(it.name, it.quality, it.isNetworkConnectionRequired) })
+                ?.let { name -> voices.firstOrNull { it.name == name } }
+                ?.let { engine.voice = it }
+        }
+        engine.setPitch(PITCH)
+        engine.setSpeechRate(RATE)
     }
 
     sealed interface Heard {
@@ -88,12 +116,12 @@ class PrismVoice(context: Context) {
      * recogniser after a short pause: reusing the one that has just answered (as the confirmation right after the
      * question did) can leave it busy, and the second listen then failed. A busy or dropped recogniser is tried once more.
      */
-    suspend fun listen(onPartial: (String) -> Unit): Heard {
+    suspend fun listen(onLevel: (Float) -> Unit = {}, onPartial: (String) -> Unit): Heard {
         if (!canListen) return Heard.Unavailable
         var result: Heard = Heard.Unavailable
         for (attempt in 0..1) {
-            delay(if (attempt == 0) 350L else 700L)
-            val outcome = listenOnce(onPartial)
+            delay(if (attempt == 0) 250L else 700L)
+            val outcome = listenOnce(onLevel, onPartial)
             result = outcome.heard
             if (!outcome.retry) break
         }
@@ -102,7 +130,7 @@ class PrismVoice(context: Context) {
 
     private class Outcome(val heard: Heard, val retry: Boolean)
 
-    private suspend fun listenOnce(onPartial: (String) -> Unit): Outcome {
+    private suspend fun listenOnce(onLevel: (Float) -> Unit, onPartial: (String) -> Unit): Outcome {
         runCatching { recognizer?.destroy() }
         recognizer = null
         val r = runCatching { SpeechRecognizer.createSpeechRecognizer(app) }.getOrNull()?.also { recognizer = it }
@@ -123,7 +151,8 @@ class PrismVoice(context: Context) {
             r.setRecognitionListener(object : RecognitionListener {
                 override fun onReadyForSpeech(params: Bundle?) = Unit
                 override fun onBeginningOfSpeech() = Unit
-                override fun onRmsChanged(rmsdB: Float) = Unit
+                // Roughly -2..10 dB: the light under Prism follows the voice.
+                override fun onRmsChanged(rmsdB: Float) = onLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f))
                 override fun onBufferReceived(buffer: ByteArray?) = Unit
                 override fun onEndOfSpeech() = Unit
                 override fun onEvent(eventType: Int, params: Bundle?) = Unit
@@ -186,11 +215,32 @@ class PrismVoice(context: Context) {
         bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
 
     companion object {
+        /** Slightly deeper and a touch quicker than the engine's default, which sounds flat and slow. */
+        const val PITCH = 0.88f
+        const val RATE = 1.06f
+
         /** Silence after the last words that ends a sentence. */
-        const val SILENCE_MS = 2_000L
+        const val SILENCE_MS = 1_600L
         const val MAX_LISTEN_MS = 15_000L
 
         /** About how long it takes to read [text] on screen. */
         fun readingTimeMs(text: String): Long = (1_200L + text.length * 55L).coerceIn(1_500L, 12_000L)
+
+        /** The short pause that lets the question be read again before Prism asks to confirm it. */
+        fun glanceMs(text: String): Long = (500L + text.length * 22L).coerceIn(800L, 2_200L)
     }
+}
+
+/** Chooses Prism's voice by name and quality, so the choice can be checked without a TV. */
+object VoicePick {
+    class Option(val name: String, val quality: Int, val needsNetwork: Boolean)
+
+    /** Google's Italian male voices; the others are female or unknown. */
+    private val male = listOf("itc", "itd")
+
+    fun best(options: List<Option>): String? = options.maxWithOrNull(
+        compareBy<Option> { it.quality }
+            .thenBy { o -> if (male.any { o.name.contains("-x-$it") }) 1 else 0 }
+            .thenBy { if (it.needsNetwork) 0 else 1 },
+    )?.name
 }
