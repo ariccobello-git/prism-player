@@ -46,7 +46,7 @@ fun PairScreen(
     RequestFocusOnEnter(primaryFocus, key = state::class)
 
     LaunchedEffect(state) {
-        if (state is PairUiState.Done) {
+        if (state is PairUiState.Done || state is PairUiState.Linked) {
             delay(2_500)
             onClose()
         }
@@ -91,6 +91,7 @@ fun PairScreen(
                         PairUiState.Starting -> StatusLine(stringResource(R.string.pair_starting))
                         PairUiState.Expired -> StatusLine(stringResource(R.string.pair_expired))
                         PairUiState.Done -> StatusLine(stringResource(R.string.pair_done))
+                        PairUiState.Linked -> StatusLine(stringResource(R.string.pair_linked))
                         PairUiState.NoNetwork -> StatusLine(stringResource(R.string.pair_no_network))
                         PairUiState.Failed -> StatusLine(stringResource(R.string.pair_failed))
                     }
