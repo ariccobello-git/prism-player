@@ -17,6 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.red74.prismplayer.EngineInfo
 import dev.red74.prismplayer.R
 import dev.red74.prismplayer.UpdateState
 import dev.red74.prismplayer.data.AppUpdater
@@ -59,12 +60,13 @@ fun AppUpdateScreen(
         }
         is UpdateState.UpToDate -> {
             title = stringResource(R.string.update_ok_title)
-            message = stringResource(R.string.update_ok_message, state.installed)
+            message = stringResource(R.string.update_ok_message, state.installed) + engineLine(state.engine)
             main = stringResource(R.string.action_ok) to onClose
         }
         is UpdateState.Available -> {
             title = stringResource(R.string.update_new_title)
-            message = stringResource(R.string.update_new_message, state.release.tag, state.installed)
+            message = stringResource(R.string.update_new_message, state.release.tag, state.installed) +
+                engineLine(state.engine)
             main = update to onInstall
             second = later to onClose
         }
@@ -123,4 +125,13 @@ fun AppUpdateScreen(
             }
         }
     }
+}
+
+/** One more paragraph about the video and audio engine, when the button's check read its latest version. */
+@Composable
+private fun engineLine(engine: EngineInfo?): String = when {
+    engine == null -> ""
+    engine.latest == null -> "\n\n" + stringResource(R.string.update_engine_unknown, engine.installed)
+    engine.newer -> "\n\n" + stringResource(R.string.update_engine_new, engine.latest, engine.installed)
+    else -> "\n\n" + stringResource(R.string.update_engine_ok, engine.installed)
 }

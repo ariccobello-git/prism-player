@@ -190,6 +190,9 @@
     <string name="update_downloading">Downloading Prism %1$s…</string>
     <string name="update_downloading_percent">Downloading Prism %1$s… %2$d%%</string>
     <string name="update_installer_opened">Confirm the installation in Android\'s window. If Android asks, allow Prism to install apps, then press Update again.</string>
+    <string name="update_engine_ok">Video and audio engine: up to date (%1$s).</string>
+    <string name="update_engine_new">Video and audio engine: version %1$s is out (you have %2$s). It is built into Prism automatically within a week and arrives with the next update.</string>
+    <string name="update_engine_unknown">Video and audio engine: %1$s (could not read the latest version).</string>
     <string name="update_failed_title">Update not completed</string>
     <string name="update_failed_download">The download stopped. Check the connection and try again.</string>
     <string name="update_failed_corrupt">The downloaded file is damaged, so it was not installed. Try again.</string>
