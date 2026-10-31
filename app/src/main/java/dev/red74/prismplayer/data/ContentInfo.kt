@@ -41,18 +41,20 @@ object ContentInfo {
         if (store == null) store = ContentInfoStore(File(context.applicationContext.noBackupFilesDir, "content_info.db"))
     }
 
-    suspend fun filmPlot(streamUrl: String): String? {
+    /** Plot and picture/audio badges of a film, from one panel answer. */
+    suspend fun film(streamUrl: String): FilmInfo? {
         val address = PanelAddress.vodInfo(streamUrl) ?: return null
         val key = InfoKeys.film(streamUrl)
         val saved = read(key)
         if (saved != null) {
-            if (InfoKeys.isStale(saved.savedAt, System.currentTimeMillis(), FILM_MAX_AGE_MS)) {
+            // Answers saved before the badges existed (no "d") are asked again once, in the background.
+            if (saved.d == null || InfoKeys.isStale(saved.savedAt, System.currentTimeMillis(), FILM_MAX_AGE_MS)) {
                 refreshLater(key) { fetchFilm(address, key) }
             }
-            return saved.a
+            return FilmInfo(saved.a, InfoKeys.badges(saved.d))
         }
         // A failed request is not remembered, so the next visit asks again.
-        return fetchFilm(address, key)?.a
+        return fetchFilm(address, key)?.let { FilmInfo(it.a, InfoKeys.badges(it.d)) }
     }
 
     suspend fun seriesPlot(episodeUrl: String?, title: String): String? =
@@ -66,7 +68,7 @@ object ContentInfo {
         val group = InfoKeys.episodes(address)
         if (!ensureGroup(group) { fetchEpisodes(address, group) }) return null
         val row = read(InfoKeys.row(group, episodeId)) ?: return null
-        return EpisodeInfo(row.a, row.b, row.c)
+        return EpisodeInfo(row.a, row.b, row.c, InfoKeys.badges(row.d))
     }
 
     private suspend fun seriesEntry(episodeUrl: String?, title: String): PanelJson.SeriesEntry? {
@@ -86,10 +88,11 @@ object ContentInfo {
 
     private suspend fun fetchFilm(address: String, key: String): ContentInfoStore.Row? = PanelLine.request {
         withContext(Dispatchers.IO) {
-            val answer = runCatching { request(address) { PanelJson.filmPlot(it) } }
+            val answer = runCatching { request(address) { PanelJson.film(it) } }
             if (answer.isFailure) return@withContext cutOrNull<ContentInfoStore.Row>(answer)
             // "No plot" is saved too, so a film without one does not ask the panel on every visit.
-            val row = ContentInfoStore.Row(answer.getOrNull(), null, null, System.currentTimeMillis())
+            val film = answer.getOrNull()
+            val row = ContentInfoStore.Row(film?.plot, null, null, System.currentTimeMillis(), film?.badges.orEmpty().joinToString("|"))
             runCatching { store?.put(key, row) }
             row
         }
@@ -109,7 +112,7 @@ object ContentInfo {
             if (isFresh(group)) return@withContext true
             val answer = runCatching { request(address) { PanelJson.episodes(it) } }
             val episodes = answer.getOrNull() ?: return@withContext cutOrNull<Boolean>(answer) ?: false
-            runCatching { store?.replaceGroup(group, episodes.mapValues { (_, e) -> ContentInfoStore.Row(e.plot, e.duration, e.released, 0) }) }.isSuccess
+            runCatching { store?.replaceGroup(group, episodes.mapValues { (_, e) -> ContentInfoStore.Row(e.plot, e.duration, e.released, 0, e.badges.joinToString("|")) }) }.isSuccess
         }
     }
 
@@ -190,12 +193,88 @@ object InfoKeys {
     /** The first key after every row of [group]: rows are `group:` + anything, and ';' follows ':'. */
     fun groupEnd(group: String): String = "$group;"
 
+    fun badges(saved: String?): List<String> = if (saved.isNullOrEmpty()) emptyList() else saved.split('|')
+
     /** Too old, or saved "in the future" (the clock was changed): ask again. */
     fun isStale(savedAt: Long, now: Long, maxAgeMs: Long): Boolean = now - savedAt !in 0..maxAgeMs
 }
 
 /** What the panel says about one episode; each part may be missing. */
-data class EpisodeInfo(val plot: String?, val duration: String?, val released: String?)
+data class EpisodeInfo(val plot: String?, val duration: String?, val released: String?, val badges: List<String> = emptyList())
+
+/** What the panel says about one film; [badges] are its real picture and audio ("FHD", "HEVC", "ITA", "5.1"). */
+data class FilmInfo(val plot: String?, val badges: List<String> = emptyList())
+
+/**
+ * The `video` and `audio` blocks a panel adds to a film or an episode once it has probed the file: resolution,
+ * codec, HDR, audio language and channels. They are the real thing, so they are worth more than the tags in the
+ * name. Nothing is asked for them: they come in the same answer as the plot.
+ */
+internal class MediaFacts {
+    private var width = 0
+    private var height = 0
+    private var codec: String? = null
+    private var hdr = false
+    private val languages = LinkedHashSet<String>()
+    private var channels = 0
+
+    /** True when [key] belonged to the video or audio block and was taken. */
+    fun take(scan: JsonScan, key: String, value: String): Boolean {
+        val k = key.lowercase()
+        return when {
+            scan.within("video") -> {
+                when (k) {
+                    "width" -> width = value.toIntOrNull() ?: width
+                    "height" -> height = value.toIntOrNull() ?: height
+                    "codec_name" -> if (codec == null) codec = value.lowercase()
+                    "color_transfer" -> if (value.equals("smpte2084", true) || value.equals("arib-std-b67", true)) hdr = true
+                }
+                true
+            }
+            scan.within("audio") -> {
+                when (k) {
+                    "language" -> language(value)?.let(languages::add)
+                    "channels" -> channels = maxOf(channels, value.toIntOrNull() ?: 0)
+                }
+                true
+            }
+            else -> false
+        }
+    }
+
+    fun badges(): List<String> {
+        val out = ArrayList<String>()
+        out += languages
+        when {
+            width >= 3000 || height >= 1800 -> out += "4K"
+            width >= 1700 || height >= 1000 -> out += "FHD"
+            width >= 1200 || height >= 700 -> out += "HD"
+            width > 0 || height > 0 -> out += "SD"
+        }
+        if (hdr) out += "HDR"
+        when (codec) {
+            "hevc", "h265" -> out += "HEVC"
+            "av1" -> out += "AV1"
+        }
+        when {
+            channels >= 8 -> out += "7.1"
+            channels >= 6 -> out += "5.1"
+        }
+        return out
+    }
+
+    private fun language(code: String): String? = when (code.trim().lowercase()) {
+        "", "und", "unknown", "null", "zxx", "mis", "mul" -> null
+        "ita", "it", "italian", "italiano" -> "ITA"
+        "eng", "en", "english" -> "ENG"
+        "fre", "fra", "fr", "french" -> "FRA"
+        "spa", "es", "spanish" -> "SPA"
+        "ger", "deu", "de", "german" -> "GER"
+        "por", "pt" -> "POR"
+        "jpn", "ja" -> "JPN"
+        else -> code.trim().uppercase().takeIf { it.length in 2..3 && it.all { c -> c in 'A'..'Z' } }
+    }
+}
 
 /** Builds the panel requests for [ContentInfo] from a stream address; null for anything not Xtream-style. */
 object PanelAddress {
@@ -241,16 +320,21 @@ object PanelJson {
     private const val MAX_PLOT = 900
 
     /** `get_vod_info`: the plot (or description) of the film. */
-    fun filmPlot(reader: Reader): String? {
+    fun filmPlot(reader: Reader): String? = film(reader).plot
+
+    /** `get_vod_info`: the plot and, when the panel has probed the file, its picture and audio (see [MediaFacts]). */
+    fun film(reader: Reader): FilmInfo {
         var plot: String? = null
         var description: String? = null
-        JsonScan(reader).run { _, key, value ->
-            when (key.lowercase()) {
+        val facts = MediaFacts()
+        val scan = JsonScan(reader, numbers = true)
+        scan.run { _, key, value ->
+            if (!facts.take(scan, key, value)) when (key.lowercase()) {
                 "plot" -> if (plot == null) plot = clean(value)
                 "description" -> if (description == null) description = clean(value)
             }
         }
-        return plot ?: description
+        return FilmInfo(plot ?: description, facts.badges())
     }
 
     class SeriesEntry(val id: String?, val plot: String?)
@@ -291,15 +375,23 @@ object PanelJson {
         var plot: String? = null
         var duration: String? = null
         var released: String? = null
-        JsonScan(reader, numbers = true).run(
+        var facts = MediaFacts()
+        val scan = JsonScan(reader, numbers = true)
+        scan.run(
             onEnd = { depth ->
                 if (depth == 4) {
-                    id?.let { if (plot != null || duration != null || released != null) out[it] = EpisodeInfo(plot, duration, released) }
-                    id = null; plot = null; duration = null; released = null
+                    val badges = facts.badges()
+                    id?.let {
+                        if (plot != null || duration != null || released != null || badges.isNotEmpty()) {
+                            out[it] = EpisodeInfo(plot, duration, released, badges)
+                        }
+                    }
+                    id = null; plot = null; duration = null; released = null; facts = MediaFacts()
                 }
             },
         ) { depth, key, value ->
             when {
+                depth >= 6 && facts.take(scan, key, value) -> Unit
                 depth == 4 && key == "id" -> id = value
                 depth == 5 -> when (key.lowercase()) {
                     "plot" -> if (plot == null) plot = clean(value)
@@ -329,6 +421,10 @@ object PanelJson {
  */
 internal class JsonScan(private val reader: Reader, private val numbers: Boolean = false) {
     private var peeked = -2
+    private val open = ArrayList<String>()
+
+    /** True while the value reported sits (at any depth) inside an object or array under [key]. */
+    fun within(key: String): Boolean = open.any { it.equals(key, ignoreCase = true) }
 
     private fun peek(): Int {
         if (peeked == -2) peeked = reader.read()
@@ -357,6 +453,7 @@ internal class JsonScan(private val reader: Reader, private val numbers: Boolean
         when (peek()) {
             '{'.code -> {
                 next()
+                open += key
                 val inner = depth + 1
                 while (true) {
                     skipSpace()
@@ -372,6 +469,7 @@ internal class JsonScan(private val reader: Reader, private val numbers: Boolean
                         else -> error("bad object")
                     }
                 }
+                open.removeAt(open.lastIndex)
                 onEnd(inner)
             }
             '['.code -> {

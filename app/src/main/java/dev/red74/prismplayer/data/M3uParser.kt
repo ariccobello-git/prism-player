@@ -109,6 +109,8 @@ object M3uParser {
 
     private class ExtInf(
         val name: String?,
+        /** The name as written, flags included (see [TextCleaner.cleanName]). */
+        val rawName: String?,
         val group: String?,
         val logo: String?,
         val tvgId: String?,
@@ -122,8 +124,16 @@ object M3uParser {
         position: Int,
         share: (String?) -> String?,
     ): Channel {
-        val name = info?.name ?: info?.tvgName ?: fallbackName(url, position)
-        val type = classify(url, name)
+        val plainName = info?.name ?: info?.tvgName ?: fallbackName(url, position)
+        val type = classify(url, plainName)
+        // Films and series keep their flags as letters ("[IT]"), often the only sign of the language. Channels do
+        // not: their names are matched against the programme guide.
+        val raw = info?.rawName
+        val name = if (type != ContentType.LIVE && info?.name != null && raw != null && raw.indexOf('\uD83C') >= 0) {
+            TextCleaner.cleanNameOrNull(raw) ?: plainName
+        } else {
+            plainName
+        }
         var seriesTitle: String? = null
         var season = 0
         var episode = 0
@@ -204,9 +214,10 @@ object M3uParser {
             }
         }
         val head = if (commaAt >= 0) body.substring(0, commaAt) else body
-        val name = if (commaAt >= 0) TextCleaner.cleanOrNull(body.substring(commaAt + 1)) else null
+        val rawName = if (commaAt >= 0) body.substring(commaAt + 1) else null
         return ExtInf(
-            name = name,
+            name = TextCleaner.cleanOrNull(rawName),
+            rawName = rawName,
             group = TextCleaner.cleanOrNull(attrValue(head, "group-title")),
             logo = attrValue(head, "tvg-logo")?.ifEmpty { null },
             tvgId = attrValue(head, "tvg-id")?.ifEmpty { null },

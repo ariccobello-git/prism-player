@@ -118,4 +118,29 @@ class ContentInfoTest {
         // A clock moved backwards must not keep an answer forever.
         assertTrue(InfoKeys.isStale(savedAt = 5_000, now = 1_000, maxAgeMs = day))
     }
+
+    @Test
+    fun filmsBringTheirRealPictureAndAudio() {
+        val json = """{"info":{"plot":"Trama","video":{"index":0,"codec_name":"hevc","width":1920,"height":800,""" +
+            """"color_transfer":"smpte2084","tags":{"language":"und"}},"audio":{"codec_name":"ac3","channels":6,"tags":{"language":"ita"}},""" +
+            """"bitrate":5200},"movie_data":{"stream_id":201}}"""
+        val film = PanelJson.film(StringReader(json))
+        assertEquals("Trama", film.plot)
+        assertEquals(listOf("ITA", "FHD", "HDR", "HEVC", "5.1"), film.badges)
+        val bare = PanelJson.film(StringReader("""{"info":{"plot":"Solo trama","video":[],"audio":[]}}"""))
+        assertEquals("Solo trama", bare.plot)
+        assertTrue(bare.badges.isEmpty())
+    }
+
+    @Test
+    fun episodesBringTheirRealPictureAndAudio() {
+        val json = """{"episodes":{"1":[{"id":"301","info":{"plot":"Uno","duration":"00:44:10",""" +
+            """"video":{"codec_name":"h264","width":1280,"height":720,"duration":"x"},"audio":{"channels":2,"tags":{"language":"eng"}}}},""" +
+            """{"id":"302","info":{"video":{"width":3840,"height":2160}}}]}}"""
+        val episodes = PanelJson.episodes(StringReader(json))
+        assertEquals(EpisodeInfo("Uno", "00:44:10", null, listOf("ENG", "HD")), episodes["301"])
+        assertEquals(EpisodeInfo(null, null, null, listOf("4K")), episodes["302"])
+        assertEquals(listOf("FHD", "ITA"), InfoKeys.badges("FHD|ITA"))
+        assertTrue(InfoKeys.badges("").isEmpty() && InfoKeys.badges(null).isEmpty())
+    }
 }
