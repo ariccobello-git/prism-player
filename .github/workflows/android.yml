@@ -219,19 +219,23 @@ jobs:
             exit 1
           fi
           AS="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          # The key store takes ASCII passwords only, and an iPhone passphrase may hold accents or
+          # curly quotes: the store password is the SHA-256 of the passphrase.
+          K="$(printf '%s' "${P}" | sha256sum | cut -d' ' -f1)"
+          export K
           work="$(mktemp -d)"
           trap 'rm -rf "${work}"' EXIT
           openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:P \
             -in signing/prism-release.p12.enc -out "${work}/new.p12"
           "${AS}" sign --v4-signing-enabled false \
             --ks app/prism-debug.p12 --ks-key-alias prism --ks-pass pass:prismdebug --key-pass pass:prismdebug \
-            --next-signer --ks "${work}/new.p12" --ks-key-alias prism --ks-pass env:P --key-pass env:P \
+            --next-signer --ks "${work}/new.p12" --ks-key-alias prism --ks-pass env:K --key-pass env:K \
             --lineage signing/lineage.bin --rotation-min-sdk-version 28 \
             --out "${work}/signed.apk" dist/app-debug.apk
           "${AS}" verify -v --print-certs "${work}/signed.apk" | tee "${work}/verify.txt"
           grep -q "Verified using v3 scheme (APK Signature Scheme v3): true" "${work}/verify.txt" \
             || { echo "::error::The APK has no v3 signature."; exit 1; }
-          new_cert="$(keytool -list -v -storetype pkcs12 -keystore "${work}/new.p12" -storepass:env P -alias prism \
+          new_cert="$(keytool -list -v -storetype pkcs12 -keystore "${work}/new.p12" -storepass:env K -alias prism \
             | sed -nE 's/.*SHA256: *//p' | tr -d ':' | tr 'A-F' 'a-f' | head -1)"
           "${AS}" lineage --in "${work}/signed.apk" --print-certs | tee "${work}/lineage.txt"
           grep -qi "${new_cert}" "${work}/lineage.txt" \
