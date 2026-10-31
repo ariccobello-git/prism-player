@@ -1,5 +1,6 @@
 package dev.red74.prismplayer.player
 
+import dev.red74.prismplayer.data.SharedLine
 import dev.red74.prismplayer.data.StreamHold
 import android.content.Context
 import androidx.media3.common.AudioAttributes
@@ -47,6 +48,12 @@ object BufferPlan {
 /** The preview playing next to the lists, so the full-screen player can close its connection before opening its own. */
 object PreviewPlayers {
     private val active = mutableMapOf<ExoPlayer, StreamHold>()
+
+    init {
+        // The list's shared turn was lost (iPrism has it now): the preview must close its connection at once.
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        SharedLine.onLost { main.post { stopAll() } }
+    }
 
     fun register(player: ExoPlayer, hold: StreamHold) { active[player] = hold }
 

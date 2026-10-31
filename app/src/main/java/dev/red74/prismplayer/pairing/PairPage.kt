@@ -59,6 +59,15 @@ internal object PairPage {
         """.trimIndent(),
     )
 
+    fun linked(lang: Lang): String = layout(
+        lang,
+        title = t(lang, "TV collegata a iPrism", "TV linked to iPrism"),
+        body = """
+            <h1>${t(lang, "TV collegata a iPrism", "TV linked to iPrism")}</h1>
+            <p>${t(lang, "Da ora TV e iPhone non usano mai la stessa lista nello stesso momento. Questo codice non è più valido.", "From now on the TV and the iPhone never use the same list at the same time. This code is no longer valid.")}</p>
+        """.trimIndent(),
+    )
+
     fun success(lang: Lang): String = layout(
         lang,
         title = t(lang, "Fatto", "Done"),

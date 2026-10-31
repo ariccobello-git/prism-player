@@ -80,6 +80,7 @@ import dev.red74.prismplayer.player.StreamIdentity
 import dev.red74.prismplayer.player.TrackPolicy
 import dev.red74.prismplayer.player.createPlayer
 import dev.red74.prismplayer.data.ProviderHosts
+import dev.red74.prismplayer.data.SharedLine
 import dev.red74.prismplayer.data.StreamHold
 import kotlinx.coroutines.delay
 import java.util.Locale
@@ -233,7 +234,12 @@ fun PlayerScreen(
             }
         }
         player.addListener(listener)
+        // The list's shared turn was lost (iPrism has it now): this connection must close at once.
+        val main = android.os.Handler(android.os.Looper.getMainLooper())
+        val onLost = { main.post { player.stop() }; Unit }
+        SharedLine.onLost(onLost)
         onDispose {
+            SharedLine.removeOnLost(onLost)
             player.removeListener(listener)
             player.release()
             hold.release()
@@ -271,7 +277,7 @@ fun PlayerScreen(
         // Panels often allow one connection per account: the preview's must be closed before this one opens.
         PreviewPlayers.stopAll()
         // Any list, guide or plot request still talking to the panel is closed before the stream opens.
-        hold.acquire()
+        hold.acquire(channels[index].url)
         ProviderHosts.noteUrl(channels[index].url)
         // Every content starts in Italian without subtitles (see TrackPolicy); the tracks decide the rest.
         autoTracks = true
@@ -307,7 +313,7 @@ fun PlayerScreen(
         delay(if (attempt == 1) Availability.RETRY_DELAY_MS else Availability.NEXT_IDENTITY_DELAY_MS)
         if (tryIndex != index) return@LaunchedEffect
         StreamIdentity.current = plan[attempt.coerceAtMost(plan.lastIndex)]
-        hold.acquire()
+        hold.acquire(channels[index].url)
         ProviderHosts.noteUrl(channels[index].url)
         val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
         if (resumeMs != null && resumeMs > 0) {

@@ -40,6 +40,7 @@ import dev.red74.prismplayer.ui.ImportScreen
 import dev.red74.prismplayer.ui.LibraryScreen
 import dev.red74.prismplayer.ui.PairScreen
 import dev.red74.prismplayer.ui.PlayerScreen
+import dev.red74.prismplayer.ui.SharedLineNote
 import dev.red74.prismplayer.ui.ShortcutsScreen
 import dev.red74.prismplayer.ui.SPLASH_EXIT_MS
 import dev.red74.prismplayer.ui.SplashScreen
@@ -302,6 +303,7 @@ private fun PrismNavigation(
         }
         }
     }
+    SharedLineNote()
     idleSeconds?.let { IdleCountdown(it) }
     }
 }
