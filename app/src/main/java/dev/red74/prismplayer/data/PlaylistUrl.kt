@@ -45,6 +45,8 @@ object PlaylistUrl {
         // refuses but every player and server accepts, so the lenient URL parser decides when the strict one fails.
         val host = strict?.host ?: runCatching { java.net.URL(candidate).host }.getOrNull()
         if (host.isNullOrBlank()) return Result.Invalid(Reason.BAD_FORMAT)
+        // A provider is always a domain or an IP address: a bare word (a code typed in the wrong field) is not a list.
+        if ('.' !in host && ':' !in host) return Result.Invalid(Reason.BAD_FORMAT)
         return Result.Valid(candidate, host)
     }
 
