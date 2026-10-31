@@ -68,6 +68,9 @@ Regole del codice (applicate in `PairingManager` e coperte da test):
 - Il file è in `noBackupFilesDir`, escluso da backup e trasferimenti; `allowBackup` è disattivato.
 - Un file illeggibile (corrotto o chiave persa) viene messo da parte come `.corrupt` senza far crashare l'app.
 - Nella schermata delle liste si vedono solo il **nome** e il **numero di contenuti**, mai l'indirizzo. Dove serve un riferimento (es. un link singolo) si mostra solo l'host, mai percorso o query (spesso contengono token). L'URL non viene mai scritto nei log né nei messaggi di errore.
+- I messaggi interni del player (Media3) sono spenti, così nemmeno gli indirizzi dei flussi finiscono nel log di sistema.
+- Anche gli APK di prova sono **non debuggabili**: nessuno con un cavo o con adb può agganciare un debugger o usare `run-as` per entrare nei file privati dell'app. In più Android li compila in anticipo, quindi girano più fluidi.
+- Preferiti, segni "non disponibile" e punti di ripresa salvano solo un'impronta (hash) dell'indirizzo, mai l'indirizzo.
 
 **Rete locale**
 
