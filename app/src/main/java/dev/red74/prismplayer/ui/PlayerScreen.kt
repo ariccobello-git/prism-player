@@ -79,6 +79,7 @@ import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.StreamIdentity
 import dev.red74.prismplayer.player.TrackPolicy
 import dev.red74.prismplayer.player.createPlayer
+import dev.red74.prismplayer.data.StreamHold
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -154,6 +155,7 @@ fun PlayerScreen(
     val framesShown = remember { intArrayOf(0) }
 
     val player = remember { createPlayer(context) }
+    val hold = remember { StreamHold() }
     val remote = remember { DeviceProfile.get(context) }
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
@@ -233,6 +235,7 @@ fun PlayerScreen(
         onDispose {
             player.removeListener(listener)
             player.release()
+            hold.release()
         }
     }
 
@@ -266,6 +269,8 @@ fun PlayerScreen(
         StreamIdentity.current = plan.first()
         // Panels often allow one connection per account: the preview's must be closed before this one opens.
         PreviewPlayers.stopAll()
+        // Any list, guide or plot request still talking to the panel is closed before the stream opens.
+        hold.acquire()
         // Every content starts in Italian without subtitles (see TrackPolicy); the tracks decide the rest.
         autoTracks = true
         appliedTracks[0] = null
@@ -300,6 +305,7 @@ fun PlayerScreen(
         delay(if (attempt == 1) Availability.RETRY_DELAY_MS else Availability.NEXT_IDENTITY_DELAY_MS)
         if (tryIndex != index) return@LaunchedEffect
         StreamIdentity.current = plan[attempt.coerceAtMost(plan.lastIndex)]
+        hold.acquire()
         val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
         if (resumeMs != null && resumeMs > 0) {
             player.setMediaItem(MediaItem.fromUri(channels[index].url), resumeMs)

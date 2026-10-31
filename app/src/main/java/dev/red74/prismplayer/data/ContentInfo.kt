@@ -15,7 +15,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -26,7 +25,7 @@ import kotlinx.coroutines.withContext
  *
  * Every answer is kept on the stick (see [ContentInfoStore]), so a page seen once opens with its plot at once, even
  * after a restart. An answer older than its age limit is still shown straight away and asked for again in the
- * background, so the next visit has the update. Requests wait their turn on [PanelLine] with list downloads.
+ * background, so the next visit has the update. Requests go through [PanelLine]: one at a time, never while a stream is open.
  */
 object ContentInfo {
     /** Plots of films almost never change. */
@@ -35,7 +34,6 @@ object ContentInfo {
     const val SERIES_MAX_AGE_MS = 24L * 60 * 60 * 1000
 
     private var store: ContentInfoStore? = null
-    private val network = PanelLine.mutex
     private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val refreshing = Collections.synchronizedSet(HashSet<String>())
 
@@ -86,10 +84,10 @@ object ContentInfo {
         return true
     }
 
-    private suspend fun fetchFilm(address: String, key: String): ContentInfoStore.Row? = network.withLock {
+    private suspend fun fetchFilm(address: String, key: String): ContentInfoStore.Row? = PanelLine.request {
         withContext(Dispatchers.IO) {
             val answer = runCatching { request(address) { PanelJson.filmPlot(it) } }
-            if (answer.isFailure) return@withContext null
+            if (answer.isFailure) return@withContext cutOrNull<ContentInfoStore.Row>(answer)
             // "No plot" is saved too, so a film without one does not ask the panel on every visit.
             val row = ContentInfoStore.Row(answer.getOrNull(), null, null, System.currentTimeMillis())
             runCatching { store?.put(key, row) }
@@ -97,20 +95,28 @@ object ContentInfo {
         }
     }
 
-    private suspend fun fetchSeries(address: String, group: String): Boolean = network.withLock {
+    private suspend fun fetchSeries(address: String, group: String): Boolean = PanelLine.request {
         withContext(Dispatchers.IO) {
             if (isFresh(group)) return@withContext true
-            val entries = runCatching { request(address) { PanelJson.series(it) } }.getOrNull() ?: return@withContext false
+            val answer = runCatching { request(address) { PanelJson.series(it) } }
+            val entries = answer.getOrNull() ?: return@withContext cutOrNull<Boolean>(answer) ?: false
             runCatching { store?.replaceGroup(group, entries.mapValues { (_, e) -> ContentInfoStore.Row(e.id, e.plot, null, 0) }) }.isSuccess
         }
     }
 
-    private suspend fun fetchEpisodes(address: String, group: String): Boolean = network.withLock {
+    private suspend fun fetchEpisodes(address: String, group: String): Boolean = PanelLine.request {
         withContext(Dispatchers.IO) {
             if (isFresh(group)) return@withContext true
-            val episodes = runCatching { request(address) { PanelJson.episodes(it) } }.getOrNull() ?: return@withContext false
+            val answer = runCatching { request(address) { PanelJson.episodes(it) } }
+            val episodes = answer.getOrNull() ?: return@withContext cutOrNull<Boolean>(answer) ?: false
             runCatching { store?.replaceGroup(group, episodes.mapValues { (_, e) -> ContentInfoStore.Row(e.plot, e.duration, e.released, 0) }) }.isSuccess
         }
+    }
+
+    /** A request cut by a stream throws, so [PanelLine] asks again once the stream ends; a real failure is null. */
+    private fun <T> cutOrNull(answer: Result<*>): T? {
+        if (PanelLine.cut) throw answer.exceptionOrNull() ?: IllegalStateException("cut")
+        return null
     }
 
     /** Another request may have filled the group while this one waited for its turn. */
@@ -137,6 +143,7 @@ object ContentInfo {
         var last: Exception? = null
         for (agent in AGENTS) {
             val connection = URL(address).openConnection() as HttpURLConnection
+            PanelLine.opened(connection)
             try {
                 connection.connectTimeout = 10_000
                 connection.readTimeout = 30_000
@@ -148,6 +155,7 @@ object ContentInfo {
                 }
                 return connection.inputStream.use { raw -> read(reader(raw)) }
             } catch (e: Exception) {
+                if (PanelLine.cut) throw e
                 last = e
             } finally {
                 connection.disconnect()

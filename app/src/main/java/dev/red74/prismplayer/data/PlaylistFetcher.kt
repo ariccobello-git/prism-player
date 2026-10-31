@@ -13,7 +13,11 @@ import java.net.UnknownHostException
 import java.util.zip.GZIPInputStream
 import javax.net.ssl.SSLException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -24,11 +28,78 @@ class FetchException(val kind: Kind, val httpCode: Int? = null) : IOException(ki
 }
 
 /**
- * The one line to the IPTV panel: list downloads, guide downloads and plot requests take turns on it, so the app
- * never holds two connections to the provider at once (many panels refuse the second one, or the whole account).
+ * The one line to the IPTV panel. The provider allows a single connection per account: two at once can get the
+ * account blocked for good. So list downloads, guide downloads and plot requests run one at a time ([request]), and
+ * never while a stream is open: a player first calls [beginStream], which cuts any request still running and waits
+ * until its connection is closed; the request starts over by itself once every stream has ended ([endStream]).
  */
 object PanelLine {
-    val mutex = Mutex()
+    private val mutex = Mutex()
+    private val streams = MutableStateFlow(0)
+    @Volatile private var open: HttpURLConnection? = null
+    @Volatile private var preempted = false
+
+    /** True when the running request was cut by a stream: its failure must not count as a real one. */
+    val cut: Boolean get() = preempted
+
+    suspend fun <T> request(block: suspend () -> T): T {
+        while (true) {
+            streams.first { it == 0 }
+            mutex.lock()
+            try {
+                if (streams.value != 0) continue
+                preempted = false
+                try {
+                    return block()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Throwable) {
+                    if (!preempted) throw e
+                }
+            } finally {
+                open = null
+                mutex.unlock()
+            }
+        }
+    }
+
+    /** Every panel connection is announced here, so a stream that starts can close it at once. */
+    fun opened(connection: HttpURLConnection) {
+        open = connection
+        if (preempted || streams.value > 0) {
+            preempted = true
+            connection.disconnect()
+        }
+    }
+
+    suspend fun beginStream() {
+        streams.update { it + 1 }
+        preempted = true
+        open?.disconnect()
+        // Waits for a request still running to let go of its connection.
+        mutex.withLock { }
+    }
+
+    fun endStream() {
+        streams.update { (it - 1).coerceAtLeast(0) }
+    }
+}
+
+/** One player's share of [PanelLine]: taken before the player opens a stream, given back when it stops. Main thread. */
+class StreamHold {
+    private var held = false
+
+    suspend fun acquire() {
+        if (held) return
+        held = true
+        PanelLine.beginStream()
+    }
+
+    fun release() {
+        if (!held) return
+        held = false
+        PanelLine.endStream()
+    }
 }
 
 class PlaylistFetcher {
@@ -54,7 +125,7 @@ class PlaylistFetcher {
         url: String,
         agents: List<String> = HttpAgent.LIST_AGENTS,
         consume: (InputStream) -> T,
-    ): Result<T> = PanelLine.mutex.withLock { withContext(Dispatchers.IO) {
+    ): Result<T> = PanelLine.request { withContext(Dispatchers.IO) {
         var last: FetchException? = null
         // A refusal (HTTP error) is retried with the next identity; other failures use the first one twice.
         var agentIndex = 0
@@ -65,6 +136,7 @@ class PlaylistFetcher {
             try {
                 return@withContext Result.success(download(url, agent, consume))
             } catch (e: FetchException) {
+                if (PanelLine.cut) throw e
                 last = e
                 if (e.kind == FetchException.Kind.HTTP && agentIndex < agents.lastIndex) {
                     agentIndex++
@@ -76,6 +148,7 @@ class PlaylistFetcher {
                     return@withContext Result.failure(e)
                 }
             } catch (e: Exception) {
+                if (PanelLine.cut) throw e
                 // Network exceptions often carry the host name; normalise to a URL-free error.
                 last = FetchException(classify(e))
             }
@@ -97,6 +170,7 @@ class PlaylistFetcher {
         var current = startUrl
         repeat(MAX_REDIRECTS + 1) {
             val connection = URL(current).openConnection() as HttpURLConnection
+            PanelLine.opened(connection)
             try {
                 connection.connectTimeout = CONNECT_TIMEOUT_MS
                 connection.readTimeout = READ_TIMEOUT_MS
