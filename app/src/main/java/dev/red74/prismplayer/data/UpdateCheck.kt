@@ -131,6 +131,12 @@ object UpdateCheck {
     /** GitHub's list of releases, read once; null when it cannot be reached. Only GitHub is contacted. */
     suspend fun fetchReleases(): String? = withContext(Dispatchers.IO) { fetchText(RELEASES_URL) }
 
+    /** The newest stable Media3 from Google's Maven (GitHub's list as a fallback); null when neither answers. */
+    suspend fun fetchLatestEngine(): String? = withContext(Dispatchers.IO) {
+        MEDIA3_METADATA_URLS.firstNotNullOfOrNull { url -> fetchText(url)?.let { latestStable(mavenVersions(it)) } }
+            ?: fetchText(MEDIA3_RELEASES_URL)?.let(::latestStableTag)
+    }
+
     fun mavenVersions(xml: String): List<String> = versionTag.findAll(xml).map { it.groupValues[1].trim() }.toList()
 
     fun latestStable(versions: List<String>): String? =

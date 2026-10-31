@@ -190,6 +190,9 @@
     <string name="update_downloading">Scarico Prism %1$s…</string>
     <string name="update_downloading_percent">Scarico Prism %1$s… %2$d%%</string>
     <string name="update_installer_opened">Conferma l\'installazione nella finestra di Android. Se Android lo chiede, consenti a Prism di installare app, poi premi di nuovo Aggiorna.</string>
+    <string name="update_engine_ok">Motore video e audio: aggiornato (%1$s).</string>
+    <string name="update_engine_new">Motore video e audio: è uscita la versione %1$s (hai la %2$s). Viene inserito in Prism in automatico entro una settimana e arriva con il prossimo aggiornamento.</string>
+    <string name="update_engine_unknown">Motore video e audio: %1$s (non riesco a leggere l\'ultima versione).</string>
     <string name="update_failed_title">Aggiornamento non completato</string>
     <string name="update_failed_download">Lo scaricamento si è interrotto. Controlla la connessione e riprova.</string>
     <string name="update_failed_corrupt">Il file scaricato è danneggiato, quindi non l\'ho installato. Riprova.</string>

@@ -27,6 +27,7 @@ import dev.red74.prismplayer.data.XmltvParser
 import dev.red74.prismplayer.player.AspectMode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,13 +50,25 @@ enum class Notice {
     UPDATE_UP_TO_DATE,
 }
 
+/**
+ * The video and audio engine (Media3) built into the app and the newest stable one published. The engine cannot be
+ * replaced on its own: a newer one reaches the TV inside the next release of the app (see .github/workflows/media3.yml).
+ */
+data class EngineInfo(val installed: String, val latest: String?) {
+    val newer: Boolean get() = latest != null && UpdateCheck.compare(latest, installed) > 0
+}
+
 /** Where the app update stands; the update page shows it. */
 sealed interface UpdateState {
     data object Idle : UpdateState
     data object Checking : UpdateState
-    data class UpToDate(val installed: String) : UpdateState
+    data class UpToDate(val installed: String, val engine: EngineInfo? = null) : UpdateState
     data object Offline : UpdateState
-    data class Available(val release: UpdateCheck.AppRelease, val installed: String) : UpdateState
+    data class Available(
+        val release: UpdateCheck.AppRelease,
+        val installed: String,
+        val engine: EngineInfo? = null,
+    ) : UpdateState
     /** [percent] is -1 while the size is not known yet. */
     data class Downloading(val release: UpdateCheck.AppRelease, val percent: Int) : UpdateState
     /** Android's installer was opened; if the user closed it, "Update" opens it again with the same file. */
@@ -599,7 +612,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         updateJob?.cancel()
         _update.value = UpdateState.Checking
         updateJob = viewModelScope.launch {
+            // The app's releases and the engine's latest version are read at the same time (GitHub and Google).
+            val engineLatest = async { UpdateCheck.fetchLatestEngine() }
             val json = UpdateCheck.fetchReleases()
+            val engine = EngineInfo(androidx.media3.common.MediaLibraryInfo.VERSION, engineLatest.await())
             if (json == null) {
                 _update.value = UpdateState.Offline
                 return@launch
@@ -608,9 +624,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val installed = BuildConfig.BUILD_LABEL
             val latest = UpdateCheck.latestAppRelease(json)
             _update.value = if (latest != null && UpdateCheck.isNewer(latest.tag, installed)) {
-                UpdateState.Available(latest, installed)
+                UpdateState.Available(latest, installed, engine)
             } else {
-                UpdateState.UpToDate(installed)
+                UpdateState.UpToDate(installed, engine)
             }
         }
     }

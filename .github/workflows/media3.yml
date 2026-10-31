@@ -1,0 +1,112 @@
+name: Media3 engine update
+
+# Once a week, looks on Google's Maven for a newer stable Media3 (the app's video and audio engine). When there is
+# one, it moves the app to it, runs the unit tests and builds the APK; only if all of that passes does it commit the
+# change to initial-scaffold and start "Android CI" with the next free -debug tag, which publishes the release.
+# The TV then offers it through the in-app updater. A failed build changes nothing and leaves this run red.
+
+on:
+  schedule:
+    - cron: "17 5 * * 1" # Mondays, 05:17 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: media3-update
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  update:
+    name: Move to the newest stable Media3
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+        with:
+          ref: initial-scaffold
+          fetch-depth: 0
+
+      - name: Compare versions
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          current=$(sed -nE 's/^media3 = "([^"]+)"/\1/p' gradle/libs.versions.toml)
+          latest=$(curl -fsSL https://dl.google.com/android/maven2/androidx/media3/media3-exoplayer/maven-metadata.xml \
+            | python3 -c '
+          import re, sys
+          vs = re.findall(r"<version>([^<]+)</version>", sys.stdin.read())
+          stable = [v for v in vs if re.fullmatch(r"\d+(\.\d+)*", v.strip())]
+          print(max(stable, key=lambda v: [int(x) for x in v.split(".")]) if stable else "")
+          ')
+          echo "Installed Media3: ${current}; newest stable: ${latest:-unknown}"
+          newer=false
+          if [ -n "${latest}" ] && [ "${latest}" != "${current}" ] && \
+             [ "$(printf '%s\n%s\n' "${current}" "${latest}" | sort -V | tail -n1)" = "${latest}" ]; then
+            newer=true
+          fi
+          echo "current=${current}" >> "$GITHUB_OUTPUT"
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+          echo "newer=${newer}" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Media3"
+            echo "- In the app: ${current}"
+            echo "- Newest stable: ${latest:-unknown}"
+            if [ "${newer}" = true ]; then echo "- Updating."; else echo "- Nothing to do."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up JDK 17
+        if: steps.versions.outputs.newer == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        if: steps.versions.outputs.newer == 'true'
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-36 build-tools;35.0.0"
+
+      - name: Set up Gradle
+        if: steps.versions.outputs.newer == 'true'
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Move to the new version, test and build
+        if: steps.versions.outputs.newer == 'true'
+        shell: bash
+        env:
+          LATEST: ${{ steps.versions.outputs.latest }}
+        run: |
+          set -euo pipefail
+          sed -i -E "s/^media3 = \"[^\"]+\"/media3 = \"${LATEST}\"/" gradle/libs.versions.toml
+          chmod +x ./gradlew
+          ./gradlew --no-daemon --stacktrace testDebugUnitTest assembleDebug
+
+      - name: Commit and publish the next release
+        if: steps.versions.outputs.newer == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT: ${{ steps.versions.outputs.current }}
+          LATEST: ${{ steps.versions.outputs.latest }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gradle/libs.versions.toml
+          git commit -m "Media3 ${CURRENT} -> ${LATEST} (weekly engine update, tests and build passed)"
+          git push origin HEAD:initial-scaffold
+          git fetch --tags --force origin
+          # Next free tag: the highest vX.Y.Z (with or without -debug) plus one in the last number.
+          last=$(git tag -l 'v*' | sed -E 's/^v([0-9]+\.[0-9]+\.[0-9]+).*/\1/' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)
+          IFS=. read -r major minor patch <<< "${last}"
+          tag="v${major}.${minor}.$((patch + 1))-debug"
+          echo "Publishing ${tag}"
+          gh workflow run android.yml --ref initial-scaffold -f release_tag="${tag}"
+          echo "- Committed and started the release **${tag}**." >> "$GITHUB_STEP_SUMMARY"
