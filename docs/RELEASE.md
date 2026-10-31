@@ -21,7 +21,7 @@ Tutto fino alla pubblicazione della pre-release può farlo Claude in autonomia. 
 - Il workflow è `.github/workflows/android.yml` («Android CI»). Il job `build` esegue validazione del wrapper, controllo toolchain, `testDebugUnitTest`, `lintDebug`, `assembleDebug`. Il job `release` parte **solo** dopo un `build` riuscito e solo se il run ha un tag (`workflow_dispatch` con `release_tag`, oppure push di un tag `v*`).
 - L'etichetta mostrata in basso nell'app (`BuildConfig.BUILD_LABEL`) è il `release_tag`; senza tag è il commit corto.
 - Il `versionCode` dell'APK è il `run_number` del workflow: ogni run ha un numero più alto, quindi ogni release si installa sopra la precedente. Per lo stesso motivo **non si può installare una release più vecchia sopra una più nuova** (vedi Rollback).
-- La chiave di firma di debug è fissa (`app/prism-debug.p12`): tutte le build hanno la stessa firma.
+- Le build della CI sono firmate con la chiave di prova pubblica (`app/prism-debug.p12`); il job `release` rifirma l'APK con la chiave di Prism (`signing/`, segreto `PRISM_KEY_PASSPHRASE`, vedi `signing/README.md`). Dopo il primo aggiornamento con la chiave nuova, la TV rifiuta gli APK firmati solo con quella di prova: installare sempre e solo le release.
 - `concurrency` usa `cancel-in-progress` per workflow e ref: **un nuovo run sullo stesso branch annulla quello in corso**. Per questo il `workflow_dispatch` si lancia solo dopo che il run del push è finito.
 
 ## Procedura

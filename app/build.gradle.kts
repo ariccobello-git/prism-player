@@ -25,8 +25,8 @@ android {
         buildConfigField("String", "BUILD_LABEL", "\"$prismVersion\"")
     }
 
-    // One fixed debug signing key (not a secret: it only signs test builds), so every build carries the same
-    // signature and Android installs a new one over the old one instead of refusing it.
+    // The public test key signs CI builds. Published releases are re-signed in CI with Prism's own key
+    // (signing/README.md), so this public key alone can no longer update the app on the TV.
     signingConfigs {
         getByName("debug") {
             storeFile = file("prism-debug.p12")
