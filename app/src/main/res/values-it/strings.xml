@@ -101,6 +101,9 @@
     <string name="fav_add">Aggiungi ai preferiti</string>
     <string name="fav_remove">Rimuovi dai preferiti</string>
     <string name="action_play">Guarda</string>
+    <string name="action_resume">Riprendi da %1$s</string>
+    <string name="action_from_start">Dall\'inizio</string>
+    <string name="resume_toast">Riprendo da %1$s</string>
     <string name="season_n">Stagione %1$d</string>
     <string name="description_missing">Descrizione non disponibile</string>
     <string name="description_loading">Caricamento della descrizione…</string>

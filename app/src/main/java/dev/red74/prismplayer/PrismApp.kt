@@ -9,6 +9,7 @@ import dev.red74.prismplayer.data.ListCache
 import dev.red74.prismplayer.data.PlaylistFetcher
 import dev.red74.prismplayer.data.PlaylistStore
 import dev.red74.prismplayer.data.SecureBox
+import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.pairing.PairingManager
 import java.io.File
 
@@ -19,6 +20,7 @@ class PrismApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        WatchProgress.init(this)
     }
 }
 

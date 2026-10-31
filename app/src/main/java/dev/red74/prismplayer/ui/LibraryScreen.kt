@@ -77,6 +77,7 @@ import dev.red74.prismplayer.data.SortMode
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.NowNext
 import dev.red74.prismplayer.data.Show
+import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.createPlayer
 import dev.red74.prismplayer.player.previewItem
@@ -1014,9 +1015,11 @@ private fun MovieDetail(
             if (key in LocalReachability.current.unavailable) {
                 PrismText(text = stringResource(R.string.unavailable_note), size = 16.sp, color = PrismColors.Danger, maxLines = 2)
             }
+            val point = remember(movie.url, WatchProgress.version) { WatchProgress.get(movie.url) }
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
                 GlassButton(
-                    text = stringResource(R.string.action_play),
+                    text = point?.let { stringResource(R.string.action_resume, formatTime(WatchProgress.resumeFrom(it))) }
+                        ?: stringResource(R.string.action_play),
                     onClick = {
                         onNav { it.copy(resume = false) }
                         onPlay(listOf(movie), 0, false)
@@ -1024,10 +1027,29 @@ private fun MovieDetail(
                     focusRequester = playFocus,
                     emphasized = true,
                 )
+                if (point != null) {
+                    GlassButton(
+                        text = stringResource(R.string.action_from_start),
+                        onClick = {
+                            WatchProgress.clear(movie.url)
+                            onNav { it.copy(resume = false) }
+                            onPlay(listOf(movie), 0, false)
+                        },
+                    )
+                }
                 StarButton(key in favorites, { onToggleFavorite(key) })
             }
+            point?.let { ProgressLine(it.fraction, Modifier.width(320.dp)) }
             Description(movie.url, maxLines = 10) { ContentInfo.filmPlot(movie.url) }
         }
+    }
+}
+
+/** A thin bar with how much of a film or episode has been watched. */
+@Composable
+private fun ProgressLine(fraction: Float, modifier: Modifier = Modifier) {
+    Box(modifier.height(4.dp).clip(RoundedCornerShape(2.dp)).background(PrismColors.TextSecondary.copy(alpha = 0.3f))) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(PrismColors.Accent))
     }
 }
 
@@ -1065,6 +1087,7 @@ private fun ShowDetail(
         if (playedIndex >= 0) episodeFocus.requestWhenReady() else seasonFocus.requestWhenReady()
     }
     val unavailable = LocalReachability.current.unavailable
+    val progressVersion = WatchProgress.version
     val key = FavoriteKey.ofShow(show)
     var enterEpisodes by remember { mutableStateOf(false) }
     var episodesFocused by remember { mutableStateOf(false) }
@@ -1132,7 +1155,11 @@ private fun ShowDetail(
                                 weight = FontWeight.Bold,
                                 color = PrismColors.Accent,
                             )
-                            PrismText(text = episode.name, size = 18.sp, maxLines = 1)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                PrismText(text = episode.name, size = 18.sp, maxLines = 1)
+                                val point = remember(episode.url, progressVersion) { WatchProgress.get(episode.url) }
+                                point?.let { ProgressLine(it.fraction, Modifier.width(220.dp)) }
+                            }
                         }
                     }
                 }

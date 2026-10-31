@@ -72,6 +72,7 @@ import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.device.DeviceProfile
 import dev.red74.prismplayer.data.TextCleaner
+import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.player.AspectMode
 import dev.red74.prismplayer.player.FastScan
 import dev.red74.prismplayer.player.PreviewPlayers
@@ -164,6 +165,8 @@ fun PlayerScreen(
     val isLiveStream = liveFlag || current.type == ContentType.LIVE
     val currentChannels by rememberUpdatedState(channels)
     val worked by rememberUpdatedState(onPlaybackWorked)
+    /** Films and episodes remember where they were left (see [WatchProgress]); live channels do not. */
+    val keepsProgress = current.type != ContentType.LIVE
     val failed by rememberUpdatedState(onPlaybackFailed)
 
     DisposableEffect(player) {
@@ -180,7 +183,10 @@ fun PlayerScreen(
                             currentChannels.getOrNull(index)?.let(worked)
                         }
                     }
-                    Player.STATE_ENDED -> status = PlayStatus.Ended
+                    Player.STATE_ENDED -> {
+                        status = PlayStatus.Ended
+                        currentChannels.getOrNull(index)?.let { WatchProgress.clear(it.url) }
+                    }
                     else -> Unit
                 }
             }
@@ -230,7 +236,25 @@ fun PlayerScreen(
         }
     }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { player.pause() }
+    // Declared after the listener effect, so on leaving it saves before the player is released.
+    DisposableEffect(index) {
+        val url = channels[index].url
+        onDispose { if (keepsProgress) saveProgress(player, url) }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
+        player.pause()
+        if (keepsProgress) saveProgress(player, current.url)
+    }
+
+    // While playing, the point is kept every few seconds, in case the TV is switched off.
+    LaunchedEffect(index, isPlaying) {
+        if (!keepsProgress || !isPlaying) return@LaunchedEffect
+        while (true) {
+            delay(PROGRESS_SAVE_MS)
+            saveProgress(player, channels[index].url)
+        }
+    }
 
     LaunchedEffect(index) {
         onIndexChange(index)
@@ -259,7 +283,13 @@ fun PlayerScreen(
         canSeek = false
         positionMs = 0L
         durationMs = C.TIME_UNSET
-        player.setMediaItem(MediaItem.fromUri(channels[index].url))
+        val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
+        if (resumeMs != null && resumeMs > 0) {
+            player.setMediaItem(MediaItem.fromUri(channels[index].url), resumeMs)
+            skipToast = context.getString(R.string.resume_toast, formatTime(resumeMs))
+        } else {
+            player.setMediaItem(MediaItem.fromUri(channels[index].url))
+        }
         player.prepare()
         player.playWhenReady = true
     }
@@ -270,7 +300,12 @@ fun PlayerScreen(
         delay(if (attempt == 1) Availability.RETRY_DELAY_MS else Availability.NEXT_IDENTITY_DELAY_MS)
         if (tryIndex != index) return@LaunchedEffect
         StreamIdentity.current = plan[attempt.coerceAtMost(plan.lastIndex)]
-        player.setMediaItem(MediaItem.fromUri(channels[index].url))
+        val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
+        if (resumeMs != null && resumeMs > 0) {
+            player.setMediaItem(MediaItem.fromUri(channels[index].url), resumeMs)
+        } else {
+            player.setMediaItem(MediaItem.fromUri(channels[index].url))
+        }
         player.prepare()
         player.playWhenReady = true
     }
@@ -423,8 +458,10 @@ fun PlayerScreen(
     }
 
     LaunchedEffect(skipToast) {
-        if (skipToast != null) {
-            delay(900)
+        val toast = skipToast
+        if (toast != null) {
+            // "+10"/"-10" from skips flash by; the resume note stays long enough to be read.
+            delay(if (toast.startsWith("+") || toast.startsWith("-")) 900 else 2_500)
             skipToast = null
         }
     }
@@ -458,7 +495,7 @@ fun PlayerScreen(
         if (duration != C.TIME_UNSET) target = target.coerceAtMost(duration)
         player.seekTo(target.coerceAtLeast(0L))
         positionMs = target.coerceAtLeast(0L)
-        skipToast = (if (deltaMs > 0) "+" else "-") + (kotlin.math.abs(deltaMs) / 1000)
+        skipToast = (if (deltaMs > 0) "+" else "-") + (kotlin.math.abs(deltaMs) / 1000) + " s"
     }
 
     /** Each press goes one step further (2x up to 128x, see FastScan.SPEEDS), then back to normal speed. */
@@ -595,7 +632,7 @@ fun PlayerScreen(
         }
 
         skipToast?.let {
-            StatusChip(text = it + " s", modifier = Modifier.align(Alignment.Center))
+            StatusChip(text = it, modifier = Modifier.align(Alignment.Center))
         }
 
         if (countdown >= 0) {
@@ -752,7 +789,16 @@ fun PlayerScreen(
 
 // --- timeline -----------------------------------------------------------------------------------------------
 
-private fun formatTime(ms: Long): String {
+private const val PROGRESS_SAVE_MS = 10_000L
+
+/** Only a real position is kept: before the content starts the player reports 0 and no duration. */
+private fun saveProgress(player: Player, url: String) {
+    if (player.playbackState == Player.STATE_IDLE || player.isCurrentMediaItemLive) return
+    val duration = player.duration
+    WatchProgress.save(url, player.currentPosition, if (duration == C.TIME_UNSET) 0L else duration)
+}
+
+internal fun formatTime(ms: Long): String {
     val total = (ms.coerceAtLeast(0L) / 1000)
     val h = total / 3600
     val m = (total % 3600) / 60
