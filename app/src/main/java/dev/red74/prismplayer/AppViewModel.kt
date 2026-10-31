@@ -42,7 +42,7 @@ import java.io.InputStreamReader
 import org.xmlpull.v1.XmlPullParser
 
 enum class Notice {
-    ADDED, REMOVED, PAIRED, IPRISM_LINKED, SAVE_FAILED, DUPLICATE,
+    ADDED, REMOVED, PAIRED, SAVE_FAILED, DUPLICATE,
     VERIFY_OK, VERIFY_FAILED, VERIFY_ALL_OK, VERIFY_SOME_FAILED,
 }
 

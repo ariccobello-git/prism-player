@@ -22,7 +22,7 @@ object ProviderImages : Interceptor {
         if (PanelLine.streaming) throw IOException("a stream is open")
         return runBlocking {
             withTimeoutOrNull(WAIT_MS) {
-                PanelLine.request(ProviderHosts.lineKey(request.url.host)) {
+                PanelLine.request {
                     val call = chain.call()
                     PanelLine.opened { call.cancel() }
                     chain.proceed(request).use { response ->

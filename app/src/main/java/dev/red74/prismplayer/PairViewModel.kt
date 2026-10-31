@@ -3,13 +3,10 @@ package dev.red74.prismplayer
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import dev.red74.prismplayer.data.IprismLink
-import dev.red74.prismplayer.data.SharedLine
 import dev.red74.prismplayer.pairing.LocalNetwork
 import dev.red74.prismplayer.pairing.PairingServer
 import fi.iki.elonen.NanoHTTPD
 import java.io.IOException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +14,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 sealed interface PairUiState {
     data object Starting : PairUiState
@@ -31,9 +27,6 @@ sealed interface PairUiState {
 
     data object Expired : PairUiState
     data object Done : PairUiState
-
-    /** iPrism's code arrived: the TV now shares each list's turn with iPrism (no list was added). */
-    data object Linked : PairUiState
     data object NoNetwork : PairUiState
     data object Failed : PairUiState
 }
@@ -74,7 +67,6 @@ class PairViewModel(application: Application) : AndroidViewModel(application) {
             manager,
             onPlaylist = ::onPlaylistReceived,
             isDuplicate = { container.playlistStore.contains(it) },
-            onIprismLink = ::onIprismLinkReceived,
         )
         try {
             candidate.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
@@ -126,22 +118,6 @@ class PairViewModel(application: Application) : AndroidViewModel(application) {
             }
             // The code is already burned, so the server is inert; give it a moment to finish
             // sending the confirmation page to the phone before closing connections.
-            delay(1_500)
-            stopServer()
-        }
-    }
-
-    private fun onIprismLinkReceived(link: IprismLink) {
-        received = true
-        viewModelScope.launch {
-            ticker?.cancel()
-            _state.value = try {
-                withContext(Dispatchers.IO) { container.iprismLink.save(link) }
-                SharedLine.setLink(link)
-                PairUiState.Linked
-            } catch (e: Exception) {
-                PairUiState.Failed
-            }
             delay(1_500)
             stopServer()
         }

@@ -34,14 +34,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.red74.prismplayer.data.PlaylistUrl
-import dev.red74.prismplayer.data.SharedLine
 import dev.red74.prismplayer.ui.ExitScreen
 import dev.red74.prismplayer.ui.HomeScreen
 import dev.red74.prismplayer.ui.ImportScreen
 import dev.red74.prismplayer.ui.LibraryScreen
 import dev.red74.prismplayer.ui.PairScreen
 import dev.red74.prismplayer.ui.PlayerScreen
-import dev.red74.prismplayer.ui.SharedLineNote
 import dev.red74.prismplayer.ui.ShortcutsScreen
 import dev.red74.prismplayer.ui.SPLASH_EXIT_MS
 import dev.red74.prismplayer.ui.SplashScreen
@@ -131,7 +129,6 @@ private fun PrismNavigation(
     val favoriteList by viewModel.favoriteList.collectAsStateWithLifecycle()
     val queue by viewModel.queue.collectAsStateWithLifecycle()
     val notice by viewModel.notice.collectAsStateWithLifecycle()
-    val iprismStatus by SharedLine.status.collectAsStateWithLifecycle()
     val aspect by viewModel.aspect.collectAsStateWithLifecycle()
     val verifying by viewModel.verifying.collectAsStateWithLifecycle()
 
@@ -210,7 +207,6 @@ private fun PrismNavigation(
                 playlists = playlists,
                 verifying = verifying,
                 notice = notice,
-                iprism = iprismStatus,
                 onOpen = { id -> push(Screen.Library(id)) },
                 onVerify = viewModel::verifyPlaylist,
                 onVerifyAll = viewModel::verifyAll,
@@ -253,7 +249,6 @@ private fun PrismNavigation(
                 }
                 LaunchedEffect(pairState) {
                     if (pairState is PairUiState.Done) viewModel.postNotice(Notice.PAIRED)
-                    if (pairState is PairUiState.Linked) viewModel.postNotice(Notice.IPRISM_LINKED)
                 }
                 PairScreen(
                     state = pairState,
@@ -307,7 +302,6 @@ private fun PrismNavigation(
         }
         }
     }
-    SharedLineNote()
     idleSeconds?.let { IdleCountdown(it) }
     }
 }

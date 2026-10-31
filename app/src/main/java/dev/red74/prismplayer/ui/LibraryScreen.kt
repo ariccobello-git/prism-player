@@ -912,7 +912,7 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
         delay(if (firstStart) PREVIEW_DELAY_MS * 2 else PREVIEW_DELAY_MS)
         firstStart = false
         // Any list, guide or plot request still talking to the panel is closed before the preview connects.
-        hold.acquire(channel.url)
+        hold.acquire()
         ProviderHosts.noteUrl(channel.url)
         exo.setPlaybackSpeed(1f)
         exo.setMediaItem(previewItem(channel.url))
