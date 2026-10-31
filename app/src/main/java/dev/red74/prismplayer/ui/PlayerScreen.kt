@@ -106,6 +106,7 @@ private const val NEXT_COUNTDOWN_S = 8
  */
 private const val ZAP_SETTLE_MS = 300L
 private const val LIVE_EDGE_MS = 6_000L
+private const val CHANNEL_BANNER_MS = 4_000L
 
 /** A selectable audio or subtitle track. */
 private class TrackChoice(val label: String, val selected: Boolean, val select: () -> Unit)
@@ -125,6 +126,8 @@ fun PlayerScreen(
     onExit: () -> Unit,
     onPlaybackWorked: (Channel) -> Unit = {},
     onPlaybackFailed: (Channel, Availability.Trouble, Boolean) -> Unit = { _, _, _ -> },
+    /** The programme on air on a live channel (from the guide), shown in the banner after a change of channel. */
+    nowTitle: (Channel) -> String? = { null },
 ) {
     val context = LocalContext.current
     var index by remember { mutableIntStateOf(startIndex.coerceIn(0, channels.lastIndex)) }
@@ -175,6 +178,9 @@ fun PlayerScreen(
     val flags = remember { booleanArrayOf(false, false) }
     /** True when the stream was closed because the app went to the background; it reconnects when it comes back. */
     var parked by remember { mutableStateOf(false) }
+    /** Bumped at each change of live channel: the banner with the channel's name shows for a few seconds. */
+    var bannerRequest by remember { mutableIntStateOf(0) }
+    var bannerVisible by remember { mutableStateOf(false) }
 
     val current = channels[index]
     val isSeries = current.type == ContentType.SERIES
@@ -525,6 +531,14 @@ fun PlayerScreen(
         }
     }
 
+    // Each new press keeps the banner up: it goes a few seconds after the last change of channel.
+    LaunchedEffect(bannerRequest) {
+        if (bannerRequest == 0) return@LaunchedEffect
+        bannerVisible = true
+        delay(CHANNEL_BANNER_MS)
+        bannerVisible = false
+    }
+
     LaunchedEffect(skipToast) {
         val toast = skipToast
         if (toast != null) {
@@ -546,6 +560,7 @@ fun PlayerScreen(
 
     fun changeChannel(delta: Int) {
         index = (index + delta + channels.size) % channels.size
+        if (channels[index].type == ContentType.LIVE) bannerRequest++
     }
 
     fun changeAspect(next: AspectMode) {
@@ -726,6 +741,16 @@ fun PlayerScreen(
 
         skipToast?.let {
             StatusChip(text = it, modifier = Modifier.align(Alignment.Center))
+        }
+
+        // The controls show the name themselves, so the banner stays out of their way.
+        AnimatedVisibility(
+            visible = bannerVisible && !overlayVisible,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.align(Alignment.TopStart),
+        ) {
+            ChannelBanner(number = index + 1, channel = current, programme = remember(current) { nowTitle(current) })
         }
 
         if (countdown >= 0) {
@@ -1172,6 +1197,28 @@ private fun troubleText(trouble: Availability.Trouble?, http: Int?): String? {
         Availability.Trouble.NO_ANSWER -> stringResource(R.string.player_trouble_no_answer)
         Availability.Trouble.BAD_STREAM -> stringResource(R.string.player_trouble_bad_stream)
         Availability.Trouble.OTHER, null -> null
+    }
+}
+
+/** Number, logo, name and programme of the channel just tuned to, at the top left of the picture. */
+@Composable
+private fun ChannelBanner(number: Int, channel: Channel, programme: String?) {
+    GlassPanel(Modifier.padding(40.dp).width(560.dp), cornerRadius = 22.dp) {
+        Row(
+            Modifier.padding(horizontal = 22.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PrismText(text = number.toString(), size = 30.sp, weight = FontWeight.Bold, color = PrismColors.Accent)
+            Poster(channel.logo, channel.name, Modifier.width(64.dp).height(64.dp), fit = true)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                PrismText(text = channel.name, size = 26.sp, weight = FontWeight.Bold, maxLines = 1)
+                val second = programme ?: channel.group
+                if (!second.isNullOrBlank()) {
+                    PrismText(text = second, size = 18.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                }
+            }
+        }
     }
 }
 

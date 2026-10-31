@@ -326,6 +326,7 @@ private fun PrismNavigation(
                         onPlaybackFailed = { channel, trouble, afterRetry ->
                             viewModel.playbackFailed(channel, trouble, afterRetry, preview = false)
                         },
+                        nowTitle = { channel -> epg.nowNext(channel, System.currentTimeMillis()).now?.title },
                     )
                 }
             }
