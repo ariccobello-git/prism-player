@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Playlists are fetched over the network and the pairing page is served on the LAN. -->
+    <!-- The only permission: playlists are fetched over the network and the pairing page is served on the LAN. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Prism, the assistant, listens through the remote's microphone; asked only the first time Prism is used. -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <!-- Android TV / Google TV: remote-controlled, no touchscreen required. -->
     <uses-feature
@@ -13,9 +11,6 @@
     <uses-feature
         android:name="android.software.leanback"
         android:required="true" />
-    <uses-feature
-        android:name="android.hardware.microphone"
-        android:required="false" />
 
     <!-- Needed on Android 11+ to see which launcher apps are installed (the Shortcuts page). -->
     <queries>
@@ -26,13 +21,6 @@
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
-        </intent>
-        <!-- Prism's ears and voice: the speech recogniser and the text-to-speech engine of the TV. -->
-        <intent>
-            <action android:name="android.speech.RecognitionService" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
     </queries>
 
