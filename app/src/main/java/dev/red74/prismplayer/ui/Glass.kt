@@ -477,31 +477,47 @@ fun GlassSurface(
     )
 }
 
-/** Poster or channel logo from the playlist; a soft gradient with the initial shows while it loads or if it is missing. */
+/**
+ * Poster or channel logo from the playlist. A soft gradient with the initial shows only while the image loads or if
+ * it is missing or fails; once it has loaded, the initial and the gradient go away so transparent logos are never
+ * muddled by the letter behind them. Logos ([fit]) sit on a plain neutral tile, posters fill the box.
+ */
 @Composable
 fun Poster(url: String?, title: String, modifier: Modifier = Modifier, fit: Boolean = false) {
+    var loaded by remember(url) { mutableStateOf(false) }
     Box(
         modifier
             .clip(RoundedCornerShape(12.dp))
-            .background(Brush.linearGradient(listOf(Color(0xFF26356B), Color(0xFF3A1F6B)))),
+            .then(
+                if (loaded) Modifier.background(if (fit) LogoTile else Color.Transparent)
+                else Modifier.background(PosterPlaceholder),
+            ),
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {
-        PrismText(
-            text = title.trim().take(1).uppercase(),
-            size = 26.sp,
-            weight = FontWeight.Bold,
-            color = PrismColors.TextSecondary,
-        )
+        if (!loaded) {
+            PrismText(
+                text = title.trim().take(1).uppercase(),
+                size = 26.sp,
+                weight = FontWeight.Bold,
+                color = PrismColors.TextSecondary,
+            )
+        }
         if (!url.isNullOrBlank()) {
             coil.compose.AsyncImage(
                 model = url,
                 contentDescription = null,
                 contentScale = if (fit) androidx.compose.ui.layout.ContentScale.Fit else androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
+                onState = { loaded = it is coil.compose.AsyncImagePainter.State.Success },
+                modifier = Modifier.fillMaxSize().then(if (fit) Modifier.padding(4.dp) else Modifier),
             )
         }
     }
 }
+
+private val PosterPlaceholder = Brush.linearGradient(listOf(Color(0xFF26356B), Color(0xFF3A1F6B)))
+
+/** Neutral graphite tile behind loaded channel logos: no blue tint, readable for both white and coloured logos. */
+private val LogoTile = Color(0xFF2E3138)
 
 /**
  * Marks a section of the screen. The D-pad moves between sections the natural way (the nearest focusable item in
