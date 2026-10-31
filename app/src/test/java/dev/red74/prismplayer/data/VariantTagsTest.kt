@@ -42,6 +42,14 @@ class VariantTagsTest {
     }
 
     @Test
+    fun decoratedLettersCountAsTheLettersTheyStandFor() {
+        check("Avatar \uD835\uDFD2\uD835\uDC0A", "Avatar", "4K")          // bold 4K
+        check("Avatar 4\uD83C\uDD3A", "Avatar", "4K")                       // 4 and squared K
+        check("Avatar \u1DA0\u1D34\u1D30", "Avatar", "FHD")                // superscript FHD
+        check("\u24BE\u24E3\u24D0 - Avatar", "Avatar", "ITA")              // circled Ita
+    }
+
+    @Test
     fun namesWithoutTagsAreLeftAlone() {
         check("Dr. House", "Dr. House")
         check("S.W.A.T.", "S.W.A.T.")

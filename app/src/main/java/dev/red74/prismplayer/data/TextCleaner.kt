@@ -44,7 +44,7 @@ object TextCleaner {
                     out.appendCodePoint(codePoint)
                     lastWasSpace = false
                 }
-                isRegional(codePoint) || draws(codePoint) -> {
+                isRegional(codePoint) || isEmoji(codePoint) || draws(codePoint) -> {
                     out.appendCodePoint(codePoint)
                     lastWasSpace = false
                 }
@@ -90,6 +90,10 @@ object TextCleaner {
         Character.CONTROL, Character.FORMAT, Character.PRIVATE_USE, Character.SURROGATE, Character.UNASSIGNED -> false
         else -> true
     }
+
+    /** Emoji blocks: the app carries its own emoji font (see PrismApp), so they are always drawn. */
+    private fun isEmoji(codePoint: Int): Boolean =
+        codePoint in 0x1F300..0x1FAFF || codePoint in 0x2600..0x27BF || codePoint in 0x2300..0x23FF || codePoint in 0x2B00..0x2BFF
 
     /** Regional indicator letters: a pair of them is drawn as a flag. */
     private fun isRegional(codePoint: Int): Boolean = codePoint in 0x1F1E6..0x1F1FF

@@ -28,6 +28,8 @@ class PrismApp : Application(), ImageLoaderFactory {
         // The player's own messages can carry stream addresses (with the list's credentials): keep them out of
         // the system log, where other tools could read them. Nothing is formatted either, so it costs nothing.
         MediaLog.setLogLevel(MediaLog.LOG_LEVEL_OFF)
+        // Every emoji is drawn with the font inside the app (loaded in the background), not the TV's older one.
+        androidx.emoji2.text.EmojiCompat.init(androidx.emoji2.bundled.BundledEmojiCompatConfig(this))
         // List names keep their symbols and emoji; only what the TV's fonts cannot draw is simplified or dropped.
         val glyphs = android.graphics.Paint()
         TextCleaner.canDraw = { text -> synchronized(glyphs) { glyphs.hasGlyph(text) } }
