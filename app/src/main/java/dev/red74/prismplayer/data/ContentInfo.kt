@@ -84,7 +84,7 @@ object ContentInfo {
         return true
     }
 
-    private suspend fun fetchFilm(address: String, key: String): ContentInfoStore.Row? = PanelLine.request {
+    private suspend fun fetchFilm(address: String, key: String): ContentInfoStore.Row? = PanelLine.request(LineKey.of(address)) {
         withContext(Dispatchers.IO) {
             val answer = runCatching { request(address) { PanelJson.filmPlot(it) } }
             if (answer.isFailure) return@withContext cutOrNull<ContentInfoStore.Row>(answer)
@@ -95,7 +95,7 @@ object ContentInfo {
         }
     }
 
-    private suspend fun fetchSeries(address: String, group: String): Boolean = PanelLine.request {
+    private suspend fun fetchSeries(address: String, group: String): Boolean = PanelLine.request(LineKey.of(address)) {
         withContext(Dispatchers.IO) {
             if (isFresh(group)) return@withContext true
             val answer = runCatching { request(address) { PanelJson.series(it) } }
@@ -104,7 +104,7 @@ object ContentInfo {
         }
     }
 
-    private suspend fun fetchEpisodes(address: String, group: String): Boolean = PanelLine.request {
+    private suspend fun fetchEpisodes(address: String, group: String): Boolean = PanelLine.request(LineKey.of(address)) {
         withContext(Dispatchers.IO) {
             if (isFresh(group)) return@withContext true
             val answer = runCatching { request(address) { PanelJson.episodes(it) } }

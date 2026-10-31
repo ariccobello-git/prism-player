@@ -1,5 +1,6 @@
 package dev.red74.prismplayer.pairing
 
+import dev.red74.prismplayer.data.IprismLink
 import dev.red74.prismplayer.data.PlaylistUrl
 import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoHTTPD.IHTTPSession
@@ -21,6 +22,7 @@ class PairingServer(
     private val manager: PairingManager,
     private val onPlaylist: (name: String, url: String) -> Unit,
     private val isDuplicate: (url: String) -> Boolean = { false },
+    private val onIprismLink: (IprismLink) -> Unit = {},
     port: Int = 0,
 ) : NanoHTTPD(port) {
 
@@ -69,6 +71,13 @@ class PairingServer(
 
         val code = field("c")
         if (!manager.verify(code)) return html(Response.Status.FORBIDDEN, PairPage.denied(lang))
+
+        // The code from iPrism's settings ("Collega la TV") pasted in the same field links the TV to iPrism.
+        IprismLink.parse(field("u"))?.let { link ->
+            if (!manager.consume(code)) return html(Response.Status.FORBIDDEN, PairPage.denied(lang))
+            onIprismLink(link)
+            return html(Response.Status.OK, PairPage.linked(lang))
+        }
 
         // A typo in the link must not burn the code: validate first, consume only when the input is good.
         val validated = PlaylistUrl.validate(PlaylistUrl.withDefaultScheme(field("u")))
