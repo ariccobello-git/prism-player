@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -51,6 +52,9 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -524,10 +528,26 @@ private fun GroupBrowser(
         targetValue = when (level) { 0 -> 1f; 1 -> 0.32f; else -> if (main.hasSubLevel) 0.2f else 0.27f },
         animationSpec = tween(320), label = "mainWeight",
     )
+    // Once a sub-group is open its column is only as wide as its longest label and count ([S], Tutti 69...),
+    // measured once per group, so the channel names get all the rest of the room.
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val subNeed = remember(subRows, measurer, density) {
+        if (subRows.isEmpty()) 0.dp else with(density) {
+            val labelStyle = TextStyle(fontSize = COMPACT_LABEL_SP.sp, fontWeight = FontWeight.SemiBold)
+            val countStyle = TextStyle(fontSize = COMPACT_COUNT_SP.sp)
+            val widest = subRows.take(200).maxOf { row ->
+                measurer.measure(row.label, labelStyle, maxLines = 1).size.width +
+                    measurer.measure(row.count.toString(), countStyle, maxLines = 1).size.width
+            }
+            // Text + compact padding (2 x 8) + gap before the count (6) + a little room for the focus zoom.
+            (widest.toDp() + 28.dp).coerceAtMost(220.dp)
+        }
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val subFit = (subNeed / (maxWidth - 28.dp).coerceAtLeast(1.dp)).coerceIn(0.05f, 0.3f)
     val subWeight by animateFloatAsState(
-        // Once a sub-group is open its column only shows short labels ([S], Tutti...): keep it narrow so the
-        // channel names get the room.
-        targetValue = if (level == 1) 0.68f else 0.12f,
+        targetValue = if (level == 1) 0.68f else subFit,
         animationSpec = tween(320), label = "subWeight",
     )
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -553,6 +573,7 @@ private fun GroupBrowser(
                 resume = nav.resume,
                 onResumed = { onNav { it.copy(resume = false) } },
                 modifier = Modifier.weight(subWeight).fillMaxHeight(),
+                compact = level >= 2,
                 onLeft = { onNav { it.copy(level = 0, resume = true) } },
                 onPick = { i -> onNav { it.copy(sub = i, itemIndex = 0, level = 2, resume = true) } },
             )
@@ -562,7 +583,7 @@ private fun GroupBrowser(
             val up = GroupTree.levelUp(2, main.hasSubLevel)
             Box(
                 Modifier
-                    .weight(if (main.hasSubLevel) 0.68f else 0.73f)
+                    .weight(if (main.hasSubLevel) 0.8f - subFit else 0.73f)
                     .fillMaxHeight()
                     .onExitFocus(androidx.compose.ui.focus.FocusDirection.Left) {
                         onNav { it.copy(level = up, resume = true) }
@@ -570,7 +591,12 @@ private fun GroupBrowser(
             ) { content(cats) }
         }
     }
+    }
 }
+
+/** Text sizes of the sub-group column while a sub-group is open (it shrinks to fit them). */
+private const val COMPACT_LABEL_SP = 15
+private const val COMPACT_COUNT_SP = 12
 
 @Composable
 private fun GroupColumn(
@@ -582,6 +608,7 @@ private fun GroupColumn(
     modifier: Modifier,
     onLeft: (() -> Unit)?,
     onPick: (Int) -> Unit,
+    compact: Boolean = false,
 ) {
     val focus = remember { FocusRequester() }
     var focusedIndex by remember { mutableIntStateOf(selected) }
@@ -619,20 +646,21 @@ private fun GroupColumn(
                 tint = if (index == current) PrismColors.Accent else null,
                 focusRequester = if (index == current) focus else null,
                 modifier = Modifier.fillMaxWidth().onFocusChanged { if (it.hasFocus) focusedIndex = index },
+                contentPadding = if (compact) PaddingValues(horizontal = 8.dp, vertical = 10.dp) else PaddingValues(horizontal = 14.dp, vertical = 10.dp),
             ) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     PrismText(
                         text = row.label,
-                        size = 17.sp,
+                        size = if (compact) COMPACT_LABEL_SP.sp else 17.sp,
                         weight = FontWeight.SemiBold,
                         maxLines = 2,
                         modifier = Modifier.weight(1f),
                     )
                     PrismText(
                         text = row.count.toString(),
-                        size = 14.sp,
+                        size = if (compact) COMPACT_COUNT_SP.sp else 14.sp,
                         color = PrismColors.TextSecondary,
-                        modifier = Modifier.padding(start = 8.dp),
+                        modifier = Modifier.padding(start = if (compact) 6.dp else 8.dp),
                     )
                 }
             }
