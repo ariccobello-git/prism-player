@@ -1,7 +1,7 @@
 package dev.red74.prismplayer.assistant
 
 import dev.red74.prismplayer.assistant.PrismBrain.Confirmation
-import dev.red74.prismplayer.assistant.PrismBrain.Genre
+import dev.red74.prismplayer.assistant.PrismBrain.GenreKind
 import dev.red74.prismplayer.assistant.PrismBrain.Intent
 import dev.red74.prismplayer.assistant.PrismKnowledge.Kind
 import kotlinx.coroutines.runBlocking
@@ -85,10 +85,10 @@ class PrismBrainTest {
 
     @Test
     fun genresAndNewArrivalsAreUnderstood() {
-        assertEquals(Intent.Genre(Kind.FILM, Genre.HORROR), PrismBrain.understand("Cerca un film horror"))
-        assertEquals(Intent.Genre(null, Genre.COMEDY), PrismBrain.understand("hai qualche commedia?"))
-        assertEquals(Intent.Genre(null, Genre.ANIMATION), PrismBrain.understand("cartoni animati"))
-        assertEquals(Intent.Genre(Kind.FILM, Genre.ACTION), PrismBrain.understand("consigliami un film d'azione"))
+        assertEquals(Intent.Genre(Kind.FILM, GenreKind.HORROR), PrismBrain.understand("Cerca un film horror"))
+        assertEquals(Intent.Genre(null, GenreKind.COMEDY), PrismBrain.understand("hai qualche commedia?"))
+        assertEquals(Intent.Genre(null, GenreKind.ANIMATION), PrismBrain.understand("cartoni animati"))
+        assertEquals(Intent.Genre(Kind.FILM, GenreKind.ACTION), PrismBrain.understand("consigliami un film d'azione"))
         assertEquals(Intent.Latest(Kind.FILM), PrismBrain.understand("quali sono gli ultimi film aggiunti?"))
         assertEquals(Intent.Latest(Kind.SERIES), PrismBrain.understand("serie nuove"))
         // A title with a genre word in it is still a title.

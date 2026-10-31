@@ -51,14 +51,14 @@ object PrismBrain {
         data class OnAir(val channel: String) : Intent
         data class Plot(val title: String) : Intent
         data class Play(val kind: PrismKnowledge.Kind?, val query: String) : Intent
-        data class Genre(val kind: PrismKnowledge.Kind?, val genre: Genre) : Intent
+        data class Genre(val kind: PrismKnowledge.Kind?, val genre: GenreKind) : Intent
         data class Latest(val kind: PrismKnowledge.Kind) : Intent
         data class Search(val kind: PrismKnowledge.Kind?, val query: String) : Intent
         data object Unknown : Intent
     }
 
     /** Genres as they are named in list categories: [stems] are matched inside the category names. */
-    enum class Genre(val spoken: List<String>, val stems: List<String>, val label: String) {
+    enum class GenreKind(val spoken: List<String>, val stems: List<String>, val label: String) {
         HORROR(listOf("horror", "dell'orrore", "paura", "terrore"), listOf("horror", "orrore", "paura"), "horror"),
         THRILLER(listOf("thriller", "suspense"), listOf("thriller", "suspense"), "thriller"),
         COMEDY(listOf("commedia", "commedie", "comico", "comici", "divertente", "divertenti", "ridere"), listOf("commedi", "comic", "comedy"), "commedia"),
@@ -342,7 +342,7 @@ object PrismBrain {
     }
 
     /** The genre when [text] asks only for one ("un film horror", "qualche commedia"), not for a title. */
-    internal fun genreOnly(text: String): Genre? {
+    internal fun genreOnly(text: String): GenreKind? {
         val filler = setOf(
             "il", "lo", "la", "i", "gli", "le", "un", "uno", "una", "dei", "degli", "delle", "del", "della", "di", "d'",
             "qualche", "qualcosa", "film", "serie", "telefilm", "cartoni", "cartone", "genere", "categoria", "canali",
@@ -350,8 +350,8 @@ object PrismBrain {
             "buoni", "nuovo", "nuovi", "altro", "altri", "mi", "ci", "che", "sono", "c'è", "ce", "hai", "avete",
         )
         val words = text.split(' ').filter { it.isNotEmpty() }
-        val genre = Genre.values().firstOrNull { g -> words.any { w -> g.spoken.any { it == w || it == w.removePrefix("d'") } } }
-            ?: Genre.values().firstOrNull { g -> g.spoken.any { it.contains(' ') && text.contains(it) } }
+        val genre = GenreKind.values().firstOrNull { g -> words.any { w -> g.spoken.any { it == w || it == w.removePrefix("d'") } } }
+            ?: GenreKind.values().firstOrNull { g -> g.spoken.any { it.contains(' ') && text.contains(it) } }
             ?: return null
         val others = words.filter { w -> w !in filler && genre.spoken.none { it == w || it == w.removePrefix("d'") } && w != "animati" }
         return if (others.isEmpty()) genre else null
