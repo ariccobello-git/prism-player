@@ -188,11 +188,56 @@ jobs:
       contents: write
 
     steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
       - name: Download APK built by this run
         uses: actions/download-artifact@v4
         with:
           name: prism-player-debug-apk
           path: dist
+
+      - name: Set up Android build tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "build-tools;35.0.0"
+
+      # Once Prism has its own key (signing/README.md), every published APK carries it: the
+      # public test key signs only the old schemes plus the handover proof.
+      - name: Sign with Prism's own key
+        shell: bash
+        env:
+          P: ${{ secrets.PRISM_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ ! -f signing/prism-release.p12.enc ]; then
+            echo "::warning::Prism has no own signing key yet: publishing with the public test key."
+            exit 0
+          fi
+          if [ -z "${P}" ]; then
+            echo "::error::signing/prism-release.p12.enc exists but the secret PRISM_KEY_PASSPHRASE is missing."
+            exit 1
+          fi
+          AS="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          work="$(mktemp -d)"
+          trap 'rm -rf "${work}"' EXIT
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:P \
+            -in signing/prism-release.p12.enc -out "${work}/new.p12"
+          "${AS}" sign --v4-signing-enabled false \
+            --ks app/prism-debug.p12 --ks-key-alias prism --ks-pass pass:prismdebug --key-pass pass:prismdebug \
+            --next-signer --ks "${work}/new.p12" --ks-key-alias prism --ks-pass env:P --key-pass env:P \
+            --lineage signing/lineage.bin --rotation-min-sdk-version 28 \
+            --out "${work}/signed.apk" dist/app-debug.apk
+          "${AS}" verify -v --print-certs "${work}/signed.apk" | tee "${work}/verify.txt"
+          grep -q "Verified using v3 scheme (APK Signature Scheme v3): true" "${work}/verify.txt" \
+            || { echo "::error::The APK has no v3 signature."; exit 1; }
+          new_cert="$(keytool -list -v -storetype pkcs12 -keystore "${work}/new.p12" -storepass:env P -alias prism \
+            | sed -nE 's/.*SHA256: *//p' | tr -d ':' | tr 'A-F' 'a-f' | head -1)"
+          "${AS}" lineage --in "${work}/signed.apk" --print-certs | tee "${work}/lineage.txt"
+          grep -qi "${new_cert}" "${work}/lineage.txt" \
+            || { echo "::error::The new key is not in the APK's signing lineage."; exit 1; }
+          mv "${work}/signed.apk" dist/app-debug.apk
+          echo "- Signed with Prism's own key (v3 rotation from the test key), SHA-256 cert ${new_cert}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create pre-release
         shell: bash
@@ -224,7 +269,7 @@ jobs:
           cat > notes.md <<NOTES
           ${NOTE}
 
-          - Signed with the project's fixed Android debug key (personal use, not for store distribution).
+          - Signed with Prism's own key when signing/prism-release.p12.enc exists (see signing/README.md).
           - Install on Android TV with the Downloader app (see README).
           - SHA-256 is in prism-player-debug.apk.sha256.
           NOTES

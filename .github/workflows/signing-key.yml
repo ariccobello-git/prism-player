@@ -1,0 +1,80 @@
+name: Crea chiave di firma
+
+# Run once, by hand, after the repository secret PRISM_KEY_PASSPHRASE exists.
+# It makes Prism's own signing key and the proof that the old public test key hands
+# the app over to it (APK Signature Scheme v3 rotation), so the TV installs the next
+# release over the current one and keeps the lists. The old key loses the right to
+# install over the new one ("rollback" off), so an APK signed with the public test
+# key alone is refused by the TV from then on.
+# The new key is committed only encrypted with the passphrase (AES-256, PBKDF2 600k).
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  key:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android build tools
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "build-tools;35.0.0"
+
+      - name: Create key and rotation proof
+        shell: bash
+        env:
+          P: ${{ secrets.PRISM_KEY_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          if [ -z "${P}" ]; then
+            echo "::error::Manca il segreto PRISM_KEY_PASSPHRASE (Settings > Secrets and variables > Actions)."
+            exit 1
+          fi
+          if [ "${#P}" -lt 20 ]; then
+            echo "::error::La frase segreta è troppo corta: usa almeno 20 caratteri (per esempio 5 parole)."
+            exit 1
+          fi
+          if [ -f signing/prism-release.p12.enc ]; then
+            echo "::error::La chiave esiste già: non va mai rifatta, altrimenti la TV non accetta più gli aggiornamenti."
+            exit 1
+          fi
+          AS="${ANDROID_HOME}/build-tools/35.0.0/apksigner"
+          work="$(mktemp -d)"
+          trap 'rm -rf "${work}"' EXIT
+          keytool -genkeypair -storetype pkcs12 -keystore "${work}/new.p12" -alias prism \
+            -keyalg RSA -keysize 4096 -validity 36500 -dname "CN=Prism Player, O=Red-74" \
+            -storepass:env P -keypass:env P
+          "${AS}" rotate --out signing/lineage.bin \
+            --old-signer --ks app/prism-debug.p12 --ks-key-alias prism --ks-pass pass:prismdebug --key-pass pass:prismdebug \
+              --set-rollback false \
+            --new-signer --ks "${work}/new.p12" --ks-key-alias prism --ks-pass env:P --key-pass env:P
+          "${AS}" lineage --in signing/lineage.bin --print-certs -v
+          openssl enc -aes-256-cbc -pbkdf2 -iter 600000 -salt -pass env:P \
+            -in "${work}/new.p12" -out signing/prism-release.p12.enc
+          # Proof that the encrypted file opens again with the same passphrase.
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:P -in signing/prism-release.p12.enc \
+            | cmp - "${work}/new.p12"
+
+      - name: Save on a branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b signing-key-setup
+          git add signing/lineage.bin signing/prism-release.p12.enc
+          git commit -m "Prism's own signing key (encrypted) and rotation proof from the old test key"
+          git push origin signing-key-setup
+          echo "Chiave creata sul branch signing-key-setup" >> "$GITHUB_STEP_SUMMARY"
