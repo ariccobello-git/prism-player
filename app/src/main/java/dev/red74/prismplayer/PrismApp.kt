@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.media3.common.util.Log as MediaLog
 import dev.red74.prismplayer.data.AppSettings
 import dev.red74.prismplayer.data.CatalogStore
+import dev.red74.prismplayer.data.ContentInfo
 import dev.red74.prismplayer.data.KeystoreKeyProvider
 import dev.red74.prismplayer.data.ListCache
 import dev.red74.prismplayer.data.PlaylistFetcher
@@ -25,6 +26,7 @@ class PrismApp : Application() {
         MediaLog.setLogLevel(MediaLog.LOG_LEVEL_OFF)
         container = AppContainer(this)
         WatchProgress.init(this)
+        ContentInfo.init(this)
     }
 }
 

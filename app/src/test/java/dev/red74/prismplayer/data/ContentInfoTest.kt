@@ -2,6 +2,8 @@ package dev.red74.prismplayer.data
 
 import java.io.StringReader
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertNull
 import org.junit.Test
 
@@ -81,5 +83,39 @@ class ContentInfoTest {
         assertEquals(EpisodeInfo("Il primo caso.", "00:44:10", "2004-11-16"), episodes["301"])
         assertEquals(EpisodeInfo(null, "00:43:20", null), episodes["302"])
         assertNull(episodes["303"])
+    }
+
+    @Test
+    fun savedKeysNeverContainTheAddress() {
+        val film = "http://panel.example:8080/movie/demo/secret/123.mkv"
+        val list = "http://panel.example:8080/player_api.php?username=demo&password=secret&action=get_series"
+        for (key in listOf(InfoKeys.film(film), InfoKeys.seriesList(list), InfoKeys.episodes(list))) {
+            assertFalse(key.contains("secret"))
+            assertFalse(key.contains("panel.example"))
+        }
+        assertEquals(InfoKeys.film(film), InfoKeys.film(film))
+    }
+
+    @Test
+    fun aGroupRangeHoldsItsRowsAndNothingElse() {
+        val group = InfoKeys.seriesList("http://panel.example/player_api.php?action=get_series")
+        val start = InfoKeys.row(group, "")
+        val end = InfoKeys.groupEnd(group)
+        for (item in listOf("", "drhouse", "zzz", "\u00e8stata", "123")) {
+            val key = InfoKeys.row(group, item)
+            assertTrue(key >= start && key < end)
+        }
+        assertFalse(group >= start)
+        val other = InfoKeys.seriesList("http://other.example/player_api.php?action=get_series")
+        assertFalse(InfoKeys.row(other, "drhouse").let { it >= start && it < end })
+    }
+
+    @Test
+    fun oldAnswersAreAskedAgain() {
+        val day = 24L * 60 * 60 * 1000
+        assertFalse(InfoKeys.isStale(savedAt = 1_000, now = 1_000 + day, maxAgeMs = day))
+        assertTrue(InfoKeys.isStale(savedAt = 1_000, now = 1_001 + day, maxAgeMs = day))
+        // A clock moved backwards must not keep an answer forever.
+        assertTrue(InfoKeys.isStale(savedAt = 5_000, now = 1_000, maxAgeMs = day))
     }
 }
