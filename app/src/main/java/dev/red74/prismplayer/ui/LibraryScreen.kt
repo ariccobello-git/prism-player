@@ -897,6 +897,10 @@ private fun PreviewPane(
  * Small live preview. It starts shortly after the cursor settles on a channel, so zapping through the list does
  * not open a stream per row, and it is stopped before the full-screen player opens (panels often allow a single
  * connection per account).
+ *
+ * When the cursor leaves a channel its preview stops at once: the stick does not decode a stream nobody is looking
+ * at while the list scrolls, and the old connection is fully closed during the wait, well before the next channel
+ * connects. Until the first picture arrives the channel's logo is shown instead of a black or frozen frame.
  */
 @Composable
 private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier = Modifier) {
@@ -904,6 +908,8 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
     val exo = remember { createPlayer(context, preview = true) }
     val hold = remember { StreamHold() }
     var failed by remember { mutableStateOf(false) }
+    /** True once the current channel has shown its first picture. */
+    var showing by remember { mutableStateOf(false) }
     val reachability = LocalReachability.current
     val currentChannel by androidx.compose.runtime.rememberUpdatedState(channel)
     val onWorked by androidx.compose.runtime.rememberUpdatedState(reachability.onPreviewWorked)
@@ -919,6 +925,10 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) currentChannel?.let(onWorked)
             }
+
+            override fun onRenderedFirstFrame() {
+                showing = true
+            }
         }
         exo.addListener(listener)
         PreviewPlayers.register(exo, hold)
@@ -933,9 +943,11 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
 
     LaunchedEffect(channel?.url, active) {
         failed = false
+        showing = false
+        // The previous channel stops right away (its line stays held, so no list or guide request slips in).
+        exo.stop()
+        exo.clearMediaItems()
         if (channel == null || !active) {
-            exo.stop()
-            exo.clearMediaItems()
             hold.release()
             return@LaunchedEffect
         }
@@ -971,6 +983,9 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
                 }
             },
         )
+        if (channel != null && !showing && !failed) {
+            Poster(channel.logo, channel.name, Modifier.size(72.dp), fit = true)
+        }
         if (failed) {
             PrismText(text = stringResource(R.string.preview_failed), size = 15.sp, color = PrismColors.TextSecondary)
         }

@@ -23,7 +23,8 @@ import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
  * Media3's defaults (50 s ahead, 2.5 s before starting, 5 s after a stall, nothing behind, up to ~140 MB) suit a
  * phone; on a 1-2 GB TV stick with IPTV panels they start slowly and use a lot of memory. The full-screen player
  * starts after 1.5 s, keeps 30-60 s ahead within 64 MB, and keeps 20 s behind so a 10-second skip back does not
- * download again. The preview keeps only a few seconds and little memory: it is small and changes often.
+ * download again. The preview starts like the full-screen player (1.5 s) and keeps 15-30 s ahead within 24 MB:
+ * with only 1 s at the start it ran dry at every hiccup of the line (VPN, busy panel) and played in jerks.
  */
 object BufferPlan {
     data class Durations(
@@ -36,7 +37,7 @@ object BufferPlan {
     )
 
     val FULL = Durations(minMs = 30_000, maxMs = 60_000, startMs = 1_500, afterStallMs = 3_500, backMs = 20_000, maxBytes = 64 shl 20)
-    val PREVIEW = Durations(minMs = 6_000, maxMs = 12_000, startMs = 1_000, afterStallMs = 2_000, backMs = 0, maxBytes = 12 shl 20)
+    val PREVIEW = Durations(minMs = 15_000, maxMs = 30_000, startMs = 1_500, afterStallMs = 3_500, backMs = 0, maxBytes = 24 shl 20)
 
     /** Audio kept in the sound card: a longer queue does not run dry when the stick is busy drawing the menus. */
     const val AUDIO_MIN_BUFFER_US = 400_000
@@ -88,7 +89,7 @@ object StreamIdentity {
 }
 
 /** Upper limit for the preview's video when the stream offers a choice (HLS/DASH variants). */
-private const val PREVIEW_MAX_BITRATE = 1_500_000
+private const val PREVIEW_MAX_BITRATE = 2_500_000
 
 /** One player setup for the full-screen view and (with [preview]) the small preview next to the channel list. */
 fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
@@ -132,8 +133,9 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
         .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
     if (preview) {
         // The preview never changes speed to catch up with a live edge (that is what made it run fast with
-        // warbling sound) and, where the stream offers several qualities, takes the lowest SD one: the window is a
-        // third of the screen wide, and every decoded pixel is taken from the menus drawn around it.
+        // warbling sound) and, where the stream offers several qualities, takes the best one within SD: the window
+        // is a third of the screen wide. The very lowest variant is not forced any more: on some panels it is the
+        // one with fewer frames per second, which makes the preview look jerky.
         builder.setLivePlaybackSpeedControl(
             DefaultLivePlaybackSpeedControl.Builder()
                 .setFallbackMinPlaybackSpeed(1f)
@@ -144,8 +146,7 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
         selector.setParameters(
             selector.buildUponParameters()
                 .setMaxVideoSizeSd()
-                .setMaxVideoBitrate(PREVIEW_MAX_BITRATE)
-                .setForceLowestBitrate(true),
+                .setMaxVideoBitrate(PREVIEW_MAX_BITRATE),
         )
         builder.setTrackSelector(selector)
     }
