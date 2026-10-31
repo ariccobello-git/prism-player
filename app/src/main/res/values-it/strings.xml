@@ -191,4 +191,9 @@
     <string name="shortcuts_loading">Cerco le app installate…</string>
     <string name="shortcuts_none_left">Tutte le app installate sono già aggiunte.</string>
     <string name="shortcuts_press_to_add">OK aggiunge la scorciatoia</string>
+    <string name="iprism_link_ok">Collegata a iPrism</string>
+    <string name="iprism_link_checking">Verifico il collegamento a iPrism…</string>
+    <string name="iprism_link_refused">Collegamento a iPrism non più valido: ricollega la TV</string>
+    <string name="iprism_link_unreachable">iPrism non risponde: le liste aspettano</string>
+    <string name="iprism_link_none">Non collegata a iPrism</string>
 </resources>

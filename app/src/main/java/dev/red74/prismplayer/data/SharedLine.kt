@@ -139,6 +139,9 @@ class IprismLinkStore(private val file: File, private val box: SecureBox) {
 object SharedLine {
     data class Answer(val ok: Boolean, val waitMs: Long = 0, val by: String? = null, val ttlMs: Long = 0)
 
+    /** The link to iPrism as last checked, for the home screen. */
+    enum class LinkStatus { NONE, CHECKING, OK, REFUSED, UNREACHABLE }
+
     private const val BEAT_MS = 15_000L
     private const val LINGER_MS = 3_000L
     private const val RETRY_MS = 3_000L
@@ -170,6 +173,37 @@ object SharedLine {
     fun setLink(value: IprismLink?) {
         link = value
         loaded = true
+        checkInBackground()
+    }
+
+    private val _status = MutableStateFlow(LinkStatus.NONE)
+    val status: StateFlow<LinkStatus> = _status.asStateFlow()
+
+    /** The check itself; replaced in tests. Null when iPrism could not be reached, else whether it said yes. */
+    @Volatile var checker: (IprismLink) -> Boolean? = ::probe
+
+    /**
+     * Asks iPrism whether the TV's key is still accepted, without touching any list: it frees a turn on a key no
+     * list has, which changes nothing. Run at every start and after a new link is pasted.
+     */
+    fun checkInBackground() {
+        scope.launch { check() }
+    }
+
+    suspend fun check(): LinkStatus {
+        val l = withContext(Dispatchers.IO) { currentLink() }
+        if (l == null) {
+            _status.value = LinkStatus.NONE
+            return LinkStatus.NONE
+        }
+        _status.value = LinkStatus.CHECKING
+        val result = when (withContext(Dispatchers.IO) { checker(l) }) {
+            true -> LinkStatus.OK
+            false -> LinkStatus.REFUSED
+            null -> LinkStatus.UNREACHABLE
+        }
+        _status.value = result
+        return result
     }
 
     val linked: Boolean get() = currentLink() != null
@@ -294,11 +328,41 @@ object SharedLine {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    private fun probe(link: IprismLink): Boolean? {
+        val connection = runCatching { URL(link.endpoint).openConnection() as HttpURLConnection }.getOrNull() ?: return null
+        return try {
+            connection.connectTimeout = 8_000
+            connection.readTimeout = 8_000
+            connection.instanceFollowRedirects = false
+            connection.requestMethod = "POST"
+            connection.doOutput = true
+            connection.setRequestProperty("content-type", "application/json")
+            connection.setRequestProperty("CF-Access-Client-Id", link.clientId)
+            connection.setRequestProperty("CF-Access-Client-Secret", link.secret)
+            connection.outputStream.use { it.write("""{"op":"free","key":"$PROBE_KEY","holder":"$holder"}""".toByteArray()) }
+            when (connection.responseCode) {
+                200 -> runCatching {
+                    json.parseToJsonElement(connection.inputStream.use { it.readBytes().decodeToString() }).jsonObject.toAnswer().ok
+                }.getOrDefault(false)
+                // Refused by Access (redirect to its login, 401/403): the key is no longer valid.
+                in 300..499 -> false
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private const val PROBE_KEY = "00000000000000000000000000000000"
+
     private fun post(link: IprismLink, op: String, key: String, holder: String): Answer? {
         val connection = runCatching { URL(link.endpoint).openConnection() as HttpURLConnection }.getOrNull() ?: return null
         return try {
             connection.connectTimeout = 8_000
             connection.readTimeout = 8_000
+            connection.instanceFollowRedirects = false
             connection.requestMethod = "POST"
             connection.doOutput = true
             connection.setRequestProperty("content-type", "application/json")
@@ -327,5 +391,6 @@ object SharedLine {
         beat?.cancel(); linger?.cancel()
         key = null; users = 0; leaseUntil = 0L; beat = null; linger = null
         _note.value = null
+        _status.value = LinkStatus.NONE
     }
 }

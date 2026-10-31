@@ -191,4 +191,9 @@
     <string name="shortcuts_loading">Looking for installed apps…</string>
     <string name="shortcuts_none_left">All installed apps are already added.</string>
     <string name="shortcuts_press_to_add">OK adds a shortcut</string>
+    <string name="iprism_link_ok">Linked to iPrism</string>
+    <string name="iprism_link_checking">Checking the link to iPrism…</string>
+    <string name="iprism_link_refused">Link to iPrism no longer valid: link the TV again</string>
+    <string name="iprism_link_unreachable">iPrism does not answer: lists wait</string>
+    <string name="iprism_link_none">Not linked to iPrism</string>
 </resources>

@@ -35,6 +35,7 @@ class PrismApp : Application(), ImageLoaderFactory {
         ContentInfo.init(this)
         val link = container.iprismLink
         SharedLine.loader = link::load
+        SharedLine.checkInBackground() // at every start: is the TV still linked to iPrism?
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)

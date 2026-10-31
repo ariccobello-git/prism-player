@@ -22,6 +22,7 @@ class SharedLineTest {
     @Before
     fun setUp() {
         SharedLine.resetForTest()
+        SharedLine.checker = { null } // never the network in tests
         SharedLine.setLink(link)
         calls.clear()
     }
@@ -107,5 +108,17 @@ class SharedLineTest {
         assertTrue(SharedLine.note.value != null)
         SharedLine.transport = { _, _, _, _ -> SharedLine.Answer(true, ttlMs = 40_000) }
         assertTrue(withTimeout(6_000) { job.await() })
+    }
+
+    @Test
+    fun theLinkIsCheckedAndShown() = runBlocking {
+        SharedLine.checker = { true }
+        assertEquals(SharedLine.LinkStatus.OK, SharedLine.check())
+        SharedLine.checker = { false }
+        assertEquals(SharedLine.LinkStatus.REFUSED, SharedLine.check())
+        SharedLine.checker = { null }
+        assertEquals(SharedLine.LinkStatus.UNREACHABLE, SharedLine.check())
+        SharedLine.setLink(null)
+        assertEquals(SharedLine.LinkStatus.NONE, SharedLine.check())
     }
 }
