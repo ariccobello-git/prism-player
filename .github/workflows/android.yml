@@ -179,7 +179,7 @@ jobs:
   # The APK is attached to a public pre-release so it has a direct, login-free download link
   # (useful for the Downloader app on Android TV).
   release:
-    name: Publish debug APK as pre-release
+    name: Publish APK (pre-release for -debug tags, release otherwise)
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
     needs: build
     runs-on: ubuntu-24.04
@@ -214,10 +214,17 @@ jobs:
           fi
           cp dist/app-debug.apk dist/prism-player-debug.apk
           (cd dist && sha256sum prism-player-debug.apk > prism-player-debug.apk.sha256)
+          # A tag ending in -debug is a test build (pre-release); any other tag (v1.0.0) is a final release.
+          KIND=(--prerelease)
+          NOTE="Debug build of Prism Player, built by GitHub Actions from commit ${GITHUB_SHA}."
+          if [[ "${TAG}" != *-debug ]]; then
+            KIND=(--latest)
+            NOTE="Final release of Prism Player, built by GitHub Actions from commit ${GITHUB_SHA}. It installs over the debug builds without losing the lists."
+          fi
           cat > notes.md <<NOTES
-          Debug build of Prism Player, built by GitHub Actions from commit ${GITHUB_SHA}.
+          ${NOTE}
 
-          - Signed with the Android debug key: for testing only, not for distribution.
+          - Signed with the project's fixed Android debug key (personal use, not for store distribution).
           - Install on Android TV with the Downloader app (see README).
           - SHA-256 is in prism-player-debug.apk.sha256.
           NOTES
@@ -226,7 +233,7 @@ jobs:
             dist/prism-player-debug.apk dist/prism-player-debug.apk.sha256 \
             --repo "${GITHUB_REPOSITORY}" \
             --target "${GITHUB_SHA}" \
-            --prerelease \
+            "${KIND[@]}" \
             --title "Prism Player ${TAG}" \
             --notes-file notes.md 2> release-error.txt; then
             echo "::error::gh release create failed for ${TAG}: $(tr '\n' ' ' < release-error.txt)"
