@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The only permission: playlists are fetched over the network and the pairing page is served on the LAN. -->
+    <!-- Network: playlists are fetched over the network and the pairing page is served on the LAN. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- In-app updates: after the user says yes, the APK downloaded from the app's GitHub releases is handed to
+         Android's own installer, which asks for confirmation. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Android TV / Google TV: remote-controlled, no touchscreen required. -->
     <uses-feature
@@ -48,6 +51,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Lets Android's installer read the downloaded update (and nothing else) from the app's cache. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_files" />
+        </provider>
     </application>
 
 </manifest>

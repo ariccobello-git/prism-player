@@ -34,7 +34,15 @@ class AppSettings(context: Context) {
             prefs.edit().putString(KEY_SHORTCUTS, Shortcuts.encode(value)).apply()
         }
 
+    /** When the app last read GitHub's list of releases (the automatic check runs once every 3 days). */
+    var lastUpdateCheck: Long
+        get() = prefs.getLong(KEY_UPDATE_CHECK, 0L)
+        set(value) {
+            prefs.edit().putLong(KEY_UPDATE_CHECK, value).apply()
+        }
+
     private companion object {
+        const val KEY_UPDATE_CHECK = "last_update_check"
         const val KEY_SHORTCUTS = "shortcuts"
 
         const val KEY_FAVORITES = "favorites"

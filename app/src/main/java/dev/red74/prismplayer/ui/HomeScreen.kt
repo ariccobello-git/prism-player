@@ -237,6 +237,7 @@ private fun noticeText(notice: Notice): String = when (notice) {
     Notice.VERIFY_FAILED -> stringResource(R.string.notice_verify_failed)
     Notice.VERIFY_ALL_OK -> stringResource(R.string.notice_verify_all_ok)
     Notice.VERIFY_SOME_FAILED -> stringResource(R.string.notice_verify_some_failed)
+    Notice.UPDATE_UP_TO_DATE -> stringResource(R.string.notice_update_ok)
 }
 
 @Composable

@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Xml
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import dev.red74.prismplayer.data.AppUpdater
 import dev.red74.prismplayer.data.Availability
 import dev.red74.prismplayer.data.Catalog
 import dev.red74.prismplayer.data.CatalogBuilder
@@ -21,6 +22,7 @@ import dev.red74.prismplayer.data.ProviderHosts
 import dev.red74.prismplayer.data.PlaylistUrl
 import dev.red74.prismplayer.data.PlaylistStore
 import dev.red74.prismplayer.data.SavedPlaylist
+import dev.red74.prismplayer.data.UpdateCheck
 import dev.red74.prismplayer.data.XmltvParser
 import dev.red74.prismplayer.player.AspectMode
 import kotlinx.coroutines.Dispatchers
@@ -44,6 +46,21 @@ import org.xmlpull.v1.XmlPullParser
 enum class Notice {
     ADDED, REMOVED, PAIRED, SAVE_FAILED, DUPLICATE,
     VERIFY_OK, VERIFY_FAILED, VERIFY_ALL_OK, VERIFY_SOME_FAILED,
+    UPDATE_UP_TO_DATE,
+}
+
+/** Where the app update stands; the update page shows it. */
+sealed interface UpdateState {
+    data object Idle : UpdateState
+    data object Checking : UpdateState
+    data class UpToDate(val installed: String) : UpdateState
+    data object Offline : UpdateState
+    data class Available(val release: UpdateCheck.AppRelease, val installed: String) : UpdateState
+    /** [percent] is -1 while the size is not known yet. */
+    data class Downloading(val release: UpdateCheck.AppRelease, val percent: Int) : UpdateState
+    /** Android's installer was opened; if the user closed it, "Update" opens it again with the same file. */
+    data class InstallerOpened(val release: UpdateCheck.AppRelease) : UpdateState
+    data class Failed(val release: UpdateCheck.AppRelease?, val problem: AppUpdater.Problem) : UpdateState
 }
 
 enum class LoadError { NETWORK, HTTP, TOO_LARGE, EMPTY, UNKNOWN, TIMEOUT, DNS, REFUSED, TLS, NOT_A_PLAYLIST }
@@ -148,6 +165,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private var loadJob: Job? = null
     private var epgJob: Job? = null
+
+    private val updater = AppUpdater(application)
+    private val _update = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val update: StateFlow<UpdateState> = _update.asStateFlow()
+    private var updateJob: Job? = null
+    /** The automatic check is tried at most once per start of the app, even when GitHub cannot be reached. */
+    private var autoCheckTried = false
 
     /** Catalogs read from the list database that may still be on screen; closed once another list is opened. */
     private val openCatalogs = ArrayList<Catalog>()
@@ -544,6 +568,86 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun setAspect(mode: AspectMode) {
         _aspect.value = mode
         container.settings.aspectMode = mode
+    }
+
+    /**
+     * The automatic check, once every 3 days: called a few seconds after the home page shows, so it never slows the
+     * start. It reads only GitHub's list of releases. A newer release opens the update page (see PrismRoot); no news
+     * shows a short "Prism is up to date" so the user knows the check happened; no connection stays silent and is
+     * tried again at the next start.
+     */
+    fun autoCheckForUpdate() {
+        if (autoCheckTried || updateJob?.isActive == true || _update.value != UpdateState.Idle) return
+        autoCheckTried = true
+        if (!UpdateCheck.autoCheckDue(container.settings.lastUpdateCheck, System.currentTimeMillis())) return
+        updateJob = viewModelScope.launch {
+            withContext(Dispatchers.IO) { runCatching { updater.cleanUp() } }
+            val json = UpdateCheck.fetchReleases() ?: return@launch
+            container.settings.lastUpdateCheck = System.currentTimeMillis()
+            val installed = BuildConfig.BUILD_LABEL
+            val latest = UpdateCheck.latestAppRelease(json)
+            if (latest != null && UpdateCheck.isNewer(latest.tag, installed)) {
+                if (_update.value == UpdateState.Idle) _update.value = UpdateState.Available(latest, installed)
+            } else if (_notice.value == null) {
+                _notice.value = Notice.UPDATE_UP_TO_DATE
+            }
+        }
+    }
+
+    /** The "Check for updates" button: the update page shows the check and its result. */
+    fun checkForUpdate() {
+        updateJob?.cancel()
+        _update.value = UpdateState.Checking
+        updateJob = viewModelScope.launch {
+            val json = UpdateCheck.fetchReleases()
+            if (json == null) {
+                _update.value = UpdateState.Offline
+                return@launch
+            }
+            container.settings.lastUpdateCheck = System.currentTimeMillis()
+            val installed = BuildConfig.BUILD_LABEL
+            val latest = UpdateCheck.latestAppRelease(json)
+            _update.value = if (latest != null && UpdateCheck.isNewer(latest.tag, installed)) {
+                UpdateState.Available(latest, installed)
+            } else {
+                UpdateState.UpToDate(installed)
+            }
+        }
+    }
+
+    /** "Update": downloads the release (or reuses the file already downloaded) and opens Android's installer. */
+    fun installUpdate() {
+        val release = when (val state = _update.value) {
+            is UpdateState.Available -> state.release
+            is UpdateState.InstallerOpened -> state.release
+            is UpdateState.Failed -> state.release
+            else -> null
+        } ?: return
+        val reuse = _update.value is UpdateState.InstallerOpened
+        updateJob?.cancel()
+        updateJob = viewModelScope.launch {
+            try {
+                val apk = if (reuse && updater.downloaded.isFile) {
+                    updater.downloaded
+                } else {
+                    _update.value = UpdateState.Downloading(release, -1)
+                    updater.download(release) { percent ->
+                        _update.value = UpdateState.Downloading(release, percent)
+                    }
+                }
+                updater.openInstaller(apk)
+                _update.value = UpdateState.InstallerOpened(release)
+            } catch (e: AppUpdater.Failure) {
+                _update.value = UpdateState.Failed(release, e.problem)
+            }
+        }
+    }
+
+    /** "Later", "OK" or back on the update page: stops a download still running and forgets the result. */
+    fun dismissUpdate() {
+        updateJob?.cancel()
+        updateJob = null
+        _update.value = UpdateState.Idle
     }
 
     fun postNotice(notice: Notice) {

@@ -53,3 +53,62 @@ class UpdateCheckTest {
         assertEquals("1.9.2", UpdateCheck.report("v0.1.1", "1.5.1", null, "<version>1.9.2</version>", tags).engineLatest)
     }
 }
+
+class AppReleaseTest {
+    private val base = UpdateCheck.DOWNLOAD_BASE
+
+    private fun release(tag: String, draft: Boolean = false, withApk: Boolean = true, apkBase: String = base) = """
+        {"tag_name":"$tag","draft":$draft,"assets":[
+          ${if (withApk) """{"name":"prism-player-debug.apk","size":1234,"browser_download_url":"$apkBase$tag/prism-player-debug.apk"},""" else ""}
+          {"name":"prism-player-debug.apk.sha256","browser_download_url":"$base$tag/prism-player-debug.apk.sha256"}
+        ]}
+    """.trimIndent()
+
+    @Test
+    fun picksNewestPublishedReleaseWithApk() {
+        val json = "[" + listOf(
+            release("v0.1.52-debug"),
+            release("v1.0.0"),
+            release("v1.0.2-debug", draft = true),
+            release("v1.0.1-debug", withApk = false),
+        ).joinToString(",") + "]"
+        val latest = UpdateCheck.latestAppRelease(json)!!
+        assertEquals("v1.0.0", latest.tag)
+        assertEquals(base + "v1.0.0/prism-player-debug.apk", latest.apkUrl)
+        assertEquals(base + "v1.0.0/prism-player-debug.apk.sha256", latest.shaUrl)
+        assertEquals(1234L, latest.size)
+    }
+
+    @Test
+    fun refusesApkFromAnotherAddress() {
+        val json = "[" + release("v9.0.0", apkBase = "https://example.com/") + "]"
+        assertNull(UpdateCheck.latestAppRelease(json))
+        assertNull(UpdateCheck.latestAppRelease("oops"))
+    }
+
+    @Test
+    fun newerOnlyForRealVersions() {
+        assertTrue(UpdateCheck.isNewer("v1.0.1-debug", "v1.0.0"))
+        assertTrue(UpdateCheck.isNewer("v1.0.0", "v0.1.52-debug"))
+        assertFalse(UpdateCheck.isNewer("v1.0.0", "v1.0.0"))
+        assertFalse(UpdateCheck.isNewer("v1.0.0", "dev"))
+        assertFalse(UpdateCheck.isNewer("v0.1.52-debug", "v1.0.0"))
+    }
+
+    @Test
+    fun autoCheckEveryThreeDays() {
+        val day = 24L * 60 * 60 * 1000
+        val now = 100 * day
+        assertTrue(UpdateCheck.autoCheckDue(0L, now))
+        assertFalse(UpdateCheck.autoCheckDue(now - 2 * day, now))
+        assertTrue(UpdateCheck.autoCheckDue(now - 3 * day, now))
+        assertTrue(UpdateCheck.autoCheckDue(now + day, now))
+    }
+
+    @Test
+    fun readsShaFile() {
+        val hex = "A".repeat(64)
+        assertEquals("a".repeat(64), UpdateCheck.shaFromFile("$hex  prism-player-debug.apk\n"))
+        assertNull(UpdateCheck.shaFromFile("not found"))
+    }
+}

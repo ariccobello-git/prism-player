@@ -7,12 +7,15 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 /**
  * Looks on the web for a newer release of the app and for newer versions of the video/audio engine (Media3) it is
- * built on. The app never replaces itself or its libraries: it only reports what it found, so a new release can be
- * built and installed.
+ * built on. Only GitHub and Google's Maven are contacted, never the provider of the lists. Installing a newer
+ * release is [AppUpdater]'s job, and only when the user says yes.
  */
 object UpdateCheck {
     const val RELEASES_URL = "https://api.github.com/repos/ariccobello-git/prism-player/releases?per_page=30"
@@ -81,6 +84,53 @@ object UpdateCheck {
         null
     }
 
+    /** A published release of the app with its APK (and, when present, the file holding the APK's SHA-256). */
+    data class AppRelease(val tag: String, val apkUrl: String, val shaUrl: String?, val size: Long)
+
+    /**
+     * The newest published release that carries the APK. Drafts and releases without the APK are skipped, and only
+     * download addresses of this repository are accepted, so the app never fetches an APK from anywhere else.
+     */
+    fun latestAppRelease(json: String): AppRelease? = try {
+        (Json.parseToJsonElement(json) as? JsonArray).orEmpty().mapNotNull { element ->
+            val release = element as? JsonObject ?: return@mapNotNull null
+            if ((release["draft"] as? JsonPrimitive)?.booleanOrNull == true) return@mapNotNull null
+            val tag = (release["tag_name"] as? JsonPrimitive)?.content ?: return@mapNotNull null
+            if (parts(tag).isEmpty()) return@mapNotNull null
+            val assets = (release["assets"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+            fun asset(name: String) = assets.firstOrNull { (it["name"] as? JsonPrimitive)?.content == name }
+            fun url(asset: JsonObject?) = (asset?.get("browser_download_url") as? JsonPrimitive)?.content
+                ?.takeIf { it.startsWith(DOWNLOAD_BASE + tag + "/") }
+            val apk = asset(APK_NAME)
+            val apkUrl = url(apk) ?: return@mapNotNull null
+            AppRelease(
+                tag = tag,
+                apkUrl = apkUrl,
+                shaUrl = url(asset("$APK_NAME.sha256")),
+                size = (apk?.get("size") as? JsonPrimitive)?.longOrNull ?: 0L,
+            )
+        }.maxWithOrNull { a, b -> compare(a.tag, b.tag) }
+    } catch (e: Exception) {
+        null
+    }
+
+    /** True when [latest] is a real version newer than the installed [installedLabel] ("dev" builds never update). */
+    fun isNewer(latest: String, installedLabel: String): Boolean =
+        parts(installedLabel).isNotEmpty() && compare(latest, installedLabel) > 0
+
+    /** The automatic check runs at most once every [AUTO_CHECK_INTERVAL_MS]; a clock moved backwards counts as due. */
+    fun autoCheckDue(lastCheckMs: Long, nowMs: Long): Boolean =
+        lastCheckMs <= 0L || nowMs < lastCheckMs || nowMs - lastCheckMs >= AUTO_CHECK_INTERVAL_MS
+
+    const val AUTO_CHECK_INTERVAL_MS = 3L * 24 * 60 * 60 * 1000
+
+    /** The SHA-256 written in a ".sha256" file ("<hex>  name"), lower case, or null when there is none. */
+    fun shaFromFile(text: String): String? =
+        Regex("""\b[0-9a-fA-F]{64}\b""").find(text)?.value?.lowercase()
+
+    /** GitHub's list of releases, read once; null when it cannot be reached. Only GitHub is contacted. */
+    suspend fun fetchReleases(): String? = withContext(Dispatchers.IO) { fetchText(RELEASES_URL) }
+
     fun mavenVersions(xml: String): List<String> = versionTag.findAll(xml).map { it.groupValues[1].trim() }.toList()
 
     fun latestStable(versions: List<String>): String? =
@@ -99,7 +149,7 @@ object UpdateCheck {
         return Report(
             appCurrent = appLabel,
             appLatest = appLatest,
-            appNewer = appLatest != null && parts(appLabel).isNotEmpty() && compare(appLatest, appLabel) > 0,
+            appNewer = appLatest != null && isNewer(appLatest, appLabel),
             engineCurrent = engineVersion,
             engineLatest = engineLatest,
             engineNewer = engineLatest != null && compare(engineLatest, engineVersion) > 0,
@@ -120,7 +170,7 @@ object UpdateCheck {
         )
     }
 
-    private fun fetchText(address: String): String? = try {
+    internal fun fetchText(address: String): String? = try {
         val connection = URL(address).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 15_000
