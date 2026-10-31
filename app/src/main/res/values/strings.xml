@@ -76,7 +76,7 @@
     <string name="unavailable_note">⊘ Not available: the provider did not deliver it in the last hours</string>
     <string name="player_hint">◀ ▶ skip 10 s · ⏪ ⏩ 2× → 48× · ▲ ▼ change channel · OK controls · Back close</string>
     <string name="status_unverified">Not verified</string>
-    <string name="status_ok">OK · %1$d entries</string>
+    <string name="status_ok">%1$d items</string>
     <string name="status_failed">Not reachable</string>
     <string name="status_checking">Checking…</string>
     <string name="action_verify">Verify</string>

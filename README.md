@@ -66,7 +66,7 @@ Regole del codice (applicate in `PairingManager` e coperte da test):
 - La copia scaricata di ogni lista è compressa e cifrata a blocchi (AES-256-GCM). Nel database della lista gli indirizzi dei flussi (che contengono le credenziali) sono cifrati uno per uno con una chiave casuale del file, a sua volta cifrata dalla chiave del Keystore; nomi, gruppi e loghi sono in chiaro. Tutto sta in `noBackupFilesDir`.
 - Il file è in `noBackupFilesDir`, escluso da backup e trasferimenti; `allowBackup` è disattivato.
 - Un file illeggibile (corrotto o chiave persa) viene messo da parte come `.corrupt` senza far crashare l'app.
-- L'interfaccia mostra solo l'**host** del link, mai percorso o query (spesso contengono token). L'URL non viene mai scritto nei log né nei messaggi di errore.
+- Nella schermata delle liste si vedono solo il **nome** e il **numero di contenuti**, mai l'indirizzo. Dove serve un riferimento (es. un link singolo) si mostra solo l'host, mai percorso o query (spesso contengono token). L'URL non viene mai scritto nei log né nei messaggi di errore.
 
 **Rete locale**
 
