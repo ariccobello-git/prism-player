@@ -63,17 +63,6 @@ object ContentInfo {
         return InfoKeys.badges(read(InfoKeys.film(streamUrl))?.d)
     }
 
-    /**
-     * Picture and audio badges of a film, asking the panel (one request, through [PanelLine]) only when they were
-     * never saved. Used when the cursor rests on a poster, so copies of the same film can be told apart.
-     */
-    suspend fun filmBadges(streamUrl: String): List<String> {
-        val address = PanelAddress.vodInfo(streamUrl) ?: return emptyList()
-        val key = InfoKeys.film(streamUrl)
-        read(key)?.d?.let { return InfoKeys.badges(it) }
-        return InfoKeys.badges(fetchFilm(address, key)?.d)
-    }
-
     suspend fun seriesPlot(episodeUrl: String?, title: String): String? =
         seriesEntry(episodeUrl, title)?.plot
 
