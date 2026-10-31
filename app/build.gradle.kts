@@ -43,6 +43,15 @@ android {
         // A non-debuggable app is also compiled ahead of time by Android, so it runs faster on the stick.
         debug {
             isDebuggable = false
+            // The published APK is this build: R8 removes the code and resources nobody calls (unused parts of
+            // Compose, Media3, OkHttp...) and optimises the rest, so the APK is smaller, starts faster and uses
+            // less memory on the stick. Unit tests are not affected (they run on the unshrunk classes).
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
         release {
             isMinifyEnabled = true
