@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.sp
 import dev.red74.prismplayer.Notice
 import dev.red74.prismplayer.R
 import dev.red74.prismplayer.data.PlaylistStatus
-import dev.red74.prismplayer.data.PlaylistUrl
 import dev.red74.prismplayer.data.SavedPlaylist
 import kotlinx.coroutines.delay
 
@@ -287,7 +286,7 @@ private fun PlaylistRow(
     ) {
         GlassButton(
             text = playlist.name,
-            subtitle = PlaylistUrl.displayLabel(playlist.url) + " · " + statusLabel,
+            subtitle = statusLabel,
             subtitleColor = statusColor,
             tint = if (failed) PrismColors.Danger else null,
             onClick = onOpen,
