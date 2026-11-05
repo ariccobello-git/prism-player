@@ -130,9 +130,12 @@ fun HomeScreen(
                         // After a language change the window restarts: the cursor returns to the chosen flag.
                         val code = Appearance.flagToFocus ?: return@LaunchedEffect
                         Appearance.flagToFocus = null
-                        withFrameNanos { }
-                        withFrameNanos { }
-                        runCatching { flagFocus[code]?.requestFocus() }
+                        // Other first-focus requests of the new window land in the first frames: ask again for a few
+                        // frames so the chosen flag (Italian or English alike) is the one that keeps the cursor.
+                        repeat(12) {
+                            withFrameNanos { }
+                            runCatching { flagFocus[code]?.requestFocus() }
+                        }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         for (code in listOf("it", "en")) {
