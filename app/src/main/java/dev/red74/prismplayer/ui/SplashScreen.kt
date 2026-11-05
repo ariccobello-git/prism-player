@@ -163,7 +163,7 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
             .fillMaxSize()
             .background(Color(0xFF02030A)),
     ) {
-        Canvas(Modifier.fillMaxSize()) { drawPrismScene(t() / TIME_SCALE, images?.sky, images?.glass) }
+        Canvas(Modifier.fillMaxSize()) { drawPrismScene(t() / TIME_SCALE, images?.sky, images?.glass, moon = images?.moon) }
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
@@ -235,12 +235,13 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
 }
 
 /** The sky photo and a small soft copy of it for what the glass shows. */
-internal class SplashImages(val sky: ImageBitmap, val glass: ImageBitmap)
+internal class SplashImages(val sky: ImageBitmap, val glass: ImageBitmap, val moon: ImageBitmap? = null)
 
 /** Loads the sky photo and its small soft copy away from the screen thread. */
 internal fun loadSplashImages(context: android.content.Context): SplashImages? = runCatching {
     val sky = BitmapFactory.decodeResource(context.resources, R.drawable.galaxy_bg) ?: return@runCatching null
     // A small copy of the sky, soft once stretched back to full size: what the glass shows through and reflects.
     val small = Bitmap.createScaledBitmap(sky, 240, (240f * sky.height / sky.width).roundToInt().coerceAtLeast(1), true)
-    SplashImages(sky.asImageBitmap(), small.asImageBitmap())
+    val moon = BitmapFactory.decodeResource(context.resources, R.drawable.crystal_moon)?.asImageBitmap()
+    SplashImages(sky.asImageBitmap(), small.asImageBitmap(), moon)
 }.getOrNull()

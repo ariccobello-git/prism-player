@@ -73,6 +73,10 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
     lint {
         // Lint runs in CI and its report is uploaded; findings do not block the debug APK.
         abortOnError = false
@@ -122,6 +126,11 @@ dependencies {
     implementation(libs.emoji2.bundled)
 
     testImplementation(libs.junit)
+    // UI test on the JVM: moves the focus in the menu and checks that nothing shifts.
+    testImplementation(libs.robolectric)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test)
+    debugImplementation(libs.compose.ui.test.manifest)
     // A real XmlPullParser for the guide tests (on the device the platform provides one).
     testImplementation(libs.kxml2)
 }

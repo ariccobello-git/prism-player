@@ -115,7 +115,7 @@ private fun DrawScope.prepare(images: SplashImages?): Swallowed {
         val bitmap = ImageBitmap(w, h)
         CanvasDrawScope().draw(this, layoutDirection, androidx.compose.ui.graphics.Canvas(bitmap), Size(w.toFloat(), h.toFloat())) {
             if (which == SceneLayers.SKY) drawRect(Color.Black)
-            drawPrismScene(end, images?.sky, images?.glass, which)
+            drawPrismScene(end, images?.sky, images?.glass, which, images?.moon)
         }
         bitmap
     }
