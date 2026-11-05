@@ -228,4 +228,12 @@
     <string name="palette_teal">Turchese</string>
     <string name="palette_pink">Rosa</string>
     <string name="palette_gold">Oro</string>
+    <string name="palette_burgundy">Bordeaux</string>
+    <string name="palette_lime">Lime</string>
+    <string name="palette_ice">Ghiaccio</string>
+    <string name="palette_indigo">Indaco</string>
+    <string name="palette_coral">Corallo</string>
+    <string name="palette_mint">Menta</string>
+    <string name="palette_coffee">Caffè</string>
+    <string name="palette_silver">Argento</string>
 </resources>

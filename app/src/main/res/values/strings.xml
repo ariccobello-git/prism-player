@@ -228,4 +228,12 @@
     <string name="palette_teal">Teal</string>
     <string name="palette_pink">Pink</string>
     <string name="palette_gold">Gold</string>
+    <string name="palette_burgundy">Burgundy</string>
+    <string name="palette_lime">Lime</string>
+    <string name="palette_ice">Ice</string>
+    <string name="palette_indigo">Indigo</string>
+    <string name="palette_coral">Coral</string>
+    <string name="palette_mint">Mint</string>
+    <string name="palette_coffee">Coffee</string>
+    <string name="palette_silver">Silver</string>
 </resources>
