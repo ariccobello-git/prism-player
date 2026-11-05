@@ -71,6 +71,14 @@ object Appearance {
         Palette(R.string.palette_teal, Color(0xFF061214), Color(0xFF0E2A33), Color(0xFF0A3A44), Color(0xFF4FD8E8), Color(0xFF5FA8FF)),
         Palette(R.string.palette_pink, Color(0xFF140812), Color(0xFF331430), Color(0xFF44123A), Color(0xFFFF7CC0), Color(0xFFC77CFF)),
         Palette(R.string.palette_gold, Color(0xFF0C0C0E), Color(0xFF1C1C22), Color(0xFF26242A), Color(0xFFE6C36A), Color(0xFFBFC6D6)),
+        Palette(R.string.palette_burgundy, Color(0xFF10060A), Color(0xFF2A0F1C), Color(0xFF3A0E26), Color(0xFFE0577F), Color(0xFFFF8FA8)),
+        Palette(R.string.palette_lime, Color(0xFF0B1205), Color(0xFF1D2B0B), Color(0xFF2A3A0A), Color(0xFFC4F04D), Color(0xFF7BE35F)),
+        Palette(R.string.palette_ice, Color(0xFF070F16), Color(0xFF12263A), Color(0xFF16344A), Color(0xFF9BD8FF), Color(0xFFD0F0FF)),
+        Palette(R.string.palette_indigo, Color(0xFF080815), Color(0xFF16164A), Color(0xFF1E1A66), Color(0xFF8A8CFF), Color(0xFF5F7BFF)),
+        Palette(R.string.palette_coral, Color(0xFF150A09), Color(0xFF361A16), Color(0xFF47201A), Color(0xFFFF8F6B), Color(0xFFFFB59B)),
+        Palette(R.string.palette_mint, Color(0xFF06130F), Color(0xFF0F2E26), Color(0xFF123D33), Color(0xFF8FF0D0), Color(0xFF5FE3C0)),
+        Palette(R.string.palette_coffee, Color(0xFF120C08), Color(0xFF2A1D14), Color(0xFF3A271A), Color(0xFFD9A066), Color(0xFFB8845A)),
+        Palette(R.string.palette_silver, Color(0xFF0B0D12), Color(0xFF1B202B), Color(0xFF262C3A), Color(0xFFD5DBEA), Color(0xFF9BA8C4)),
     )
 
     private var prefs: android.content.SharedPreferences? = null
@@ -193,6 +201,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBritishFlag() {
 fun AppearanceScreen(onDone: () -> Unit) {
     var chosen by remember { mutableIntStateOf(Appearance.paletteIndex) }
     val first = remember { FocusRequester() }
+    val confirm = remember { FocusRequester() }
     RequestFocusOnEnter(first)
     val preview = Appearance.palettes[chosen]
 
@@ -201,14 +210,19 @@ fun AppearanceScreen(onDone: () -> Unit) {
             Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 PrismText(text = stringResource(R.string.appearance_title), size = 30.sp, weight = FontWeight.Bold)
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-                    Column(Modifier.weight(0.42f).fillMaxHeight().confineFocus(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(Modifier.weight(0.42f).fillMaxHeight().confineFocus(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         PrismText(text = stringResource(R.string.appearance_pick), size = 18.sp, color = PrismColors.TextSecondary)
-                        for (rowStart in 0 until 8 step 4) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(vertical = 4.dp)) {
+                        for (rowStart in 0 until Appearance.palettes.size step 4) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(vertical = 2.dp)) {
                                 for (i in rowStart until rowStart + 4) {
                                     val p = Appearance.palettes[i]
                                     RoundButton(
-                                        onClick = { chosen = i },
+                                        size = 56.dp,
+                                        onClick = {
+                                            chosen = i
+                                            // OK on a colour moves the cursor to Confirm, keeping that colour.
+                                            runCatching { confirm.requestFocus() }
+                                        },
                                         selected = chosen == i,
                                         focusRequester = if (i == Appearance.paletteIndex) first else null,
                                         onFocused = { chosen = i },
@@ -230,6 +244,7 @@ fun AppearanceScreen(onDone: () -> Unit) {
                     GlassButton(
                         text = stringResource(R.string.appearance_confirm),
                         emphasized = true,
+                        focusRequester = confirm,
                         onClick = {
                             Appearance.setPalette(chosen)
                             onDone()
