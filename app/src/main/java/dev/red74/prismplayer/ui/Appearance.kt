@@ -211,6 +211,7 @@ fun AppearanceScreen(onDone: () -> Unit) {
     var chosen by remember { mutableIntStateOf(Appearance.paletteIndex) }
     val first = remember { FocusRequester() }
     val confirm = remember { FocusRequester() }
+    val crest = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.roma_crest)
     RequestFocusOnEnter(first)
     val preview = Appearance.palettes[chosen]
 
@@ -236,11 +237,26 @@ fun AppearanceScreen(onDone: () -> Unit) {
                                         focusRequester = if (i == Appearance.paletteIndex) first else null,
                                         onFocused = { chosen = i },
                                     ) {
-                                        Box(
-                                            Modifier.fillMaxSize().background(
-                                                Brush.linearGradient(listOf(p.accent, p.accentAlt)),
-                                            ),
-                                        )
+                                        if (p.arches) {
+                                            // AS Roma: the supplied crest, small and tinted in the theme's gold, on its dark red.
+                                            Box(
+                                                Modifier.fillMaxSize().background(Brush.linearGradient(listOf(p.bg1, p.bg2))),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                androidx.compose.foundation.Image(
+                                                    bitmap = crest,
+                                                    contentDescription = null,
+                                                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(p.accent, androidx.compose.ui.graphics.BlendMode.SrcIn),
+                                                    modifier = Modifier.fillMaxSize().padding(9.dp),
+                                                )
+                                            }
+                                        } else {
+                                            Box(
+                                                Modifier.fillMaxSize().background(
+                                                    Brush.linearGradient(listOf(p.accent, p.accentAlt)),
+                                                ),
+                                            )
+                                        }
                                     }
                                 }
                             }
