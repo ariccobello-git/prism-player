@@ -102,6 +102,10 @@ object Appearance {
     fun savedLanguage(context: Context): String? =
         runCatching { context.applicationContext.getSharedPreferences("prism_ui", Context.MODE_PRIVATE).getString("lang", null) }.getOrNull()
 
+    /** Set when the language was just changed: the restarted Home page puts the cursor back on that flag. */
+    @Volatile
+    var flagToFocus: String? = null
+
     fun saveLanguage(context: Context, lang: String) {
         runCatching { context.applicationContext.getSharedPreferences("prism_ui", Context.MODE_PRIVATE).edit().putString("lang", lang).apply() }
     }
@@ -165,8 +169,8 @@ fun RoundButton(
 
 /** Italian or British flag filling the whole circle. */
 @Composable
-fun FlagButton(italian: Boolean, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    RoundButton(onClick = onClick, modifier = modifier, selected = selected) {
+fun FlagButton(italian: Boolean, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) {
+    RoundButton(onClick = onClick, modifier = modifier, selected = selected, focusRequester = focusRequester) {
         Canvas(Modifier.fillMaxSize()) {
             if (italian) drawItalianFlag() else drawBritishFlag()
         }

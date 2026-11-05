@@ -33,6 +33,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -124,14 +125,25 @@ fun HomeScreen(
                     // Language flags (the app restarts its window in the chosen language) and the colour page.
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val language = remember { Appearance.currentLanguage(context) }
+                    val flagFocus = remember { mapOf("it" to FocusRequester(), "en" to FocusRequester()) }
+                    LaunchedEffect(Unit) {
+                        // After a language change the window restarts: the cursor returns to the chosen flag.
+                        val code = Appearance.flagToFocus ?: return@LaunchedEffect
+                        Appearance.flagToFocus = null
+                        withFrameNanos { }
+                        withFrameNanos { }
+                        runCatching { flagFocus[code]?.requestFocus() }
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         for (code in listOf("it", "en")) {
                             FlagButton(
+                                focusRequester = flagFocus[code],
                                 italian = code == "it",
                                 selected = language == code,
                                 onClick = {
                                     if (code != language) {
                                         Appearance.saveLanguage(context, code)
+                                        Appearance.flagToFocus = code
                                         (context as? android.app.Activity)?.recreate()
                                     }
                                 },
