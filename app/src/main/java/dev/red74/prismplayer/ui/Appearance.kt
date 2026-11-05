@@ -58,6 +58,8 @@ class Palette(
     val bg2: Color,
     val accent: Color,
     val accentAlt: Color,
+    /** Adds a faint drawn scene (Roman arches) to the backdrop. */
+    val arches: Boolean = false,
 )
 
 /** The user's choices of language and colours, kept between launches. Reading them is free (plain memory). */
@@ -80,7 +82,7 @@ object Appearance {
         Palette(R.string.palette_coffee, Color(0xFF120C08), Color(0xFF2A1D14), Color(0xFF3A271A), Color(0xFFD9A066), Color(0xFFB8845A)),
         Palette(R.string.palette_silver, Color(0xFF0B0D12), Color(0xFF1B202B), Color(0xFF262C3A), Color(0xFFD5DBEA), Color(0xFF9BA8C4)),
         // AS Roma: the club's yellow #FBBA00 and red #970A2C (brandcolorcode.com), over a dark red backdrop.
-        Palette(R.string.palette_roma, Color(0xFF0D0507), Color(0xFF2A0A14), Color(0xFF4A0A1E), Color(0xFFFBBA00), Color(0xFFB5123A)),
+        Palette(R.string.palette_roma, Color(0xFF0D0507), Color(0xFF2A0A14), Color(0xFF4A0A1E), Color(0xFFFBBA00), Color(0xFFB5123A), arches = true),
     )
 
     private var prefs: android.content.SharedPreferences? = null
@@ -263,6 +265,30 @@ fun AppearanceScreen(onDone: () -> Unit) {
     }
 }
 
+/** Two tiers of Roman arches along the bottom of the screen, a faint line drawing in the accent colour. Drawn once, never animated. */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArches(color: Color) {
+    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = size.minDimension * 0.003f + 1f)
+    val count = 11
+    val w = size.width / count
+    val r = w * 0.34f
+    var base = size.height
+    for (tier in 0 until 2) {
+        val height = r * 2.6f
+        for (i in 0 until count) {
+            val cx = w * i + w / 2f
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(cx - r, base)
+                lineTo(cx - r, base - height + r)
+                arcTo(androidx.compose.ui.geometry.Rect(cx - r, base - height, cx + r, base - height + 2 * r), 180f, 180f, false)
+                lineTo(cx + r, base)
+            }
+            drawPath(path, color.copy(alpha = if (tier == 0) 0.13f else 0.09f), style = stroke)
+        }
+        base -= height + r * 0.35f
+        drawLine(color.copy(alpha = 0.10f), Offset(0f, base + r * 0.17f), Offset(size.width, base + r * 0.17f), stroke.width)
+    }
+}
+
 /** A small, static picture of the Home page in the colours of [p]. Nothing animates, so it costs nothing. */
 @Composable
 private fun PalettePreview(p: Palette, modifier: Modifier = Modifier) {
@@ -279,6 +305,7 @@ private fun PalettePreview(p: Palette, modifier: Modifier = Modifier) {
             drawCircle(Brush.radialGradient(listOf(p.accent.copy(alpha = 0.32f), Color.Transparent), a, r), r, a)
             val b = Offset(size.width * 0.95f, size.height * 0.9f)
             drawCircle(Brush.radialGradient(listOf(p.accentAlt.copy(alpha = 0.28f), Color.Transparent), b, r), r, b)
+            if (p.arches) drawArches(p.accent)
         }
         Row(Modifier.fillMaxSize().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(
