@@ -55,7 +55,7 @@ private fun smooth(edge0: Float, edge1: Float, x: Float): Float {
 /**
  * The opening scene at [tm] seconds of the opening music's own timeline (10.6 s, see [PrismMotion]): a real
  * photograph of the Milky Way ([sky]; ESO/S. Brunier, CC BY 4.0, see the README), a solid glass prism turning in 3D
- * ([PrismView], [drawGlassPrism3D]), a white beam from the lower left and the spectrum, traced with real refraction
+ * ([PrismView], [drawCrystalMoon]), a white beam from the lower left and the spectrum, traced with real refraction
  * ([PrismOptics]). Once out of the glass the colours fly out of the screen towards the viewer and down past its
  * bottom edge. [glassView] is a small soft copy of the sky for what the glass shows.
  */
@@ -64,6 +64,7 @@ internal fun DrawScope.drawPrismScene(
     sky: ImageBitmap?,
     glassView: ImageBitmap?,
     layers: SceneLayers = SceneLayers.ALL,
+    moon: ImageBitmap? = null,
 ) {
     val w = size.width
     val h = size.height
@@ -113,17 +114,15 @@ internal fun DrawScope.drawPrismScene(
         radius = radius * 2.4f, center = center, blendMode = BlendMode.Plus,
     )
 
-    drawGlassPrism3D(
+    drawCrystalMoon(
         theta = theta,
-        yaw = yaw,
-        project = { x, y, z -> project(x, y, z) },
         center = center,
         radius = radius,
         appear = appear,
         flash = flash,
         power = power,
         sparkle = PrismMotion.sparkle(tm.toDouble()).toFloat(),
-        glassView = glassView,
+        moon = moon,
     )
 
     // --- the white beam: it comes from far away on the lower left to wherever it meets the glass ---------------------
