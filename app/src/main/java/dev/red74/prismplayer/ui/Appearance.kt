@@ -265,28 +265,87 @@ fun AppearanceScreen(onDone: () -> Unit) {
     }
 }
 
-/** Two tiers of Roman arches along the bottom of the screen, a faint line drawing in the accent colour. Drawn once, never animated. */
-fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArches(color: Color) {
-    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = size.minDimension * 0.003f + 1f)
-    val count = 11
-    val w = size.width / count
-    val r = w * 0.34f
-    var base = size.height
-    for (tier in 0 until 2) {
-        val height = r * 2.6f
-        for (i in 0 until count) {
-            val cx = w * i + w / 2f
+/**
+ * A faint line drawing of Rome in the accent colour: the Colosseum seen from a little above, so its round shape reads
+ * (three tiers of arches around the front half, the whole rim as an ellipse), and the Capitoline she-wolf with the twins.
+ * Plain strokes, drawn once, never animated.
+ */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRome(color: Color) {
+    val w = size.width
+    val h = size.height
+    val line = size.minDimension * 0.003f + 1f
+    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = line, cap = StrokeCap.Round)
+    val soft = color.copy(alpha = 0.12f)
+    val fainter = color.copy(alpha = 0.08f)
+
+    // Colosseum: an ellipse seen in perspective, three tiers.
+    val cx = w * 0.70f
+    val rx = w * 0.28f
+    val ry = h * 0.07f
+    val tier = h * 0.07f
+    val base = h * 0.90f
+    val top = base - tier * 3f
+    fun oval(y: Float, c: Color) = drawOval(c, Offset(cx - rx, y - ry), Size(rx * 2f, ry * 2f), style = stroke)
+    fun front(y: Float, c: Color) = drawArc(c, 0f, 180f, false, Offset(cx - rx, y - ry), Size(rx * 2f, ry * 2f), style = stroke)
+    oval(top, soft)
+    for (t in 1..2) front(base - tier * t, fainter)
+    front(base, soft)
+    drawLine(soft, Offset(cx - rx, top), Offset(cx - rx, base), line)
+    drawLine(soft, Offset(cx + rx, top), Offset(cx + rx, base), line)
+    // The arches of the two lower tiers, closer together towards the sides as the curve turns away.
+    val n = 17
+    for (t in 0 until 2) {
+        val yBase = base - tier * t
+        for (i in 1 until n) {
+            val a = Math.PI * i / n
+            val x = cx + rx * Math.cos(a).toFloat()
+            val y = yBase + ry * Math.sin(a).toFloat()
+            val half = rx * 0.055f * maxOf(0.3f, Math.sin(a).toFloat())
+            val rise = tier * 0.55f
             val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(cx - r, base)
-                lineTo(cx - r, base - height + r)
-                arcTo(androidx.compose.ui.geometry.Rect(cx - r, base - height, cx + r, base - height + 2 * r), 180f, 180f, false)
-                lineTo(cx + r, base)
+                moveTo(x - half, y)
+                lineTo(x - half, y - rise)
+                arcTo(androidx.compose.ui.geometry.Rect(x - half, y - rise - half, x + half, y - rise + half), 180f, 180f, false)
+                lineTo(x + half, y)
             }
-            drawPath(path, color.copy(alpha = if (tier == 0) 0.13f else 0.09f), style = stroke)
+            drawPath(path, soft, style = stroke)
         }
-        base -= height + r * 0.35f
-        drawLine(color.copy(alpha = 0.10f), Offset(0f, base + r * 0.17f), Offset(size.width, base + r * 0.17f), stroke.width)
     }
+    // The attic: small square windows along the top tier.
+    for (i in 1 until n) {
+        val a = Math.PI * i / n
+        val x = cx + rx * Math.cos(a).toFloat()
+        val y = top + tier + ry * Math.sin(a).toFloat()
+        val half = rx * 0.02f * maxOf(0.3f, Math.sin(a).toFloat())
+        drawRect(fainter, Offset(x - half, y - tier * 0.7f), Size(half * 2f, tier * 0.35f), style = stroke)
+    }
+
+    // The she-wolf with Romulus and Remus: simple outlines, units of a 100-wide box.
+    val u = w * 0.0023f
+    val ox = w * 0.07f
+    val oy = h * 0.90f
+    fun p(x: Float, y: Float) = Offset(ox + x * u, oy + y * u)
+    val wolf = color.copy(alpha = 0.16f)
+    drawOval(wolf, p(20f, -51f), Size(60f * u, 26f * u), style = stroke)                  // body
+    drawLine(wolf, p(26f, -44f), p(14f, -60f), line)                                      // neck
+    drawOval(wolf, p(2f, -68f), Size(22f * u, 14f * u), style = stroke)                   // head
+    drawLine(wolf, p(4f, -62f), p(-6f, -58f), line)                                       // snout
+    drawLine(wolf, p(14f, -68f), p(18f, -77f), line)                                      // ear
+    drawLine(wolf, p(18f, -77f), p(22f, -67f), line)
+    drawLine(wolf, p(30f, -30f), p(28f, 0f), line)                                        // legs
+    drawLine(wolf, p(38f, -28f), p(38f, 0f), line)
+    drawLine(wolf, p(66f, -30f), p(66f, 0f), line)
+    drawLine(wolf, p(74f, -32f), p(78f, 0f), line)
+    val tail = androidx.compose.ui.graphics.Path().apply {
+        moveTo(p(79f, -44f).x, p(79f, -44f).y)
+        quadraticTo(p(94f, -46f).x, p(94f, -46f).y, p(92f, -28f).x, p(92f, -28f).y)
+    }
+    drawPath(tail, wolf, style = stroke)                                                  // tail
+    drawOval(wolf, p(36f, -17f), Size(14f * u, 8f * u), style = stroke)                   // the twins
+    drawCircle(wolf, 3.2f * u, p(33f, -14f), style = stroke)
+    drawOval(wolf, p(52f, -17f), Size(14f * u, 8f * u), style = stroke)
+    drawCircle(wolf, 3.2f * u, p(69f, -14f), style = stroke)
+    drawLine(wolf, p(-10f, 0f), p(100f, 0f), line)                                        // the ground
 }
 
 /** A small, static picture of the Home page in the colours of [p]. Nothing animates, so it costs nothing. */
@@ -305,7 +364,7 @@ private fun PalettePreview(p: Palette, modifier: Modifier = Modifier) {
             drawCircle(Brush.radialGradient(listOf(p.accent.copy(alpha = 0.32f), Color.Transparent), a, r), r, a)
             val b = Offset(size.width * 0.95f, size.height * 0.9f)
             drawCircle(Brush.radialGradient(listOf(p.accentAlt.copy(alpha = 0.28f), Color.Transparent), b, r), r, b)
-            if (p.arches) drawArches(p.accent)
+            if (p.arches) drawRome(p.accent)
         }
         Row(Modifier.fillMaxSize().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(
