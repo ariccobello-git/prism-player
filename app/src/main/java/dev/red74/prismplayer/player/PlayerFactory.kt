@@ -20,6 +20,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioTrackBufferSizeProvider
+import androidx.media3.exoplayer.audio.ForwardingAudioSink
+import androidx.media3.common.Format
+import androidx.media3.common.MimeTypes
+import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy
@@ -50,6 +54,37 @@ object BufferPlan {
     const val AUDIO_MIN_BUFFER_US = 400_000
     const val AUDIO_MAX_BUFFER_US = 1_000_000
     const val AUDIO_BUFFER_FACTOR = 6
+}
+
+/**
+ * Sound that the TV cannot open (ERROR_CODE_AUDIO_TRACK_INIT_FAILED): it happens with films whose audio is sent
+ * to the TV or soundbar as it is (Dolby, DTS) or with many channels and a long sound queue. After the first such
+ * error the app switches to a safer sound for the rest of the run: the stick decodes the audio itself, prefers
+ * stereo tracks and uses Media3's standard (shorter) sound queue. Live channels keep working as before.
+ */
+object AudioSafety {
+    @Volatile var on: Boolean = false
+
+    fun isAudioOutputError(errorCode: Int): Boolean =
+        errorCode == PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED ||
+            errorCode == PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED
+
+    /** True when this error switched to the safer sound now (so the content is simply tried again). */
+    fun switchOn(errorCode: Int): Boolean {
+        if (on || !isAudioOutputError(errorCode)) return false
+        on = true
+        return true
+    }
+}
+
+/** Audio as is (not decoded by the stick) is refused while [AudioSafety] is on, so the decoder is used instead. */
+private class SafeAudioSink(sink: AudioSink) : ForwardingAudioSink(sink) {
+    private fun refused(format: Format) = AudioSafety.on && format.sampleMimeType != MimeTypes.AUDIO_RAW
+
+    override fun supportsFormat(format: Format): Boolean = !refused(format) && super.supportsFormat(format)
+
+    override fun getFormatSupport(format: Format): Int =
+        if (refused(format)) AudioSink.SINK_FORMAT_UNSUPPORTED else super.getFormatSupport(format)
 }
 
 /** The preview playing next to the lists, so the full-screen player can close its connection before opening its own. */
@@ -182,18 +217,24 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
     // Standard extractors and the library's own identity, as in the older player that handled live lists well.
     // More load retries (8) keep a live stream alive through the short hiccups panels often have.
     val renderers = object : DefaultRenderersFactory(context) {
-        override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink =
-            DefaultAudioSink.Builder(context)
-                .setEnableFloatOutput(enableFloatOutput)
-                .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                .setAudioTrackBufferSizeProvider(
-                    DefaultAudioTrackBufferSizeProvider.Builder()
-                        .setMinPcmBufferDurationUs(BufferPlan.AUDIO_MIN_BUFFER_US)
-                        .setMaxPcmBufferDurationUs(BufferPlan.AUDIO_MAX_BUFFER_US)
-                        .setPcmBufferMultiplicationFactor(BufferPlan.AUDIO_BUFFER_FACTOR)
-                        .build(),
-                )
+        override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink {
+            val long = DefaultAudioTrackBufferSizeProvider.Builder()
+                .setMinPcmBufferDurationUs(BufferPlan.AUDIO_MIN_BUFFER_US)
+                .setMaxPcmBufferDurationUs(BufferPlan.AUDIO_MAX_BUFFER_US)
+                .setPcmBufferMultiplicationFactor(BufferPlan.AUDIO_BUFFER_FACTOR)
                 .build()
+            val standard = DefaultAudioTrackBufferSizeProvider.Builder().build()
+            return SafeAudioSink(
+                DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .setAudioTrackBufferSizeProvider { minSize, encoding, mode, frameSize, rate, bitrate, speed ->
+                        (if (AudioSafety.on) standard else long)
+                            .getBufferSizeInBytes(minSize, encoding, mode, frameSize, rate, bitrate, speed)
+                    }
+                    .build(),
+            )
+        }
     }.setEnableDecoderFallback(true)
     val sources = DefaultMediaSourceFactory(httpFactory)
         .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(8))

@@ -81,6 +81,7 @@ import dev.red74.prismplayer.player.StreamConnections
 import dev.red74.prismplayer.player.StreamIdentity
 import dev.red74.prismplayer.player.TrackPolicy
 import dev.red74.prismplayer.player.createPlayer
+import dev.red74.prismplayer.player.AudioSafety
 import dev.red74.prismplayer.data.ProviderHosts
 import dev.red74.prismplayer.data.StreamHold
 import kotlinx.coroutines.delay
@@ -105,6 +106,8 @@ private const val NEXT_COUNTDOWN_S = 8
  * only the one the viewer stops on opens a connection.
  */
 private const val ZAP_SETTLE_MS = 300L
+/** Pause before trying a content again with the safer sound, so the sound card closes the failed track. */
+private const val AUDIO_RETRY_DELAY_MS = 500L
 private const val LIVE_EDGE_MS = 6_000L
 private const val CHANNEL_BANNER_MS = 4_000L
 
@@ -239,6 +242,19 @@ fun PlayerScreen(
                     if (flags[1]) parked = true else player.prepare()
                     return
                 }
+                // Sound the TV could not open: tried again at once with the safer sound (see AudioSafety).
+                if (AudioSafety.switchOn(error.errorCode)) {
+                    player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                        .setMaxAudioChannelCount(2)
+                        .build()
+                    scope.launch {
+                        delay(AUDIO_RETRY_DELAY_MS)
+                        if (flags[1]) { parked = true; return@launch }
+                        StreamConnections.awaitNone()
+                        if (player.playerError != null) player.prepare()
+                    }
+                    return
+                }
                 val http = generateSequence(error.cause) { it.cause }
                     .filterIsInstance<HttpDataSource.InvalidResponseCodeException>()
                     .firstOrNull()?.responseCode
@@ -333,6 +349,7 @@ fun PlayerScreen(
             .clearOverrides()
             .setPreferredAudioLanguage(TrackPolicy.ITALIAN)
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .setMaxAudioChannelCount(if (AudioSafety.on) 2 else Int.MAX_VALUE)
             .build()
         countdown = -1
         status = PlayStatus.Loading
