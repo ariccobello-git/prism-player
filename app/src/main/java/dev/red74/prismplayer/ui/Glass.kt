@@ -50,6 +50,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -488,18 +489,17 @@ fun Poster(url: String?, title: String, modifier: Modifier = Modifier, fit: Bool
     Box(
         modifier
             .clip(RoundedCornerShape(12.dp))
-            .then(
-                if (loaded) Modifier.background(if (fit) LogoTile else Color.Transparent)
-                else Modifier.background(PosterPlaceholder),
-            ),
+            .then(if (loaded && fit) Modifier.background(LogoTile) else Modifier),
         contentAlignment = androidx.compose.ui.Alignment.Center,
     ) {
         if (!loaded) {
-            PrismText(
-                text = title.trim().take(1).uppercase(),
-                size = 26.sp,
-                weight = FontWeight.Bold,
-                color = PrismColors.TextSecondary,
+            // While the real image loads, or when the list has none: the Prism artwork (square for channel logos,
+            // 2:3 with the name for film and series posters). Decoded once and shared by every tile.
+            androidx.compose.foundation.Image(
+                bitmap = PrismFallback.get(androidx.compose.ui.platform.LocalContext.current, fit),
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
             )
         }
         if (!url.isNullOrBlank()) {
@@ -514,7 +514,20 @@ fun Poster(url: String?, title: String, modifier: Modifier = Modifier, fit: Bool
     }
 }
 
-private val PosterPlaceholder = Brush.linearGradient(listOf(Color(0xFF26356B), Color(0xFF3A1F6B)))
+/** The two small Prism images used when a logo or poster is missing, decoded once for the whole app. */
+private object PrismFallback {
+    private var logo: androidx.compose.ui.graphics.ImageBitmap? = null
+    private var poster: androidx.compose.ui.graphics.ImageBitmap? = null
+
+    fun get(context: android.content.Context, square: Boolean): androidx.compose.ui.graphics.ImageBitmap {
+        val cached = if (square) logo else poster
+        if (cached != null) return cached
+        val id = if (square) dev.red74.prismplayer.R.drawable.prism_logo_fallback else dev.red74.prismplayer.R.drawable.prism_poster_fallback
+        val image = android.graphics.BitmapFactory.decodeResource(context.resources, id).asImageBitmap()
+        if (square) logo = image else poster = image
+        return image
+    }
+}
 
 /** Neutral graphite tile behind loaded channel logos: no blue tint, readable for both white and coloured logos. */
 private val LogoTile = Color(0xFF2E3138)
