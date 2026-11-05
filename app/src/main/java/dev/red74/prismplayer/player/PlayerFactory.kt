@@ -60,6 +60,7 @@ object BufferPlan {
  * Sound that the TV cannot open (ERROR_CODE_AUDIO_TRACK_INIT_FAILED): it happens with films whose audio is sent
  * to the TV or soundbar as it is (Dolby, DTS) or with many channels and a long sound queue. After the first such
  * error the app switches to a safer sound for the rest of the run: the stick decodes the audio itself, prefers
+<<<<<<< HEAD
  * stereo tracks and uses Media3's standard (shorter) sound queue. The choice is kept for the next runs too, so
  * the same film never fails first again. Live channels keep working as before.
  */
@@ -76,6 +77,12 @@ object AudioSafety {
         loaded = true
         if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)) on = true
     }
+=======
+ * stereo tracks and uses Media3's standard (shorter) sound queue. Live channels keep working as before.
+ */
+object AudioSafety {
+    @Volatile var on: Boolean = false
+>>>>>>> origin/claude/project-thread-3aa2cl
 
     fun isAudioOutputError(errorCode: Int): Boolean =
         errorCode == PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED ||
@@ -87,6 +94,7 @@ object AudioSafety {
         on = true
         return true
     }
+<<<<<<< HEAD
 
     /** Same, and remembered for the next runs. */
     fun switchOn(context: Context, errorCode: Int): Boolean {
@@ -94,6 +102,8 @@ object AudioSafety {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, true).apply()
         return true
     }
+=======
+>>>>>>> origin/claude/project-thread-3aa2cl
 }
 
 /** Audio as is (not decoded by the stick) is refused while [AudioSafety] is on, so the decoder is used instead. */
