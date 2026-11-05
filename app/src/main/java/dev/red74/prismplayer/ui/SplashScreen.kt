@@ -242,6 +242,6 @@ internal fun loadSplashImages(context: android.content.Context): SplashImages? =
     val sky = BitmapFactory.decodeResource(context.resources, R.drawable.galaxy_bg) ?: return@runCatching null
     // A small copy of the sky, soft once stretched back to full size: what the glass shows through and reflects.
     val small = Bitmap.createScaledBitmap(sky, 240, (240f * sky.height / sky.width).roundToInt().coerceAtLeast(1), true)
-    val moon = BitmapFactory.decodeResource(context.resources, R.drawable.crystal_moon)?.asImageBitmap()
+    val moon = BitmapFactory.decodeResource(context.resources, R.drawable.crystal_moon_map)?.asImageBitmap()
     SplashImages(sky.asImageBitmap(), small.asImageBitmap(), moon)
 }.getOrNull()
