@@ -738,7 +738,7 @@ private fun GroupColumn(
     }
 }
 
-/** The orderings offered by [SortBar], each with the label shown on the button and in the menu. */
+/** The orderings offered by [SortBar], in the order the button cycles through them. */
 private val SORT_OPTIONS = listOf(
     SortMode.STANDARD to R.string.sort_standard,
     SortMode.AZ to R.string.sort_az,
@@ -749,77 +749,19 @@ private val SORT_OPTIONS = listOf(
 /**
  * The ordering of the final list: standard (as the list declares), A-Z, Z-A, latest added first.
  *
- * One clearly labelled button ("Ordina: Standard ▾") shows the current choice; OK opens, in place, a short menu
- * with every choice written out in full and the current one ticked. The menu pushes the list down instead of
- * floating over it, so the D-pad moves through it like any other row. Choosing closes it and puts the focus back
- * on the button; Back, or moving the focus away from the menu, closes it without changing anything.
+ * One button that says the current order in words ("Ordina: Standard") and, underneath, which order the next OK
+ * gives. Every OK moves to the next order, round and round. The button never leaves the screen, so the cursor stays
+ * on it; the user moves away with the arrows.
  */
 @Composable
 private fun SortBar(nav: LibraryNav, onNav: NavChange) {
-    var open by remember { mutableStateOf(false) }
-    var hadFocus by remember { mutableStateOf(false) }
-    var refocusButton by remember { mutableStateOf(false) }
-    val buttonFocus = remember { FocusRequester() }
-    val currentFocus = remember { FocusRequester() }
-    val current = SORT_OPTIONS.firstOrNull { it.first == nav.sort }?.second ?: R.string.sort_standard
-
-    BackHandler(enabled = open) {
-        open = false
-        refocusButton = true
-    }
-    LaunchedEffect(open) {
-        if (open) currentFocus.requestWhenReady()
-    }
-    LaunchedEffect(refocusButton) {
-        if (refocusButton) {
-            buttonFocus.requestWhenReady()
-            refocusButton = false
-        }
-    }
-
-    Column(
-        Modifier.onFocusChanged {
-            // Closes the menu when the focus leaves the whole sort area (for example down into the list).
-            if (it.hasFocus) hadFocus = true
-            else if (hadFocus) {
-                hadFocus = false
-                open = false
-            }
-        },
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        GlassButton(
-            text = stringResource(R.string.sort_button, stringResource(current)) + if (open) "  ▴" else "  ▾",
-            onClick = { open = !open },
-            focusRequester = buttonFocus,
-            emphasized = open,
-        )
-        if (open) {
-            PrismText(text = stringResource(R.string.sort_menu_hint), size = 15.sp, color = PrismColors.TextSecondary)
-            for ((mode, label) in SORT_OPTIONS) {
-                val selected = nav.sort == mode
-                GlassButton(
-                    text = (if (selected) "✓  " else "     ") + stringResource(label),
-                    subtitle = stringResource(sortDescription(mode)),
-                    onClick = {
-                        if (!selected) onNav { it.copy(sort = mode, itemIndex = 0) }
-                        open = false
-                        refocusButton = true
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    focusRequester = if (selected) currentFocus else null,
-                    emphasized = selected,
-                )
-            }
-        }
-    }
-}
-
-private fun sortDescription(mode: SortMode): Int = when (mode) {
-    SortMode.STANDARD -> R.string.sort_standard_hint
-    SortMode.AZ -> R.string.sort_az_hint
-    SortMode.ZA -> R.string.sort_za_hint
-    SortMode.RECENT -> R.string.sort_recent_hint
+    val index = SORT_OPTIONS.indexOfFirst { it.first == nav.sort }.coerceAtLeast(0)
+    val next = SORT_OPTIONS[(index + 1) % SORT_OPTIONS.size]
+    GlassButton(
+        text = stringResource(R.string.sort_button, stringResource(SORT_OPTIONS[index].second)),
+        subtitle = stringResource(R.string.sort_next, stringResource(next.second)),
+        onClick = { onNav { it.copy(sort = next.first, itemIndex = 0) } },
+    )
 }
 
 @Composable
