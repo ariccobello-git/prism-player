@@ -63,6 +63,8 @@ class TextCleanerTest {
         TextCleaner.canDraw = null
         assertEquals("4K FHD", TextCleaner.clean("4\uD83C\uDD7A ꜰʜᴅ"))
         assertEquals("4K 4K 4K 4K", TextCleaner.clean("4\u212A 4\uFF2B 4\u24C0 4\uD835\uDC0A"))
+        assertEquals("Ita HD", TextCleaner.clean("\u24BE\u24E3\u24D0 \uD83C\uDD37\uD83C\uDD33"))   // Ⓘⓣⓐ 🄷🄳
+        assertEquals("k K", TextCleaner.clean("\u24A6 \uD83C\uDD1A"))                                  // ⒦ 🄚
         assertEquals("4K 🇮🇹", TextCleaner.clean("4\uD83C\uDDF0 🇮🇹"))
     }
 

@@ -141,6 +141,8 @@ object TextCleaner {
      * anything else.
      */
     fun letterOf(codePoint: Int): String? = when (codePoint) {
+        in 0x249C..0x24B5 -> ('a' + (codePoint - 0x249C)).toString()          // ⒜ parenthesized
+        in 0x1F110..0x1F129 -> ('A' + (codePoint - 0x1F110)).toString()      // 🄐 parenthesized
         in 0x1F150..0x1F169 -> ('A' + (codePoint - 0x1F150)).toString()
         in 0x1F170..0x1F189 -> ('A' + (codePoint - 0x1F170)).toString()
         in 0x1F1E6..0x1F1FF -> ('A' + (codePoint - 0x1F1E6)).toString()
