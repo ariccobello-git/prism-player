@@ -186,6 +186,7 @@ fun PrismBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val crest = if (Appearance.palette.arches) androidx.compose.ui.res.imageResource(dev.red74.prismplayer.R.drawable.roma_crest) else null
     Box(
         modifier
             .fillMaxSize()
@@ -213,7 +214,7 @@ fun PrismBackground(
                 radius = radius,
                 center = second,
             )
-            if (Appearance.palette.arches) drawRome(PrismColors.Accent)
+            if (Appearance.palette.arches) drawRome(PrismColors.Accent, crest)
         }
         content()
         // The installed build, always readable at the bottom of the page.

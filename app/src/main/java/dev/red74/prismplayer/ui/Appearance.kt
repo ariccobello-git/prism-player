@@ -267,10 +267,22 @@ fun AppearanceScreen(onDone: () -> Unit) {
 
 /**
  * A faint line drawing of Rome in the accent colour: the Colosseum seen from a little above, so its round shape reads
- * (three tiers of arches around the front half, the whole rim as an ellipse), and the Capitoline she-wolf with the twins.
- * Plain strokes, drawn once, never animated.
+ * (three tiers of arches around the front half, the whole rim as an ellipse), and the club crest on the left.
+ * Plain strokes and one small image, drawn once, never animated.
  */
-fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRome(color: Color) {
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRome(color: Color, crest: androidx.compose.ui.graphics.ImageBitmap?) {
+    // The crest the user supplied (white lines on transparent), tinted in the accent colour and kept faint.
+    if (crest != null) {
+        val ch = size.height * 0.80f
+        val cw = ch * crest.width / crest.height
+        drawImage(
+            crest,
+            dstOffset = androidx.compose.ui.unit.IntOffset((size.width * 0.04f).toInt(), (size.height * 0.10f).toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(cw.toInt(), ch.toInt()),
+            alpha = 0.16f,
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(color, androidx.compose.ui.graphics.BlendMode.SrcIn),
+        )
+    }
     val w = size.width
     val h = size.height
     val line = size.minDimension * 0.003f + 1f
@@ -319,38 +331,12 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRome(color: Color) {
         val half = rx * 0.02f * maxOf(0.3f, Math.sin(a).toFloat())
         drawRect(fainter, Offset(x - half, y - tier * 0.7f), Size(half * 2f, tier * 0.35f), style = stroke)
     }
-
-    // The she-wolf with Romulus and Remus: simple outlines, units of a 100-wide box.
-    val u = w * 0.0023f
-    val ox = w * 0.07f
-    val oy = h * 0.90f
-    fun p(x: Float, y: Float) = Offset(ox + x * u, oy + y * u)
-    val wolf = color.copy(alpha = 0.16f)
-    drawOval(wolf, p(20f, -51f), Size(60f * u, 26f * u), style = stroke)                  // body
-    drawLine(wolf, p(26f, -44f), p(14f, -60f), line)                                      // neck
-    drawOval(wolf, p(2f, -68f), Size(22f * u, 14f * u), style = stroke)                   // head
-    drawLine(wolf, p(4f, -62f), p(-6f, -58f), line)                                       // snout
-    drawLine(wolf, p(14f, -68f), p(18f, -77f), line)                                      // ear
-    drawLine(wolf, p(18f, -77f), p(22f, -67f), line)
-    drawLine(wolf, p(30f, -30f), p(28f, 0f), line)                                        // legs
-    drawLine(wolf, p(38f, -28f), p(38f, 0f), line)
-    drawLine(wolf, p(66f, -30f), p(66f, 0f), line)
-    drawLine(wolf, p(74f, -32f), p(78f, 0f), line)
-    val tail = androidx.compose.ui.graphics.Path().apply {
-        moveTo(p(79f, -44f).x, p(79f, -44f).y)
-        quadraticTo(p(94f, -46f).x, p(94f, -46f).y, p(92f, -28f).x, p(92f, -28f).y)
-    }
-    drawPath(tail, wolf, style = stroke)                                                  // tail
-    drawOval(wolf, p(36f, -17f), Size(14f * u, 8f * u), style = stroke)                   // the twins
-    drawCircle(wolf, 3.2f * u, p(33f, -14f), style = stroke)
-    drawOval(wolf, p(52f, -17f), Size(14f * u, 8f * u), style = stroke)
-    drawCircle(wolf, 3.2f * u, p(69f, -14f), style = stroke)
-    drawLine(wolf, p(-10f, 0f), p(100f, 0f), line)                                        // the ground
 }
 
 /** A small, static picture of the Home page in the colours of [p]. Nothing animates, so it costs nothing. */
 @Composable
 private fun PalettePreview(p: Palette, modifier: Modifier = Modifier) {
+    val crest = if (p.arches) androidx.compose.ui.res.imageResource(R.drawable.roma_crest) else null
     val shape = RoundedCornerShape(20.dp)
     Box(
         modifier
@@ -364,7 +350,7 @@ private fun PalettePreview(p: Palette, modifier: Modifier = Modifier) {
             drawCircle(Brush.radialGradient(listOf(p.accent.copy(alpha = 0.32f), Color.Transparent), a, r), r, a)
             val b = Offset(size.width * 0.95f, size.height * 0.9f)
             drawCircle(Brush.radialGradient(listOf(p.accentAlt.copy(alpha = 0.28f), Color.Transparent), b, r), r, b)
-            if (p.arches) drawRome(p.accent)
+            if (p.arches) drawRome(p.accent, crest)
         }
         Row(Modifier.fillMaxSize().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(
