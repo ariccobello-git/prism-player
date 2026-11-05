@@ -122,6 +122,8 @@ fun HomeScreen(
                         text = stringResource(R.string.action_check_updates),
                         onClick = onCheckUpdates,
                         modifier = Modifier.fillMaxWidth().focusMemory("check_updates"),
+                        // At start the cursor sits on the first, top item of the menu.
+                        focusRequester = firstFocus,
                     )
                     GlassButton(
                         text = stringResource(R.string.action_updates),
@@ -132,7 +134,6 @@ fun HomeScreen(
                         text = stringResource(R.string.action_add_url),
                         onClick = onAddUrl,
                         modifier = Modifier.fillMaxWidth().focusMemory("add"),
-                        focusRequester = firstFocus,
                     )
                     GlassButton(
                         text = stringResource(R.string.action_pair),
