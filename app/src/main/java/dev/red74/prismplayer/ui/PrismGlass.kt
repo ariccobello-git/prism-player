@@ -19,10 +19,42 @@ import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-/** Thick glass looks green-blue where you look through it edge-on. */
-private val GlassEdge = Color(0xFF4FA59B)
-private val GlassBody = Color(0xFFCFE6F2)
-private val GlassShadow = Color(0xFF020711)
+/** The body is a weathered rocky crystal that has travelled through space: dark crust, warm where the light grazes it. */
+private val GlassEdge = Color(0xFF3C4650)
+private val GlassBody = Color(0xFFC9BFAE)
+private val GlassShadow = Color(0xFF05060B)
+private val RockDark = Color(0xFF17171C)
+private val RockMid = Color(0xFF4A4843)
+
+/**
+ * The scars of the journey, fixed on the body: craters (two of them on the edges, so they read as chipped corners)
+ * and fine grit. Positions are in each long face's own frame (u across, v along), so they turn with the prism.
+ */
+private object RockTexture {
+    class Crater(val u: Float, val v: Float, val r: Float, val jitter: FloatArray)
+
+    val craters: Array<List<Crater>> = Array(3) { f ->
+        val rnd = java.util.Random(11L + f * 37L)
+        List(6) { k ->
+            val edge = k < 2
+            Crater(
+                u = if (edge) k.toFloat() else 0.18f + 0.64f * rnd.nextFloat(),
+                v = 0.08f + 0.84f * rnd.nextFloat(),
+                r = if (edge) 0.20f + 0.10f * rnd.nextFloat() else 0.07f + 0.15f * rnd.nextFloat() * rnd.nextFloat() + 0.03f,
+                jitter = FloatArray(9) { 0.72f + 0.55f * rnd.nextFloat() },
+            )
+        }
+    }
+
+    /** u,v pairs of fine grit, per long face. */
+    val grit: Array<FloatArray> = Array(3) { f ->
+        val rnd = java.util.Random(101L + f * 53L)
+        FloatArray(2 * 36) { rnd.nextFloat() }
+    }
+
+    /** The same for the two ends (a triangle: u,v folded into it). */
+    val gritCap: FloatArray = java.util.Random(7L).let { rnd -> FloatArray(2 * 28) { rnd.nextFloat() } }
+}
 
 private fun polygon(points: List<Offset>): Path = Path().apply {
     moveTo(points[0].x, points[0].y)
@@ -128,14 +160,14 @@ internal fun DrawScope.drawGlassPrism3D(
     val outline = polygon(hull(screen))
     val lightOnScreen = Offset(PrismView.LIGHT.x.toFloat(), PrismView.LIGHT.y.toFloat()).unit()
     clipPath(outline) {
-        drawPath(outline, GlassShadow.copy(alpha = 0.55f * appear))
+        drawPath(outline, RockDark.copy(alpha = 0.93f * appear))
         if (glassView != null) {
             val drift = Offset(cos(theta.toFloat() * 1.3f) * radius * 0.35f, sin(theta.toFloat() * 0.9f + yaw.toFloat()) * radius * 0.25f)
             withTransform({ scale(-1.25f, 1.25f, center + drift) }) {
                 drawImage(
                     glassView,
                     dstSize = IntSize(w.roundToInt(), h.roundToInt()),
-                    alpha = 0.85f * appear,
+                    alpha = 0.10f * appear,
                     colorFilter = ColorFilter.tint(Color(0xFFBFE0F0), BlendMode.Modulate),
                     filterQuality = FilterQuality.Low,
                 )
@@ -144,14 +176,14 @@ internal fun DrawScope.drawGlassPrism3D(
         drawPath(
             outline,
             Brush.linearGradient(
-                listOf(GlassBody.copy(alpha = 0.20f * appear), GlassBody.copy(alpha = 0.04f * appear), GlassShadow.copy(alpha = 0.35f * appear)),
+                listOf(RockMid.copy(alpha = 0.55f * appear), RockMid.copy(alpha = 0.15f * appear), GlassShadow.copy(alpha = 0.40f * appear)),
                 start = center + lightOnScreen * radius * 1.4f, end = center - lightOnScreen * radius * 1.4f,
             ),
         )
     }
 
     // --- the faces turned away, seen faintly through the glass -------------------------------------------------------
-    for (f in faces.filter { !it.visible }) drawPath(pathOf(f), GlassBody.copy(alpha = 0.04f * appear))
+    for (f in faces.filter { !it.visible }) drawPath(pathOf(f), GlassBody.copy(alpha = 0.015f * appear))
 
     // --- the faces turned to the viewer, far to near --------------------------------------------------------------------
     val visible = faces.filter { it.visible }.sortedByDescending { it.depth }
@@ -166,7 +198,7 @@ internal fun DrawScope.drawGlassPrism3D(
                     drawImage(
                         glassView,
                         dstSize = IntSize(w.roundToInt(), h.roundToInt()),
-                        alpha = (0.20f + 0.45f * f.lit) * appear,
+                        alpha = (0.03f + 0.07f * f.lit) * appear,
                         filterQuality = FilterQuality.Low,
                     )
                 }
@@ -185,7 +217,7 @@ internal fun DrawScope.drawGlassPrism3D(
                 for (k in pts.indices) {
                     val a = pts[k]
                     val b = pts[(k + 1) % pts.size]
-                    drawLine(GlassEdge.copy(alpha = (0.22f + 0.14f * (1f - f.lit)) * appear), a, b, radius * 0.15f)
+                    drawLine(GlassEdge.copy(alpha = (0.30f + 0.20f * (1f - f.lit)) * appear), a, b, radius * 0.12f)
                 }
             } else {
                 // a reflection that slides along the long face as the glass turns
@@ -196,7 +228,7 @@ internal fun DrawScope.drawGlassPrism3D(
                     Brush.linearGradient(
                         0f to Color.Transparent,
                         (at - 0.09f).coerceIn(0f, 1f) to Color.Transparent,
-                        at.coerceIn(0f, 1f) to Color.White.copy(alpha = (0.10f + 0.32f * f.lit) * appear),
+                        at.coerceIn(0f, 1f) to Color.White.copy(alpha = (0.02f + 0.08f * f.lit) * appear),
                         (at + 0.09f).coerceIn(0f, 1f) to Color.Transparent,
                         1f to Color.Transparent,
                         start = pts[0], end = pts[0] + along,
@@ -204,8 +236,9 @@ internal fun DrawScope.drawGlassPrism3D(
                     blendMode = BlendMode.Plus,
                 )
             }
+            drawRockDetails(f, pts, radius, lightOnScreen, appear)
             // the light crossing the glass lights it from the inside
-            if (power > 0f) drawPath(path, Color.White.copy(alpha = 0.08f * power), blendMode = BlendMode.Plus)
+            if (power > 0f) drawPath(path, Color(0xFFFFE9C4).copy(alpha = 0.06f * power), blendMode = BlendMode.Plus)
             if (flash > 0f) drawPath(path, Color(0xFFBFD8FF).copy(alpha = 0.10f * flash.coerceAtMost(1f)), blendMode = BlendMode.Plus)
         }
     }
@@ -223,17 +256,18 @@ internal fun DrawScope.drawGlassPrism3D(
             drawLine(Color.White.copy(alpha = 0.14f * appear), p, q, 1.1.dp.toPx(), StrokeCap.Round)
             continue
         }
-        val normal = Offset(-(q.y - p.y), q.x - p.x).unit()
-        drawLine(Color(0xFFBFD8FF).copy(alpha = (0.08f + 0.24f * lit) * appear), p, q, 8.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-        drawLine(Color(0xFFFF5A6A).copy(alpha = 0.20f * lit * appear), p + normal * fringe, q + normal * fringe, 1.2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-        drawLine(Color(0xFF5F8BFF).copy(alpha = 0.24f * lit * appear), p - normal * fringe, q - normal * fringe, 1.2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-        drawLine(Color.White.copy(alpha = (0.30f + 0.65f * lit) * appear), p, q, (1.3f + 1.4f * lit).dp.toPx(), StrokeCap.Round)
+        // a worn edge: a broken, dim line (a rimlight where the light grazes it), no clean glass glint
+        val mid = Offset((p.x + q.x) / 2f, (p.y + q.y) / 2f)
+        val bump = Offset(-(q.y - p.y), q.x - p.x).unit() * (radius * 0.012f)
+        drawLine(GlassBody.copy(alpha = (0.05f + 0.16f * lit) * appear), p, q, 5.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+        drawLine(GlassBody.copy(alpha = (0.18f + 0.40f * lit) * appear), p, mid + bump, (1.0f + 0.9f * lit).dp.toPx(), StrokeCap.Round)
+        drawLine(GlassBody.copy(alpha = (0.12f + 0.30f * lit) * appear), mid - bump, q, (0.9f + 0.8f * lit).dp.toPx(), StrokeCap.Round)
     }
 
     // --- the visible corner nearest the light sparkles, brighter on every beat ----------------------------------------
     val seenCorners = (0 until 6).filter { k -> faces.any { it.visible && k in it.corners } }
     val corner = seenCorners.maxByOrNull { view[it].dot(PrismView.LIGHT) }?.let { screen[it] } ?: return
-    val glow = appear * (0.35f + 0.65f * maxOf(sparkle, flash.coerceAtMost(1f)))
+    val glow = appear * 0.55f * (0.35f + 0.65f * maxOf(sparkle, flash.coerceAtMost(1f)))
     val ray = 26.dp.toPx() * (0.6f + 0.8f * glow)
     drawCircle(
         Brush.radialGradient(listOf(Color.White.copy(alpha = 0.85f * glow), Color(0xFFBFD8FF).copy(alpha = 0.25f * glow), Color.Transparent), center = corner, radius = ray * 0.6f),
@@ -245,5 +279,53 @@ internal fun DrawScope.drawGlassPrism3D(
             Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.9f * glow), Color.Transparent), start = corner - d, end = corner + d),
             corner - d, corner + d, 1.3.dp.toPx(), blendMode = BlendMode.Plus,
         )
+    }
+}
+
+/** Craters, chips and grit on one visible face, drawn inside the face's clip. */
+private fun DrawScope.drawRockDetails(f: Face, pts: List<Offset>, radius: Float, light: Offset, appear: Float) {
+    if (f.cap) {
+        // the ends: grit folded into the triangle
+        val a = pts[0]; val b = pts[1]; val c = pts[2]
+        val g = RockTexture.gritCap
+        val dots = ArrayList<Offset>(g.size / 2)
+        for (k in 0 until g.size / 2) {
+            var u = g[2 * k]; var v = g[2 * k + 1]
+            if (u + v > 1f) { u = 1f - u; v = 1f - v }
+            dots += Offset(a.x + (b.x - a.x) * u + (c.x - a.x) * v, a.y + (b.y - a.y) * u + (c.y - a.y) * v)
+        }
+        drawPoints(dots, androidx.compose.ui.graphics.PointMode.Points, Color.Black.copy(alpha = 0.35f * appear), 1.6.dp.toPx(), StrokeCap.Round)
+        return
+    }
+    val index = f.corners[0].coerceIn(0, 2)
+    val p0 = pts[0]; val p1 = pts[1]; val p2 = pts[2]; val p3 = pts[3]
+    fun at(u: Float, v: Float) = Offset(
+        (1 - v) * ((1 - u) * p0.x + u * p1.x) + v * ((1 - u) * p3.x + u * p2.x),
+        (1 - v) * ((1 - u) * p0.y + u * p1.y) + v * ((1 - u) * p3.y + u * p2.y),
+    )
+    // sizes: the face is 1.73 across and 2.5 along (prism units), so a round crater is narrower in u than in v
+    val du = 1f / 1.73f
+    val dv = 1f / (2f * PrismView.HALF_LENGTH.toFloat())
+    val grit = RockTexture.grit[index]
+    val dots = ArrayList<Offset>(grit.size / 2)
+    for (k in 0 until grit.size / 2) dots += at(grit[2 * k], grit[2 * k + 1])
+    drawPoints(dots, androidx.compose.ui.graphics.PointMode.Points, Color.Black.copy(alpha = (0.18f + 0.22f * (1f - f.lit)) * appear), 1.5.dp.toPx(), StrokeCap.Round)
+    val rim = GlassBody.copy(alpha = (0.10f + 0.30f * f.lit) * appear)
+    val towardLight = light * (radius * 0.012f)
+    for (c in RockTexture.craters[index]) {
+        val path = Path()
+        val n = c.jitter.size
+        for (k in 0 until n) {
+            val ang = 2.0 * Math.PI * k / n
+            val rr = c.r * c.jitter[k]
+            val pt = at(c.u + (rr * du * cos(ang)).toFloat(), c.v + (rr * dv * sin(ang)).toFloat())
+            if (k == 0) path.moveTo(pt.x, pt.y) else path.lineTo(pt.x, pt.y)
+        }
+        path.close()
+        drawPath(path, Color.Black.copy(alpha = 0.50f * appear))
+        // the lit lip on the side that faces the light, a dark shadow on the other
+        withTransform({ translate(towardLight.x, towardLight.y) }) {
+            drawPath(path, rim, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.1.dp.toPx()))
+        }
     }
 }
