@@ -302,51 +302,88 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRome(color: Color, cres
     }
     val w = size.width
     val h = size.height
-    val line = size.minDimension * 0.003f + 1f
-    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = line, cap = StrokeCap.Round)
-    val soft = color.copy(alpha = 0.12f)
-    val fainter = color.copy(alpha = 0.08f)
+    val line = size.minDimension * 0.0028f + 1f
+    val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = line, cap = StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round)
+    // Same treatment as the crest: thin light lines in the accent colour, very faint.
+    val ink = color.copy(alpha = 0.16f)
+    val fine = color.copy(alpha = 0.10f)
 
-    // Colosseum: an ellipse seen in perspective, three tiers.
+    // Colosseum seen from the front and a little above: the wall is the front half of an ellipse, so the bays get
+    // narrower towards the sides and the cornices dip in the middle (that is what makes it read as round).
+    // Four storeys on the left; the right side is broken down, as the real ruin is.
     val cx = w * 0.70f
-    val rx = w * 0.28f
-    val ry = h * 0.07f
-    val tier = h * 0.07f
+    val r = w * 0.30f
+    val tier = h * 0.078f
+    val dip = h * 0.04f
     val base = h * 0.90f
-    val top = base - tier * 3f
-    fun oval(y: Float, c: Color) = drawOval(c, Offset(cx - rx, y - ry), Size(rx * 2f, ry * 2f), style = stroke)
-    fun front(y: Float, c: Color) = drawArc(c, 0f, 180f, false, Offset(cx - rx, y - ry), Size(rx * 2f, ry * 2f), style = stroke)
-    oval(top, soft)
-    for (t in 1..2) front(base - tier * t, fainter)
-    front(base, soft)
-    drawLine(soft, Offset(cx - rx, top), Offset(cx - rx, base), line)
-    drawLine(soft, Offset(cx + rx, top), Offset(cx + rx, base), line)
-    // The arches of the two lower tiers, closer together towards the sides as the curve turns away.
-    val n = 17
-    for (t in 0 until 2) {
-        val yBase = base - tier * t
-        for (i in 1 until n) {
-            val a = Math.PI * i / n
-            val x = cx + rx * Math.cos(a).toFloat()
-            val y = yBase + ry * Math.sin(a).toFloat()
-            val half = rx * 0.055f * maxOf(0.3f, Math.sin(a).toFloat())
-            val rise = tier * 0.55f
-            val path = androidx.compose.ui.graphics.Path().apply {
-                moveTo(x - half, y)
-                lineTo(x - half, y - rise)
-                arcTo(androidx.compose.ui.geometry.Rect(x - half, y - rise - half, x + half, y - rise + half), 180f, 180f, false)
-                lineTo(x + half, y)
-            }
-            drawPath(path, soft, style = stroke)
+    fun rad(deg: Float) = Math.toRadians(deg.toDouble())
+    fun px(deg: Float) = cx + r * Math.sin(rad(deg)).toFloat()
+    fun level(deg: Float, j: Float) = base + dip * Math.cos(rad(deg)).toFloat() - tier * j
+    fun cornice(from: Float, to: Float, j: Float, c: Color) {
+        val path = androidx.compose.ui.graphics.Path()
+        var d = from
+        path.moveTo(px(d), level(d, j))
+        while (d < to) {
+            d = minOf(d + 4f, to)
+            path.lineTo(px(d), level(d, j))
         }
+        drawPath(path, c, style = stroke)
     }
-    // The attic: small square windows along the top tier.
-    for (i in 1 until n) {
-        val a = Math.PI * i / n
-        val x = cx + rx * Math.cos(a).toFloat()
-        val y = top + tier + ry * Math.sin(a).toFloat()
-        val half = rx * 0.02f * maxOf(0.3f, Math.sin(a).toFloat())
-        drawRect(fainter, Offset(x - half, y - tier * 0.7f), Size(half * 2f, tier * 0.35f), style = stroke)
+    val left = -80f
+    val right = 80f
+    val atticEnd = 28f   // the attic storey stands up to here
+    val thirdEnd = 52f   // the third storey up to here
+    cornice(left, right, 0f, ink)
+    cornice(left, right, 1f, fine)
+    cornice(left, right, 2f, fine)
+    cornice(left, thirdEnd, 3f, ink)
+    cornice(left, atticEnd, 3.8f, ink)
+    // The broken edge: down the slope from the attic to the third storey, then to the second.
+    drawLine(ink, Offset(px(atticEnd), level(atticEnd, 3.8f)), Offset(px(atticEnd + 6f), level(atticEnd + 6f, 3.3f)), line)
+    drawLine(ink, Offset(px(atticEnd + 6f), level(atticEnd + 6f, 3.3f)), Offset(px(atticEnd + 8f), level(atticEnd + 8f, 3f)), line)
+    drawLine(ink, Offset(px(thirdEnd), level(thirdEnd, 3f)), Offset(px(thirdEnd + 8f), level(thirdEnd + 8f, 2.5f)), line)
+    drawLine(ink, Offset(px(thirdEnd + 8f), level(thirdEnd + 8f, 2.5f)), Offset(px(right), level(right, 2f)), line)
+    drawLine(ink, Offset(px(left), level(left, 0f)), Offset(px(left), level(left, 3.8f)), line)
+    drawLine(ink, Offset(px(right), level(right, 0f)), Offset(px(right), level(right, 2f)), line)
+
+    val bays = 16
+    val step = (right - left) / bays
+    for (i in 0 until bays) {
+        val d0 = left + i * step
+        val d1 = d0 + step
+        val mid = (d0 + d1) / 2f
+        val bayW = px(d1) - px(d0)
+        val half = bayW * 0.30f
+        // The columns between the bays.
+        val topJ = when {
+            mid < atticEnd -> 3.8f
+            mid < thirdEnd -> 3f
+            else -> 2f
+        }
+        drawLine(fine, Offset(px(d1), level(d1, 0f)), Offset(px(d1), level(d1, topJ)), line)
+        val storeys = when {
+            mid < thirdEnd -> 3
+            else -> 2
+        }
+        for (t in 0 until storeys) {
+            val yb = level(mid, t.toFloat())
+            val rise = tier * 0.52f
+            val x = px(mid)
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(x - half, yb)
+                lineTo(x - half, yb - rise)
+                arcTo(androidx.compose.ui.geometry.Rect(x - half, yb - rise - half, x + half, yb - rise + half), 180f, 180f, false)
+                lineTo(x + half, yb)
+            }
+            drawPath(path, ink, style = stroke)
+        }
+        if (mid < atticEnd) {
+            // The attic: a small square window in each bay.
+            val x = px(mid)
+            val yb = level(mid, 3f) - tier * 0.28f
+            val wh = half * 0.45f
+            drawRect(fine, Offset(x - wh, yb - tier * 0.28f), Size(wh * 2f, tier * 0.28f), style = stroke)
+        }
     }
 }
 
