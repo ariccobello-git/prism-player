@@ -82,4 +82,12 @@ class VariantTagsTest {
         assertTrue(VariantTags.isLanguage("SUB ITA"))
         assertTrue(!VariantTags.isLanguage("4K"))
     }
+
+    @Test
+    fun lettersWithoutAPlainFormCountAsLetters() {
+        assertTrue("4K" in VariantTags.of("Avatar 4\uD83C\uDD7A").badges)       // 4🅺
+        assertTrue("FHD" in VariantTags.of("Avatar ꜰʜᴅ").badges)
+        assertTrue("4K" in VariantTags.of("Avatar 4\uD83C\uDDF0").badges)       // 4🇰
+        assertEquals("🇮🇹 Avatar", VariantTags.of("🇮🇹 Avatar").title)          // a flag is not a tag
+    }
 }
