@@ -111,7 +111,7 @@ internal object MoonMesh {
     private val indices = ShortArray(N * M * 6)
     private var built = false
     private var shaderFor: Any? = null
-    private val paint = android.graphics.Paint().apply { isAntiAlias = true; isFilterBitmap = true }
+    private val paint by lazy { android.graphics.Paint().apply { isAntiAlias = true; isFilterBitmap = true } }
     private val texs = FloatArray((N + 1) * (M + 1) * 2)
 
     private fun build(w: Float, h: Float) {
