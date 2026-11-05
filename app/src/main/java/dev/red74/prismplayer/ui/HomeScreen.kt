@@ -148,9 +148,7 @@ fun HomeScreen(
                     // Fixed-height row (taller than the lifted circles) that never asks the menu to scroll when the
                     // cursor moves inside it: the left panel stays perfectly still between flags and Aspetto.
                     Row(
-                        Modifier
-                            .height(76.dp)
-                            .bringIntoViewResponder(remember { NoScrollResponder }),
+                        Modifier.stillRow(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -393,6 +391,10 @@ private fun PlaylistRow(
         }
     }
 }
+
+/** Fixed-height row (taller than the lifted circles) that never makes the menu scroll or shift on focus moves. */
+@OptIn(ExperimentalFoundationApi::class)
+internal fun Modifier.stillRow(): Modifier = height(76.dp).bringIntoViewResponder(NoScrollResponder)
 
 /** Swallows bring-into-view requests so focus moves inside a small row never scroll or shift the menu. */
 @OptIn(ExperimentalFoundationApi::class)
