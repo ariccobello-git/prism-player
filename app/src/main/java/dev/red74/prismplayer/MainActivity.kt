@@ -11,6 +11,11 @@ import dev.red74.prismplayer.ui.PrismTheme
 import dev.red74.prismplayer.ui.UiSounds
 
 class MainActivity : ComponentActivity() {
+    override fun attachBaseContext(newBase: android.content.Context) {
+        // The language chosen on the Home page (flags); without a choice the TV's own language is used.
+        super.attachBaseContext(dev.red74.prismplayer.ui.Appearance.localized(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Never two Prism Players on the device: the manifest keeps one task (singleTask), and if a launcher still
@@ -27,6 +32,7 @@ class MainActivity : ComponentActivity() {
         // and nothing is playing (see IdleExit).
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         UiSounds.init(this)
+        dev.red74.prismplayer.ui.Appearance.init(this)
         setContent {
             PrismTheme {
                 PrismRoot()

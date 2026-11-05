@@ -215,4 +215,17 @@
     <string name="removed_batch_count">%1$d removed</string>
     <string name="removed_more">…and %1$d more not listed</string>
     <string name="removed_ungrouped">No group</string>
+    <string name="action_appearance">Look</string>
+    <string name="appearance_title">Look of the app</string>
+    <string name="appearance_pick">Choose the base colour</string>
+    <string name="appearance_confirm">Confirm</string>
+    <string name="appearance_cancel">Cancel</string>
+    <string name="palette_blue">Night blue</string>
+    <string name="palette_violet">Violet</string>
+    <string name="palette_red">Red</string>
+    <string name="palette_orange">Orange</string>
+    <string name="palette_green">Green</string>
+    <string name="palette_teal">Teal</string>
+    <string name="palette_pink">Pink</string>
+    <string name="palette_gold">Gold</string>
 </resources>

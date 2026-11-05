@@ -55,6 +55,7 @@ private sealed interface Screen {
     data object AppUpdate : Screen
     data object Shortcuts : Screen
     data object Removed : Screen
+    data object Appearance : Screen
     data object Exit : Screen
     data class Library(val playlistId: String) : Screen
     data object Player : Screen
@@ -239,6 +240,7 @@ private fun PrismNavigation(
                 },
                 onShortcuts = { push(Screen.Shortcuts) },
                 onRemoved = { push(Screen.Removed) },
+                onAppearance = { push(Screen.Appearance) },
                 onNoticeShown = viewModel::clearNotice,
             )
 
@@ -262,6 +264,7 @@ private fun PrismNavigation(
             )
 
             Screen.Updates -> UpdatesScreen(onBack = ::pop)
+            Screen.Appearance -> dev.red74.prismplayer.ui.AppearanceScreen(onDone = ::pop)
 
             Screen.AppUpdate -> AppUpdateScreen(
                 state = update,
@@ -353,6 +356,7 @@ private fun screenKey(screen: Screen): String = when (screen) {
     Screen.AppUpdate -> "app_update"
     Screen.Shortcuts -> "shortcuts"
     Screen.Removed -> "removed"
+    Screen.Appearance -> "appearance"
     Screen.Exit -> "exit"
     is Screen.Library -> "library"
     Screen.Player -> "player"
