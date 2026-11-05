@@ -17,6 +17,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.BringIntoViewResponder
+import androidx.compose.foundation.gestures.bringIntoViewResponder
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -48,6 +52,7 @@ import dev.red74.prismplayer.data.PlaylistStatus
 import dev.red74.prismplayer.data.SavedPlaylist
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     playlists: List<SavedPlaylist>,
@@ -140,7 +145,15 @@ fun HomeScreen(
                             menuScroll.scrollTo(0)
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Fixed-height row (taller than the lifted circles) that never asks the menu to scroll when the
+                    // cursor moves inside it: the left panel stays perfectly still between flags and Aspetto.
+                    Row(
+                        Modifier
+                            .height(76.dp)
+                            .bringIntoViewResponder(remember { NoScrollResponder }),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         for (code in listOf("it", "en")) {
                             FlagButton(
                                 focusRequester = flagFocus[code],
@@ -379,4 +392,11 @@ private fun PlaylistRow(
             )
         }
     }
+}
+
+/** Swallows bring-into-view requests so focus moves inside a small row never scroll or shift the menu. */
+@OptIn(ExperimentalFoundationApi::class)
+private object NoScrollResponder : BringIntoViewResponder {
+    override fun calculateRectForParent(localRect: Rect): Rect = Rect.Zero
+    override suspend fun bringChildIntoView(localRect: () -> Rect?) {}
 }
