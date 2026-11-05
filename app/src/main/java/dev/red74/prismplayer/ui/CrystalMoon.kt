@@ -98,7 +98,7 @@ private const val MOON_OPACITY = 0.58f
  * (the supplied picture unrolled around a sphere, 1024 x 512). Every frame only the vertices are moved and the
  * triangles facing the viewer are drawn with one drawVertices call, so it stays light on the stick.
  */
-private object MoonMesh {
+internal object MoonMesh {
     private const val N = 32
     private const val M = 16
     private const val TILT_IN_PLANE = -0.42      // the axis leans to the side
@@ -111,7 +111,7 @@ private object MoonMesh {
     private val indices = ShortArray(N * M * 6)
     private var built = false
     private var shaderFor: Any? = null
-    private val paint = android.graphics.Paint().apply { isAntiAlias = true; isFilterBitmap = true }
+    private val paint by lazy { android.graphics.Paint().apply { isAntiAlias = true; isFilterBitmap = true } }
     private val texs = FloatArray((N + 1) * (M + 1) * 2)
 
     private fun build(w: Float, h: Float) {
@@ -131,13 +131,15 @@ private object MoonMesh {
         built = true
     }
 
-    fun draw(scope: DrawScope, moon: ImageBitmap, theta: Double, center: Offset, radius: Float, alpha: Float) {
-        val bitmap = moon.asAndroidBitmap()
-        if (!built) build(bitmap.width.toFloat(), bitmap.height.toFloat())
-        if (shaderFor !== bitmap) {
-            paint.shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
-            shaderFor = bitmap
-        }
+    /** Number of floats in the position (and texture) arrays: drawVertices counts floats, not points. */
+    const val FLOATS = (N + 1) * (M + 1) * 2
+
+    val vertexPositions: FloatArray get() = verts
+    val triangleIndices: ShortArray get() = indices
+
+    /** Moves the mesh to the pose at [theta] and lists the triangles facing the viewer; returns the index count. */
+    fun pose(theta: Double, center: Offset, radius: Float, texWidth: Float, texHeight: Float): Int {
+        if (!built) build(texWidth, texHeight)
         val cs = cos(theta).toFloat(); val sn = sin(theta).toFloat()
         val cb = cos(TILT_TO_VIEWER).toFloat(); val sb = sin(TILT_TO_VIEWER).toFloat()
         val ca = cos(TILT_IN_PLANE).toFloat(); val sa = sin(TILT_IN_PLANE).toFloat()
@@ -163,10 +165,20 @@ private object MoonMesh {
             if (depth[a] + depth[b] + depth[c] > 0f) { indices[n++] = a.toShort(); indices[n++] = b.toShort(); indices[n++] = c.toShort() }
             if (depth[b] + depth[d] + depth[c] > 0f) { indices[n++] = b.toShort(); indices[n++] = d.toShort(); indices[n++] = c.toShort() }
         }
+        return n
+    }
+
+    fun draw(scope: DrawScope, moon: ImageBitmap, theta: Double, center: Offset, radius: Float, alpha: Float) {
+        val bitmap = moon.asAndroidBitmap()
+        val n = pose(theta, center, radius, bitmap.width.toFloat(), bitmap.height.toFloat())
+        if (shaderFor !== bitmap) {
+            paint.shader = android.graphics.BitmapShader(bitmap, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+            shaderFor = bitmap
+        }
         paint.alpha = (alpha.coerceIn(0f, 1f) * 255f).toInt()
         scope.drawIntoCanvas {
             it.nativeCanvas.drawVertices(
-                android.graphics.Canvas.VertexMode.TRIANGLES, count, verts, 0, texs, 0, null, 0, indices, 0, n, paint,
+                android.graphics.Canvas.VertexMode.TRIANGLES, FLOATS, verts, 0, texs, 0, null, 0, indices, 0, n, paint,
             )
         }
     }
