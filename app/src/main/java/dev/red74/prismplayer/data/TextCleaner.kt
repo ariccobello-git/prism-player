@@ -39,9 +39,9 @@ object TextCleaner {
                 }
                 isJoiner(codePoint) -> out.appendCodePoint(codePoint)
                 // Before the "unassigned" test: an older Android does not know the newest emoji, the app's font does.
-                // A regional letter alone ("4🇰") is not a flag: if the fonts cannot draw it, write the letter.
-                isRegional(codePoint) && !pairedRegional(text, index - Character.charCount(codePoint)) &&
-                    !draws(codePoint) -> {
+                // A regional letter alone ("4🇰") is not a flag but a letter: the emoji font draws it as a dark
+                // letter in a dashed box, unreadable on the dark screen, so it is written as the plain letter.
+                isRegional(codePoint) && !pairedRegional(text, index - Character.charCount(codePoint)) -> {
                     out.append(letterOf(codePoint))
                     lastWasSpace = false
                 }
