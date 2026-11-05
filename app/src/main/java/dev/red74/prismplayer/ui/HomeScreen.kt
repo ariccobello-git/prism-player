@@ -51,6 +51,7 @@ import kotlinx.coroutines.delay
 fun HomeScreen(
     playlists: List<SavedPlaylist>,
     verifying: Set<String>,
+    removedCount: Int,
     notice: Notice?,
     onOpen: (String) -> Unit,
     onVerify: (String) -> Unit,
@@ -61,6 +62,7 @@ fun HomeScreen(
     onUpdates: () -> Unit,
     onCheckUpdates: () -> Unit,
     onShortcuts: () -> Unit,
+    onRemoved: () -> Unit,
     onNoticeShown: () -> Unit,
 ) {
     val firstFocus = remember { FocusRequester() }
@@ -145,6 +147,16 @@ fun HomeScreen(
                             text = stringResource(R.string.action_verify_all),
                             onClick = onVerifyAll,
                             modifier = Modifier.fillMaxWidth().focusMemory("verify_all"),
+                        )
+                    }
+                    if (playlists.isNotEmpty() || removedCount > 0) {
+                        // Right after the check of the lists: what their renewals took away (kept 7 days).
+                        GlassButton(
+                            text = stringResource(R.string.action_removed),
+                            subtitle = if (removedCount > 0) stringResource(R.string.removed_count, removedCount)
+                            else stringResource(R.string.removed_none),
+                            onClick = onRemoved,
+                            modifier = Modifier.fillMaxWidth().focusMemory("removed"),
                         )
                     }
                     GlassButton(

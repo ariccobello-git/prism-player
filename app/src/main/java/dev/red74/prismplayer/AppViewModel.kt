@@ -14,6 +14,11 @@ import dev.red74.prismplayer.data.EpgUrl
 import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.FavoriteList
 import dev.red74.prismplayer.data.FetchException
+import dev.red74.prismplayer.data.ListChanges
+import dev.red74.prismplayer.data.ListDiff
+import dev.red74.prismplayer.data.CatalogDb
+import dev.red74.prismplayer.data.RemovedBatch
+import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.data.HttpAgent
 import dev.red74.prismplayer.data.M3uParser
 import dev.red74.prismplayer.data.PlaylistStatus
@@ -158,6 +163,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val unavailable: StateFlow<Map<String, Long>> = _unavailable.asStateFlow()
     private var lastGoodPlaybackMs = 0L
 
+    private val _removedCount = MutableStateFlow(0)
+    /** Contents that list renewals took away in the last 7 days (the home button shows the number). */
+    val removedCount: StateFlow<Int> = _removedCount.asStateFlow()
+
     private val _notice = MutableStateFlow<Notice?>(null)
     val notice: StateFlow<Notice?> = _notice.asStateFlow()
 
@@ -212,6 +221,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
         }
         viewModelScope.launch(Dispatchers.IO) { container.catalogStore.cleanUp() }
+        viewModelScope.launch(Dispatchers.IO) {
+            container.removedStore.purge()
+            _removedCount.value = container.removedStore.count()
+        }
+    }
+
+    /** The removed contents of the last 7 days, newest renewal first (older records are deleted on the way). */
+    suspend fun removedContents(): List<RemovedBatch> = withContext(Dispatchers.IO) {
+        container.removedStore.batches().also { list -> _removedCount.value = list.sumOf { it.total } }
     }
 
     override fun onCleared() {
@@ -248,7 +266,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun removePlaylist(id: String) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) { container.catalogStore.delete(id) }
+            withContext(Dispatchers.IO) {
+                container.catalogStore.delete(id)
+                container.removedStore.deleteList(id)
+                _removedCount.value = container.removedStore.count()
+            }
             _notice.value = runCatching { store.remove(id) }
                 .fold(onSuccess = { Notice.REMOVED }, onFailure = { Notice.SAVE_FAILED })
             if (_library.value.playlistId == id) {
@@ -374,7 +396,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _library.update { it.copy(loading = false, error = null, catalog = catalog) }
             recordStatus(id, PlaylistStatus.OK, parsed.count, null, null)
             loadGuide(playlist, catalog)
-            saveDatabase(id, catalog)
+            saveDatabase(playlist, catalog)
         }
     }
 
@@ -382,9 +404,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         CatalogBuilder.build(parsed.channels, parsed.epgUrl, parsed.truncated)
     }
 
-    /** Stores the list in its database for the next opening; a failure just means the next opening downloads it again. */
-    private suspend fun saveDatabase(id: String, catalog: Catalog) = withContext(Dispatchers.IO) {
-        runCatching { container.catalogStore.write(id, catalog) }
+    /**
+     * Stores the list in its database for the next opening; a failure just means the next opening downloads it again.
+     * When a copy was already stored, the two are compared first: what the list no longer has is recorded for the
+     * "Removed contents" page (7 days) and its favourite, resume point and unavailable mark are forgotten.
+     */
+    private suspend fun saveDatabase(playlist: SavedPlaylist, catalog: Catalog): ListChanges? {
+        val asked = _favorites.value + _unavailable.value.keys + WatchProgress.keys()
+        val changes = withContext(Dispatchers.IO) {
+            var found: ListChanges? = null
+            // A list cut short by the size limit lacks its last entries on purpose: those are no removals.
+            val compare: ((android.database.sqlite.SQLiteDatabase, java.io.File) -> Unit)? = if (catalog.truncated) null else { db, old ->
+                found = ListDiff.compare(db, old, asked, CatalogDb.CURRENT_VERSION)
+            }
+            runCatching { container.catalogStore.write(playlist.id, catalog, compare) }
+            found?.also { if (it.removedTotal > 0) container.removedStore.add(playlist.id, playlist.name, System.currentTimeMillis(), it.removedTotal, it.removed) }
+        } ?: return null
+        if (changes.removedTotal > 0) _removedCount.value = withContext(Dispatchers.IO) { container.removedStore.count() }
+        val gone = changes.goneKeys
+        if (gone.isNotEmpty()) {
+            if (_favorites.value.any { it in gone }) {
+                val kept = _favorites.value - gone
+                _favorites.value = kept
+                container.settings.favorites = kept
+            }
+            if (_unavailable.value.keys.any { it in gone }) saveUnavailable(_unavailable.value - gone)
+            WatchProgress.forget(gone)
+        }
+        return changes
     }
 
     /** The shown copy is old: download again quietly and swap it in only if the list really changed. */
@@ -397,8 +444,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             if (loaded.error != null || _library.value.playlistId != playlist.id) return@launch
             recordStatus(playlist.id, PlaylistStatus.OK, parsed.count, null, null)
             val catalog = buildCatalog(parsed)
-            saveDatabase(playlist.id, catalog)
-            if (swap || catalog.totalEntries != shownCount) {
+            val changes = saveDatabase(playlist, catalog)
+            // Removed contents leave the screen at once, even when as many new ones came in.
+            if (swap || catalog.totalEntries != shownCount || changes?.changed == true) {
                 _library.update { if (it.playlistId == playlist.id) it.copy(catalog = catalog) else it }
             }
         }
@@ -474,9 +522,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * A list already opened once (it has a stored copy) is renewed by the check: the same single download that
+     * counts it also replaces the stored copy, so contents the provider took away are removed (and recorded, see
+     * [saveDatabase]). A list never opened is only counted, as before.
+     */
     private suspend fun checkOne(playlist: SavedPlaylist): Boolean {
-        val loaded = load(playlist, keepChannels = false)
+        val renew = withContext(Dispatchers.IO) { container.catalogStore.ageMs(playlist.id) != null }
+        val loaded = load(playlist, keepChannels = renew)
         val ok = loaded.error == null
+        val parsed = loaded.parsed
+        if (ok && renew && parsed != null) {
+            val catalog = buildCatalog(parsed)
+            val changes = saveDatabase(playlist, catalog)
+            if (changes?.changed == true) {
+                _library.update { if (it.playlistId == playlist.id && !it.loading && it.error == null) it.copy(catalog = catalog) else it }
+            }
+        }
         recordStatus(
             playlist.id,
             if (ok) PlaylistStatus.OK else PlaylistStatus.FAILED,

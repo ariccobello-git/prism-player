@@ -54,6 +54,8 @@ class AppContainer(context: Context) {
     )
     /** The same lists as small databases, read a page at a time, so even a very big list opens at once. */
     val catalogStore = CatalogStore(File(context.noBackupFilesDir, "lists"), keys::getOrCreateKey)
+    /** What list renewals took away, kept 7 days (names and groups only). */
+    val removedStore = dev.red74.prismplayer.data.RemovedStore(File(context.noBackupFilesDir, "removed.db"))
     val fetcher = PlaylistFetcher()
     val pairingManager = PairingManager()
     val settings = AppSettings(context)
