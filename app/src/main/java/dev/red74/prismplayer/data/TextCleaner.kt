@@ -49,6 +49,12 @@ object TextCleaner {
                     out.append(letterOf(codePoint))
                     lastWasSpace = false
                 }
+                // A letter or digit written in a decorated form (𝐊, ᴷ, Ⓚ, Ｋ, K, 🅺): always the plain character, so
+                // it reads the same on every screen whatever the fonts can draw.
+                plainLetter(codePoint) != null -> {
+                    out.append(plainLetter(codePoint))
+                    lastWasSpace = false
+                }
                 isRegional(codePoint) || isEmoji(codePoint) -> {
                     out.appendCodePoint(codePoint)
                     lastWasSpace = false
@@ -110,6 +116,15 @@ object TextCleaner {
     private fun isEmoji(codePoint: Int): Boolean =
         codePoint in 0x1F300..0x1FAFF || codePoint in 0x2600..0x27BF || codePoint in 0x2300..0x23FF || codePoint in 0x2B00..0x2BFF
 
+    /** The plain letter or digit a decorated character stands for, or null (flags, other symbols, plain text). */
+    private fun plainLetter(codePoint: Int): String? {
+        if (codePoint < 0x250 || isRegional(codePoint)) return null
+        letterOf(codePoint)?.let { return it }
+        val plain = Normalizer.normalize(String(Character.toChars(codePoint)), Normalizer.Form.NFKC)
+        val ligature = codePoint in 0xFB00..0xFB06
+        return plain.takeIf { it.isNotEmpty() && (plain.length == 1 || ligature) && plain.all { ch -> ch in 'A'..'Z' || ch in 'a'..'z' || ch in '0'..'9' } }
+    }
+
     /** Regional indicator letters: a pair of them is drawn as a flag. */
     fun isRegional(codePoint: Int): Boolean = codePoint in 0x1F1E6..0x1F1FF
 
@@ -126,6 +141,8 @@ object TextCleaner {
      * anything else.
      */
     fun letterOf(codePoint: Int): String? = when (codePoint) {
+        in 0x249C..0x24B5 -> ('a' + (codePoint - 0x249C)).toString()          // ⒜ parenthesized
+        in 0x1F110..0x1F129 -> ('A' + (codePoint - 0x1F110)).toString()      // 🄐 parenthesized
         in 0x1F150..0x1F169 -> ('A' + (codePoint - 0x1F150)).toString()
         in 0x1F170..0x1F189 -> ('A' + (codePoint - 0x1F170)).toString()
         in 0x1F1E6..0x1F1FF -> ('A' + (codePoint - 0x1F1E6)).toString()
