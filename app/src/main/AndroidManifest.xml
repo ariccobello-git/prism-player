@@ -33,7 +33,7 @@
         android:name=".PrismApp"
         android:allowBackup="false"
         android:largeHeap="true"
-        android:banner="@drawable/banner"
+        android:banner="@drawable/banner_moon"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
