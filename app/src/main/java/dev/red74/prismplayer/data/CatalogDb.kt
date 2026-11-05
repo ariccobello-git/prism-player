@@ -302,11 +302,11 @@ class CatalogDb private constructor(
     }
 
     companion object {
-        /** "3": letters drawn as symbols (🅺, ꜰʜᴅ) kept. "2": emoji and symbols kept. "1" has the same tables. */
-        private const val VERSION = "3"
+        /** "4": a lone regional letter ("4🇰") is written as the letter. "3": letters drawn as symbols (🅺, ꜰʜᴅ) kept. "2": emoji and symbols kept. "1" has the same tables. */
+        private const val VERSION = "4"
         /** The version new copies are written with (see [ListDiff]). */
         const val CURRENT_VERSION = VERSION
-        private val READABLE = setOf("1", "2", VERSION)
+        private val READABLE = setOf("1", "2", "3", VERSION)
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
         private const val TAG_BYTES = 16

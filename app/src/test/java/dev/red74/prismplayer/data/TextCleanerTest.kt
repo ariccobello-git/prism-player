@@ -59,8 +59,9 @@ class TextCleanerTest {
         assertEquals("4K", TextCleaner.clean("4\uD83C\uDDF0"))                                   // 4🇰
         assertEquals("🇮🇹 Rai", TextCleaner.clean("🇮🇹 Rai"))                                    // flags stay
         TextCleaner.canDraw = null
-        // When the fonts draw them, the symbols stay as they are.
+        // When the fonts draw them, the symbols stay as they are; a lone regional letter is always a letter.
         assertEquals("4\uD83C\uDD7A ꜰʜᴅ", TextCleaner.clean("4\uD83C\uDD7A ꜰʜᴅ"))
+        assertEquals("4K 🇮🇹", TextCleaner.clean("4\uD83C\uDDF0 🇮🇹"))
     }
 
     @Test
