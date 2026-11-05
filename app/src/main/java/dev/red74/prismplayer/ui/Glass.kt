@@ -213,7 +213,7 @@ fun PrismBackground(
                 radius = radius,
                 center = second,
             )
-            if (Appearance.palette.arches) drawArches(PrismColors.Accent)
+            if (Appearance.palette.arches) drawRome(PrismColors.Accent)
         }
         content()
         // The installed build, always readable at the bottom of the page.
