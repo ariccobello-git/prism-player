@@ -70,6 +70,7 @@ fun HomeScreen(
     val firstFocus = remember { FocusRequester() }
     val listFocus = remember { FocusRequester() }
     var muted by remember { mutableStateOf(UiSounds.muted) }
+    val menuScroll = rememberScrollState()
     RequestFocusOnEnter(firstFocus)
     // Two levels side by side: the menu and the playlists. Back from the playlists goes to the menu.
     var listFocused by remember { mutableStateOf(false) }
@@ -101,7 +102,7 @@ fun HomeScreen(
                 // Scrolls when the menu is taller than the screen, so the focused button is always brought into view.
                 Column(
                     Modifier
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(menuScroll)
                         .padding(36.dp)
                         .confineFocus(),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -135,6 +136,8 @@ fun HomeScreen(
                         repeat(12) {
                             withFrameNanos { }
                             runCatching { flagFocus[code]?.requestFocus() }
+                            // Keep the menu at its top so the title stays visible (flags sit right under it).
+                            menuScroll.scrollTo(0)
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {

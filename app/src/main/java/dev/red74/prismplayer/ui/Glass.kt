@@ -65,6 +65,7 @@ import dev.red74.prismplayer.data.SymbolGlyphs
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -186,6 +187,7 @@ fun PrismBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val crest = if (Appearance.palette.arches) androidx.compose.ui.graphics.ImageBitmap.imageResource(dev.red74.prismplayer.R.drawable.roma_crest) else null
     Box(
         modifier
             .fillMaxSize()
@@ -213,7 +215,7 @@ fun PrismBackground(
                 radius = radius,
                 center = second,
             )
-            if (Appearance.palette.arches) drawRome(PrismColors.Accent)
+            if (Appearance.palette.arches) drawRome(PrismColors.Accent, crest)
         }
         content()
         // The installed build, always readable at the bottom of the page.
