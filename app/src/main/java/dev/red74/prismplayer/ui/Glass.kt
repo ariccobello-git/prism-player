@@ -516,12 +516,12 @@ fun GlassSurface(
 }
 
 /**
- * Poster or channel logo from the playlist. A soft gradient with the initial shows only while the image loads or if
- * it is missing or fails; once it has loaded, the initial and the gradient go away so transparent logos are never
- * muddled by the letter behind them. Logos ([fit]) sit on a plain neutral tile, posters fill the box.
+ * Poster or channel logo from the playlist. The Prism artwork shows only while the image loads or if it is missing
+ * or fails; once it has loaded, the artwork goes away so transparent logos are never muddled by what is behind
+ * them. Logos ([fit]) sit on a plain neutral tile, posters fill the box.
  */
 @Composable
-fun Poster(url: String?, title: String, modifier: Modifier = Modifier, fit: Boolean = false) {
+fun Poster(url: String?, modifier: Modifier = Modifier, fit: Boolean = false) {
     var loaded by remember(url) { mutableStateOf(false) }
     Box(
         modifier
@@ -573,7 +573,7 @@ private val LogoTile = Color(0xFF2E3138)
  * Marks a section of the screen. The D-pad moves between sections the natural way (the nearest focusable item in
  * the direction pressed, as in every TV app), so no arrow is ever blocked. Back goes up one step.
  */
-fun Modifier.confineFocus(horizontal: Boolean = true): Modifier = this.focusGroup()
+fun Modifier.confineFocus(): Modifier = this.focusGroup()
 
 /**
  * Like [confineFocus], but when the arrow [direction] would leave this section, [action] runs instead (for example
