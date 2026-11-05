@@ -34,7 +34,7 @@ class SymbolGlyphsTest {
     fun symbolsInTheBundledFontsAreKeptAsTheyAre() {
         SymbolGlyphs.systemDraws = { text -> text.codePointAt(0) < 0x250 }
         TextCleaner.canDraw = { text -> SymbolGlyphs.draws(text.codePointAt(0)) }
-        assertEquals("♔ Scacchi 4🅺", TextCleaner.clean("♔ Scacchi 4🅺"))
+        assertEquals("♔ Scacchi 4K", TextCleaner.clean("♔ Scacchi 4\uD83C\uDD7A"))
         assertEquals("", TextCleaner.clean(""))
     }
 }
