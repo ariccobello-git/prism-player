@@ -19,6 +19,10 @@ object TextCleaner {
      */
     @Volatile
     var canDraw: ((String) -> Boolean)? = null
+        set(value) {
+            field = value
+            drawable.clear()
+        }
 
     /** Answers of [canDraw] per character: a list repeats the same few symbols thousands of times. */
     private val drawable = ConcurrentHashMap<Int, Boolean>()

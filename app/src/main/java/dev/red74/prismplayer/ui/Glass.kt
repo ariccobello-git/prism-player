@@ -56,6 +56,12 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import dev.red74.prismplayer.data.SymbolGlyphs
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -133,6 +139,20 @@ fun PrismText(
     color: Color = PrismColors.TextPrimary,
     maxLines: Int = Int.MAX_VALUE,
 ) {
+    // Symbols the TV's fonts lack are drawn with the app's symbol fonts, at the size of the text around them.
+    val styled = remember(text) { withSymbolFonts(text) }
+    if (styled != null) {
+        Text(
+            text = styled,
+            modifier = modifier,
+            color = color,
+            fontSize = size,
+            fontWeight = weight,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+        )
+        return
+    }
     Text(
         text = text,
         modifier = modifier,
@@ -143,6 +163,23 @@ fun PrismText(
         overflow = TextOverflow.Ellipsis,
     )
 }
+
+/** [text] with its symbols the TV cannot draw set in the bundled symbol fonts, or null when there are none. */
+private fun withSymbolFonts(text: String): AnnotatedString? {
+    val pieces = SymbolGlyphs.pieces(text)
+    if (pieces.isEmpty()) return null
+    return buildAnnotatedString {
+        append(text)
+        for (piece in pieces) addStyle(SpanStyle(fontFamily = SymbolFonts[piece.font]), piece.start, piece.end)
+    }
+}
+
+/** The bundled symbol fonts, in the order of [SymbolGlyphs]: Noto Sans Symbols, Symbols 2, Math. */
+private val SymbolFonts: List<FontFamily> = listOf(
+    FontFamily(Font(dev.red74.prismplayer.R.font.symbols_noto)),
+    FontFamily(Font(dev.red74.prismplayer.R.font.symbols_noto2)),
+    FontFamily(Font(dev.red74.prismplayer.R.font.symbols_noto_math)),
+)
 
 @Composable
 fun PrismBackground(
