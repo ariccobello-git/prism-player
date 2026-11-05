@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -336,7 +337,7 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawRome(color: Color, cres
 /** A small, static picture of the Home page in the colours of [p]. Nothing animates, so it costs nothing. */
 @Composable
 private fun PalettePreview(p: Palette, modifier: Modifier = Modifier) {
-    val crest = if (p.arches) androidx.compose.ui.res.imageResource(R.drawable.roma_crest) else null
+    val crest = if (p.arches) androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.roma_crest) else null
     val shape = RoundedCornerShape(20.dp)
     Box(
         modifier
