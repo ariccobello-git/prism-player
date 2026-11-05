@@ -40,7 +40,9 @@ class AvailabilityTest {
     fun deviceProblemsAndPreviewsNeverMark() {
         assertFalse(Availability.marks(Trouble.OTHER, afterRetry = true, networkProven = true, preview = false))
         assertFalse(Availability.marks(Trouble.BAD_STREAM, afterRetry = true, networkProven = true, preview = true))
-        assertTrue(Availability.marks(Trouble.BAD_STREAM, afterRetry = false, networkProven = false, preview = false))
+        assertFalse(Availability.marks(Trouble.BAD_STREAM, afterRetry = false, networkProven = false, preview = false))
+        assertTrue(Availability.marks(Trouble.BAD_STREAM, afterRetry = true, networkProven = false, preview = false))
+        assertTrue(Availability.retries(Trouble.BAD_STREAM))
     }
 
     @Test
