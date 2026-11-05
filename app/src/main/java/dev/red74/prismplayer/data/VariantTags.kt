@@ -238,6 +238,14 @@ object VariantTags {
     private fun plainLetters(text: String, index: Int): String? {
         val cp = text.codePointAt(index)
         if (cp < 0x250) return if (Character.isLetterOrDigit(cp)) String(Character.toChars(cp)) else null
+        // A lone regional letter ("4🇰") is a letter; a pair of them is a flag and stays a symbol.
+        if (TextCleaner.isRegional(cp)) {
+            val before = if (index > 0) text.codePointBefore(index) else 0
+            val afterAt = index + Character.charCount(cp)
+            val after = if (afterAt < text.length) text.codePointAt(afterAt) else 0
+            return if (TextCleaner.isRegional(before) || TextCleaner.isRegional(after)) null else TextCleaner.letterOf(cp)
+        }
+        TextCleaner.letterOf(cp)?.let { return it }
         val plain = java.text.Normalizer.normalize(String(Character.toChars(cp)), java.text.Normalizer.Form.NFKC)
         return plain.takeIf { it.isNotEmpty() && it.all { ch -> ch.isLetterOrDigit() } }
     }

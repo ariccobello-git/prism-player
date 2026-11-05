@@ -296,9 +296,9 @@ class CatalogDb private constructor(
     }
 
     companion object {
-        /** "2": names and groups keep their emoji and symbols (see [TextCleaner]). "1" has the same tables. */
-        private const val VERSION = "2"
-        private val READABLE = setOf("1", VERSION)
+        /** "3": letters drawn as symbols (🅺, ꜰʜᴅ) kept. "2": emoji and symbols kept. "1" has the same tables. */
+        private const val VERSION = "3"
+        private val READABLE = setOf("1", "2", VERSION)
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128
         private const val TAG_BYTES = 16

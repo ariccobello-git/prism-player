@@ -51,6 +51,19 @@ class TextCleanerTest {
     }
 
     @Test
+    fun lettersDrawnAsSymbolsBecomeLettersOnlyWhenTheFontsLackThem() {
+        // Fonts that draw only plain letters and the flags.
+        TextCleaner.canDraw = { text -> text.codePointAt(0) < 0x250 }
+        assertEquals("4K HD", TextCleaner.clean("4\uD83C\uDD7A \uD83C\uDD57\uD83C\uDD53"))   // 4🅺 🅗🅓
+        assertEquals("FHD", TextCleaner.clean("ꜰʜᴅ"))
+        assertEquals("4K", TextCleaner.clean("4\uD83C\uDDF0"))                                   // 4🇰
+        assertEquals("🇮🇹 Rai", TextCleaner.clean("🇮🇹 Rai"))                                    // flags stay
+        TextCleaner.canDraw = null
+        // When the fonts draw them, the symbols stay as they are.
+        assertEquals("4\uD83C\uDD7A ꜰʜᴅ", TextCleaner.clean("4\uD83C\uDD7A ꜰʜᴅ"))
+    }
+
+    @Test
     fun removesQuestionMarksAndTidiesSpaces() {
         assertEquals("Caf del mar", TextCleaner.clean("Caf? del mar"))
         assertEquals("Chi sei", TextCleaner.clean("  Chi   sei ?  "))
