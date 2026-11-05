@@ -1014,7 +1014,7 @@ private fun SidePanel(modifier: Modifier = Modifier, content: @Composable androi
             .fillMaxHeight(0.7f),
         cornerRadius = 24.dp,
     ) {
-        Column(Modifier.padding(22.dp).confineFocus(horizontal = true), verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
+        Column(Modifier.padding(22.dp).confineFocus(), verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
     }
 }
 
@@ -1227,7 +1227,7 @@ private fun ChannelBanner(number: Int, channel: Channel, programme: String?) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             PrismText(text = number.toString(), size = 30.sp, weight = FontWeight.Bold, color = PrismColors.Accent)
-            Poster(channel.logo, channel.name, Modifier.width(64.dp).height(64.dp), fit = true)
+            Poster(channel.logo, Modifier.width(64.dp).height(64.dp), fit = true)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 PrismText(text = channel.name, size = 26.sp, weight = FontWeight.Bold, maxLines = 1)
                 val second = programme ?: channel.group

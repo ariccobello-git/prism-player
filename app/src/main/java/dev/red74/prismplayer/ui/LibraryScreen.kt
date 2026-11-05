@@ -72,7 +72,6 @@ import dev.red74.prismplayer.LibraryState
 import dev.red74.prismplayer.LibraryTab
 import dev.red74.prismplayer.R
 import dev.red74.prismplayer.data.Catalog
-import dev.red74.prismplayer.data.Category
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentInfo
 import dev.red74.prismplayer.data.EpgData
@@ -852,7 +851,6 @@ private fun LiveView(
         PreviewPane(
             channel = preview,
             nowNext = preview?.let { epg.nowNext(it, nowMs) },
-            nowMs = nowMs,
             hasGuide = !epg.isEmpty,
             active = !fullscreen,
             modifier = Modifier
@@ -888,7 +886,7 @@ private fun ChannelRow(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Poster(channel.logo, channel.name, Modifier.size(56.dp), fit = true)
+            Poster(channel.logo, Modifier.size(56.dp), fit = true)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (unavailable) UnavailableSign()
@@ -929,7 +927,6 @@ private fun ChannelRow(
 private fun PreviewPane(
     channel: Channel?,
     nowNext: NowNext?,
-    nowMs: Long,
     hasGuide: Boolean,
     active: Boolean,
     modifier: Modifier = Modifier,
@@ -1075,7 +1072,7 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
             },
         )
         if (channel != null && !showing && !failed) {
-            Poster(channel.logo, channel.name, Modifier.size(72.dp), fit = true)
+            Poster(channel.logo, Modifier.size(72.dp), fit = true)
         }
         if (failed) {
             PrismText(text = stringResource(R.string.preview_failed), size = 15.sp, color = PrismColors.TextSecondary)
@@ -1161,7 +1158,7 @@ private fun ItemGrid(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Box {
-                            Poster(item.logo, item.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+                            Poster(item.logo, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
                             Badges(badges, Modifier.align(Alignment.BottomStart).padding(4.dp), compact = true, max = 4)
                             if (item.unavailable) UnavailableSign(Modifier.align(Alignment.TopEnd).padding(6.dp), size = 26)
                         }
@@ -1189,8 +1186,8 @@ private fun MovieDetail(
     val info by produceState<Pair<Boolean, dev.red74.prismplayer.data.FilmInfo?>>(false to null, movie.url) {
         value = true to ContentInfo.film(movie.url)
     }
-    Row(Modifier.fillMaxSize().confineFocus(horizontal = true), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        Poster(movie.logo, movie.name, Modifier.width(240.dp).aspectRatio(2f / 3f))
+    Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        Poster(movie.logo, Modifier.width(240.dp).aspectRatio(2f / 3f))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PrismText(text = tags.title, size = 32.sp, weight = FontWeight.Bold, maxLines = 3)
             Badges(VariantTags.withFacts(info.second?.badges.orEmpty(), tags.badges), max = 7)
@@ -1274,8 +1271,8 @@ private fun EpisodeDetail(
     val info by produceState<Pair<Boolean, EpisodeInfo?>>(false to null, episode.url) {
         value = true to ContentInfo.episodeInfo(episode.url, show.title)
     }
-    Row(Modifier.fillMaxSize().confineFocus(horizontal = true), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        Poster(episode.logo ?: show.logo, show.title, Modifier.width(240.dp).aspectRatio(2f / 3f))
+    Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        Poster(episode.logo ?: show.logo, Modifier.width(240.dp).aspectRatio(2f / 3f))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PrismText(text = VariantTags.of(show.title).title, size = 32.sp, weight = FontWeight.Bold, maxLines = 2)
             val where = listOfNotNull(
@@ -1361,7 +1358,7 @@ private fun ShowDetail(
 
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.width(240.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Poster(show.logo, show.title, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+            Poster(show.logo, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val tags = remember(show.title) { VariantTags.of(show.title) }
@@ -1513,7 +1510,7 @@ private fun FavoritesView(
                 ) {
                     if (missing) UnavailableSign()
                     val live = entry.channel?.type == dev.red74.prismplayer.data.ContentType.LIVE
-                    Poster(entry.logo, entry.title, Modifier.size(56.dp), fit = live)
+                    Poster(entry.logo, Modifier.size(56.dp), fit = live)
                     // Channels keep their whole name; films and series show their tags as badges instead.
                     val tags = VariantTags.of(entry.title)
                     val group = groupBadges[entry.group]

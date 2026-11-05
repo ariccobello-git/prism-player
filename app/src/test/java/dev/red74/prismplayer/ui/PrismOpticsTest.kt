@@ -4,7 +4,6 @@ import kotlin.math.abs
 import kotlin.math.asin
 import kotlin.math.sin
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
