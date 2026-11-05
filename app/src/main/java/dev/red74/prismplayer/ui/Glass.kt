@@ -602,14 +602,25 @@ fun Modifier.onExitFocus(direction: androidx.compose.ui.focus.FocusDirection, ac
  * others sit slightly behind (smaller, dimmer). Used on every group of focusable sections, side by side or stacked.
  */
 fun Modifier.depthFocus(): Modifier = composed {
+    // Moving the cursor between two items of the same section can report "no focus" for a moment. Losing the focus
+    // is applied only if it lasts, so the section never dips and comes back (the small jiggle) on every move.
+    var has by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
+    LaunchedEffect(has) {
+        if (has) {
+            focused = true
+        } else {
+            kotlinx.coroutines.delay(150)
+            focused = false
+        }
+    }
     val depth by animateFloatAsState(
         targetValue = if (focused) 1f else 0f,
         animationSpec = androidx.compose.animation.core.tween(320),
         label = "depth",
     )
     Modifier
-        .onFocusChanged { focused = it.hasFocus }
+        .onFocusChanged { has = it.hasFocus }
         .graphicsLayer {
             val s = 0.94f + 0.06f * depth
             scaleX = s
