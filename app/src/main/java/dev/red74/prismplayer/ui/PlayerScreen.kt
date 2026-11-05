@@ -106,8 +106,11 @@ private const val NEXT_COUNTDOWN_S = 8
  * only the one the viewer stops on opens a connection.
  */
 private const val ZAP_SETTLE_MS = 300L
-/** Pause before trying a content again with the safer sound, so the sound card closes the failed track. */
-private const val AUDIO_RETRY_DELAY_MS = 500L
+/**
+ * Pause before trying a content again with the safer sound: the sound card closes the failed track and the panel
+ * notices that the old connection is gone (sooner, some answer with an unreadable page instead of the video).
+ */
+private const val AUDIO_RETRY_DELAY_MS = 2_000L
 private const val LIVE_EDGE_MS = 6_000L
 private const val CHANNEL_BANNER_MS = 4_000L
 
@@ -243,7 +246,7 @@ fun PlayerScreen(
                     return
                 }
                 // Sound the TV could not open: tried again at once with the safer sound (see AudioSafety).
-                if (AudioSafety.switchOn(error.errorCode)) {
+                if (AudioSafety.switchOn(context, error.errorCode)) {
                     player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
                         .setMaxAudioChannelCount(2)
                         .build()
@@ -849,7 +852,10 @@ fun PlayerScreen(
                 ) {
                     errorName?.let {
                         PrismText(
-                            text = troubleText(trouble, troubleHttp) ?: stringResource(R.string.player_error, it),
+                            // The code name is added for unreadable streams too: it tells what Media3 saw (never the URL).
+                            text = troubleText(trouble, troubleHttp)
+                                ?.let { text -> if (trouble == Availability.Trouble.BAD_STREAM) "$text ($it)" else text }
+                                ?: stringResource(R.string.player_error, it),
                             size = 20.sp,
                             color = PrismColors.Danger,
                         )

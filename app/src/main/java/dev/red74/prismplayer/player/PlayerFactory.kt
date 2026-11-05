@@ -60,10 +60,22 @@ object BufferPlan {
  * Sound that the TV cannot open (ERROR_CODE_AUDIO_TRACK_INIT_FAILED): it happens with films whose audio is sent
  * to the TV or soundbar as it is (Dolby, DTS) or with many channels and a long sound queue. After the first such
  * error the app switches to a safer sound for the rest of the run: the stick decodes the audio itself, prefers
- * stereo tracks and uses Media3's standard (shorter) sound queue. Live channels keep working as before.
+ * stereo tracks and uses Media3's standard (shorter) sound queue. The choice is kept for the next runs too, so
+ * the same film never fails first again. Live channels keep working as before.
  */
 object AudioSafety {
+    private const val PREFS = "prism_settings"
+    private const val KEY = "audio_safe"
+
     @Volatile var on: Boolean = false
+    @Volatile private var loaded = false
+
+    /** Reads the stored choice once per run (the preferences are already in memory after the first read). */
+    fun load(context: Context) {
+        if (loaded) return
+        loaded = true
+        if (context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)) on = true
+    }
 
     fun isAudioOutputError(errorCode: Int): Boolean =
         errorCode == PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED ||
@@ -73,6 +85,13 @@ object AudioSafety {
     fun switchOn(errorCode: Int): Boolean {
         if (on || !isAudioOutputError(errorCode)) return false
         on = true
+        return true
+    }
+
+    /** Same, and remembered for the next runs. */
+    fun switchOn(context: Context, errorCode: Int): Boolean {
+        if (!switchOn(errorCode)) return false
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, true).apply()
         return true
     }
 }
@@ -202,6 +221,7 @@ private const val PREVIEW_MAX_BITRATE = 2_500_000
 
 /** One player setup for the full-screen view and (with [preview]) the small preview next to the channel list. */
 fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
+    AudioSafety.load(context)
     // A fresh source for every connection, so a change of identity applies to the next try (and to each HLS segment).
     // Every connection is counted (see StreamConnections), so the next stream can wait for this one to close.
     val httpFactory = DataSource.Factory {

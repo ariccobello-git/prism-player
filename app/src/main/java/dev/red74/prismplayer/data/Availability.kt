@@ -56,16 +56,20 @@ object Availability {
         else -> Trouble.OTHER
     }
 
-    /** HTTP errors are tried again silently (see the class comment) before being shown. */
-    fun retries(trouble: Trouble): Boolean = trouble == Trouble.REFUSED || trouble == Trouble.SERVER || trouble == Trouble.MISSING
+    /**
+     * HTTP errors are tried again silently (see the class comment) before being shown. So is a stream that is not
+     * readable: right after a connection closes (a retry, a film started again) some panels answer with a short
+     * page instead of the video until they notice the old connection is gone.
+     */
+    fun retries(trouble: Trouble): Boolean =
+        trouble == Trouble.REFUSED || trouble == Trouble.SERVER || trouble == Trouble.MISSING || trouble == Trouble.BAD_STREAM
 
     /**
      * Whether a failure marks the content. [afterRetry]: the second try failed too. [networkProven]: another channel
      * played a moment ago. [preview]: the small preview, which never marks (it has no second tries).
      */
     fun marks(trouble: Trouble, afterRetry: Boolean, networkProven: Boolean, preview: Boolean): Boolean = !preview && when (trouble) {
-        Trouble.BAD_STREAM -> true
-        Trouble.MISSING, Trouble.REFUSED, Trouble.SERVER -> afterRetry
+        Trouble.BAD_STREAM, Trouble.MISSING, Trouble.REFUSED, Trouble.SERVER -> afterRetry
         Trouble.NO_ANSWER -> networkProven
         Trouble.OTHER -> false
     }
