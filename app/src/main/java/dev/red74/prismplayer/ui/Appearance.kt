@@ -79,6 +79,8 @@ object Appearance {
         Palette(R.string.palette_mint, Color(0xFF06130F), Color(0xFF0F2E26), Color(0xFF123D33), Color(0xFF8FF0D0), Color(0xFF5FE3C0)),
         Palette(R.string.palette_coffee, Color(0xFF120C08), Color(0xFF2A1D14), Color(0xFF3A271A), Color(0xFFD9A066), Color(0xFFB8845A)),
         Palette(R.string.palette_silver, Color(0xFF0B0D12), Color(0xFF1B202B), Color(0xFF262C3A), Color(0xFFD5DBEA), Color(0xFF9BA8C4)),
+        // AS Roma: giallorosso, the club's maroon and gold.
+        Palette(R.string.palette_roma, Color(0xFF12050A), Color(0xFF34091A), Color(0xFF561022), Color(0xFFF0BC42), Color(0xFFD13A52)),
     )
 
     private var prefs: android.content.SharedPreferences? = null
@@ -216,9 +218,9 @@ fun AppearanceScreen(onDone: () -> Unit) {
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                     Column(Modifier.weight(0.42f).fillMaxHeight().confineFocus(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         PrismText(text = stringResource(R.string.appearance_pick), size = 18.sp, color = PrismColors.TextSecondary)
-                        for (rowStart in 0 until Appearance.palettes.size step 4) {
+                        for (rowStart in 0 until Appearance.palettes.size step 6) {
                             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(vertical = 2.dp)) {
-                                for (i in rowStart until rowStart + 4) {
+                                for (i in rowStart until minOf(rowStart + 6, Appearance.palettes.size)) {
                                     val p = Appearance.palettes[i]
                                     RoundButton(
                                         size = 56.dp,

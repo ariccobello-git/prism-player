@@ -6,9 +6,9 @@ import org.junit.Test
 
 class AppearanceTest {
     @Test
-    fun sixteenDistinctPalettes() {
-        assertEquals(16, Appearance.palettes.size)
-        assertEquals(16, Appearance.palettes.map { it.accent }.toSet().size)
+    fun seventeenDistinctPalettes() {
+        assertEquals(17, Appearance.palettes.size)
+        assertEquals(17, Appearance.palettes.map { it.accent }.toSet().size)
     }
 
     @Test
