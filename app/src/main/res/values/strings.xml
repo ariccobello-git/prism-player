@@ -205,4 +205,14 @@
     <string name="shortcuts_loading">Looking for installed apps…</string>
     <string name="shortcuts_none_left">All installed apps are already added.</string>
     <string name="shortcuts_press_to_add">OK adds a shortcut</string>
+    <string name="action_removed">Removed contents</string>
+    <string name="removed_count">%1$d in the last 7 days</string>
+    <string name="removed_none">None in the last 7 days</string>
+    <string name="removed_title">Removed contents</string>
+    <string name="removed_hint">Channels, films and series the lists no longer have, found when they are renewed or verified. They are deleted by themselves after 7 days.</string>
+    <string name="removed_loading">Reading the removed contents…</string>
+    <string name="removed_empty">No contents removed in the last 7 days.</string>
+    <string name="removed_batch_count">%1$d removed</string>
+    <string name="removed_more">…and %1$d more not listed</string>
+    <string name="removed_ungrouped">No group</string>
 </resources>

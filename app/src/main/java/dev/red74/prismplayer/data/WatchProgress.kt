@@ -78,6 +78,20 @@ object WatchProgress {
         version++
     }
 
+    /** Keys of every saved point (see [FavoriteKey]). */
+    fun keys(): Set<String> = prefs?.all?.keys?.toSet().orEmpty()
+
+    /** Forgets the points of contents a list no longer has. Main thread. */
+    fun forget(keys: Collection<String>) {
+        val store = prefs ?: return
+        val present = keys.filter(store::contains)
+        if (present.isEmpty()) return
+        val editor = store.edit()
+        present.forEach(editor::remove)
+        editor.apply()
+        version++
+    }
+
     fun clear(url: String) {
         val store = prefs ?: return
         val key = FavoriteKey.ofUrl(url)

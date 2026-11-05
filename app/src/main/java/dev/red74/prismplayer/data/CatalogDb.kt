@@ -40,14 +40,20 @@ class CatalogStore(private val dir: File, private val keyProvider: () -> SecretK
         }
     }
 
-    /** Writes [catalog] as the stored copy of list [id]; the old copy is replaced only when the new one is complete. */
-    fun write(id: String, catalog: Catalog): Boolean {
+    /**
+     * Writes [catalog] as the stored copy of list [id]; the old copy is replaced only when the new one is complete.
+     * [compare], when given and an old copy exists, runs on the finished new database with the old file before the
+     * old copy is replaced (see [ListDiff]); its failure never stops the write.
+     */
+    fun write(id: String, catalog: Catalog, compare: ((SQLiteDatabase, File) -> Unit)? = null): Boolean {
         dir.mkdirs()
         val temp = File(dir, "tmp-" + System.nanoTime() + ".sqlite")
         return try {
             val db = SQLiteDatabase.openOrCreateDatabase(temp, null)
             try {
                 CatalogDb.fill(db, catalog, keyProvider)
+                val old = fileFor(id)
+                if (compare != null && old.isFile && old.length() > 0) runCatching { compare(db, old) }
             } finally {
                 db.close()
             }
@@ -298,6 +304,8 @@ class CatalogDb private constructor(
     companion object {
         /** "3": letters drawn as symbols (🅺, ꜰʜᴅ) kept. "2": emoji and symbols kept. "1" has the same tables. */
         private const val VERSION = "3"
+        /** The version new copies are written with (see [ListDiff]). */
+        const val CURRENT_VERSION = VERSION
         private val READABLE = setOf("1", "2", VERSION)
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
         private const val TAG_BITS = 128

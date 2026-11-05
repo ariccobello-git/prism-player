@@ -54,6 +54,7 @@ private sealed interface Screen {
     data object Updates : Screen
     data object AppUpdate : Screen
     data object Shortcuts : Screen
+    data object Removed : Screen
     data object Exit : Screen
     data class Library(val playlistId: String) : Screen
     data object Player : Screen
@@ -133,6 +134,7 @@ private fun PrismNavigation(
     val notice by viewModel.notice.collectAsStateWithLifecycle()
     val aspect by viewModel.aspect.collectAsStateWithLifecycle()
     val verifying by viewModel.verifying.collectAsStateWithLifecycle()
+    val removedCount by viewModel.removedCount.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
 
     val current: Screen = if (confirmExit) Screen.Exit else stack.last()
@@ -222,6 +224,7 @@ private fun PrismNavigation(
             Screen.Home -> HomeScreen(
                 playlists = playlists,
                 verifying = verifying,
+                removedCount = removedCount,
                 notice = notice,
                 onOpen = { id -> push(Screen.Library(id)) },
                 onVerify = viewModel::verifyPlaylist,
@@ -235,6 +238,7 @@ private fun PrismNavigation(
                     push(Screen.AppUpdate)
                 },
                 onShortcuts = { push(Screen.Shortcuts) },
+                onRemoved = { push(Screen.Removed) },
                 onNoticeShown = viewModel::clearNotice,
             )
 
@@ -270,6 +274,7 @@ private fun PrismNavigation(
             )
 
             Screen.Shortcuts -> ShortcutsScreen(onBack = ::pop)
+            Screen.Removed -> dev.red74.prismplayer.ui.RemovedScreen(load = viewModel::removedContents, onBack = ::pop)
 
             Screen.Pair -> {
                 val pairState by pairViewModel.state.collectAsStateWithLifecycle()
@@ -347,6 +352,7 @@ private fun screenKey(screen: Screen): String = when (screen) {
     Screen.Updates -> "updates"
     Screen.AppUpdate -> "app_update"
     Screen.Shortcuts -> "shortcuts"
+    Screen.Removed -> "removed"
     Screen.Exit -> "exit"
     is Screen.Library -> "library"
     Screen.Player -> "player"

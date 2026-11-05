@@ -205,4 +205,14 @@
     <string name="shortcuts_loading">Cerco le app installate…</string>
     <string name="shortcuts_none_left">Tutte le app installate sono già aggiunte.</string>
     <string name="shortcuts_press_to_add">OK aggiunge la scorciatoia</string>
+    <string name="action_removed">Contenuti rimossi</string>
+    <string name="removed_count">%1$d negli ultimi 7 giorni</string>
+    <string name="removed_none">Nessuno negli ultimi 7 giorni</string>
+    <string name="removed_title">Contenuti rimossi</string>
+    <string name="removed_hint">Canali, film e serie che le liste non hanno più, trovati quando vengono aggiornate o verificate. Si cancellano da soli dopo 7 giorni.</string>
+    <string name="removed_loading">Leggo i contenuti rimossi…</string>
+    <string name="removed_empty">Nessun contenuto rimosso negli ultimi 7 giorni.</string>
+    <string name="removed_batch_count">%1$d rimossi</string>
+    <string name="removed_more">…e altri %1$d non elencati</string>
+    <string name="removed_ungrouped">Senza gruppo</string>
 </resources>
