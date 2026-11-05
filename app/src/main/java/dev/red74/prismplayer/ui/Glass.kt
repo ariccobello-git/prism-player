@@ -82,11 +82,11 @@ import androidx.tv.material3.darkColorScheme
  * entry-level sticks, so the depth comes from layered translucency instead.
  */
 object PrismColors {
-    val Bg0 = Color(0xFF070B14)
-    val Bg1 = Color(0xFF111A33)
-    val Bg2 = Color(0xFF1C1140)
-    val Accent = Color(0xFF7C9CFF)
-    val AccentAlt = Color(0xFFB57CFF)
+    val Bg0: Color get() = Appearance.palette.bg0
+    val Bg1: Color get() = Appearance.palette.bg1
+    val Bg2: Color get() = Appearance.palette.bg2
+    val Accent: Color get() = Appearance.palette.accent
+    val AccentAlt: Color get() = Appearance.palette.accentAlt
     val TextPrimary = Color(0xFFF4F6FF)
     val TextSecondary = Color(0xFFB4BBD6)
     val Danger = Color(0xFFFF7C8A)

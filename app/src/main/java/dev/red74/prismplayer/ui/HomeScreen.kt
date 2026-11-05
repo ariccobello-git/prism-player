@@ -63,6 +63,7 @@ fun HomeScreen(
     onCheckUpdates: () -> Unit,
     onShortcuts: () -> Unit,
     onRemoved: () -> Unit,
+    onAppearance: () -> Unit,
     onNoticeShown: () -> Unit,
 ) {
     val firstFocus = remember { FocusRequester() }
@@ -119,7 +120,30 @@ fun HomeScreen(
                         size = 18.sp,
                         color = PrismColors.TextSecondary,
                     )
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(12.dp))
+                    // Language flags (the app restarts its window in the chosen language) and the colour page.
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    val language = remember { Appearance.currentLanguage(context) }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        for (code in listOf("it", "en")) {
+                            FlagButton(
+                                italian = code == "it",
+                                selected = language == code,
+                                onClick = {
+                                    if (code != language) {
+                                        Appearance.saveLanguage(context, code)
+                                        (context as? android.app.Activity)?.recreate()
+                                    }
+                                },
+                            )
+                        }
+                        GlassButton(
+                            text = stringResource(R.string.action_appearance),
+                            onClick = onAppearance,
+                            modifier = Modifier.weight(1f).focusMemory("appearance"),
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
                     GlassButton(
                         text = stringResource(R.string.action_check_updates),
                         onClick = onCheckUpdates,
