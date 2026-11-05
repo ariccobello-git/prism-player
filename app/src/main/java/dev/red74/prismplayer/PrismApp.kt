@@ -13,6 +13,7 @@ import dev.red74.prismplayer.data.PlaylistFetcher
 import dev.red74.prismplayer.data.PlaylistStore
 import dev.red74.prismplayer.data.ProviderImages
 import dev.red74.prismplayer.data.SecureBox
+import dev.red74.prismplayer.data.SymbolGlyphs
 import dev.red74.prismplayer.data.TextCleaner
 import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.pairing.PairingManager
@@ -30,9 +31,11 @@ class PrismApp : Application(), ImageLoaderFactory {
         MediaLog.setLogLevel(MediaLog.LOG_LEVEL_OFF)
         // Every emoji is drawn with the font inside the app (loaded in the background), not the TV's older one.
         androidx.emoji2.text.EmojiCompat.init(androidx.emoji2.bundled.BundledEmojiCompatConfig(this))
-        // List names keep their symbols and emoji; only what the TV's fonts cannot draw is simplified or dropped.
+        // List names keep their symbols and emoji. A symbol the TV's fonts lack is drawn with the app's symbol
+        // fonts (SymbolGlyphs); only one no font has is simplified to its letter or dropped.
         val glyphs = android.graphics.Paint()
-        TextCleaner.canDraw = { text -> synchronized(glyphs) { glyphs.hasGlyph(text) } }
+        SymbolGlyphs.systemDraws = { text -> synchronized(glyphs) { glyphs.hasGlyph(text) } }
+        TextCleaner.canDraw = { text -> SymbolGlyphs.draws(text.codePointAt(0)) }
         container = AppContainer(this)
         WatchProgress.init(this)
         ContentInfo.init(this)
