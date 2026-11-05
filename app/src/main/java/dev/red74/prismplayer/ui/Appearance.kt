@@ -79,8 +79,8 @@ object Appearance {
         Palette(R.string.palette_mint, Color(0xFF06130F), Color(0xFF0F2E26), Color(0xFF123D33), Color(0xFF8FF0D0), Color(0xFF5FE3C0)),
         Palette(R.string.palette_coffee, Color(0xFF120C08), Color(0xFF2A1D14), Color(0xFF3A271A), Color(0xFFD9A066), Color(0xFFB8845A)),
         Palette(R.string.palette_silver, Color(0xFF0B0D12), Color(0xFF1B202B), Color(0xFF262C3A), Color(0xFFD5DBEA), Color(0xFF9BA8C4)),
-        // AS Roma: giallorosso, the club's maroon and gold.
-        Palette(R.string.palette_roma, Color(0xFF12050A), Color(0xFF34091A), Color(0xFF561022), Color(0xFFF0BC42), Color(0xFFD13A52)),
+        // AS Roma: the club's yellow #FBBA00 and red #970A2C (brandcolorcode.com), over a dark red backdrop.
+        Palette(R.string.palette_roma, Color(0xFF0D0507), Color(0xFF2A0A14), Color(0xFF4A0A1E), Color(0xFFFBBA00), Color(0xFFB5123A)),
     )
 
     private var prefs: android.content.SharedPreferences? = null
