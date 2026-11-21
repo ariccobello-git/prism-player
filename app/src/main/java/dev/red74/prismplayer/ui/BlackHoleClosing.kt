@@ -53,7 +53,7 @@ internal object BlackHoleTimeline {
     const val HOLE_IN = 1.6f
     const val SWALLOW_START = 1.4f
     const val SWALLOW_SPREAD = 3.0f
-    const val PIECE_MIN = 0.9f
+    const val PIECE_MIN = 0.6f
     const val PIECE_MAX = 1.5f
     const val SHRINK_START = 5.9f
     const val SHRINK = 1.1f
@@ -96,8 +96,8 @@ internal object BlackHoleTimeline {
     private fun easeIn(x: Float): Float = x.pow(2.2f)
 }
 
-private const val COLS = 80
-private const val ROWS = 45
+private const val COLS = 128
+private const val ROWS = 72
 
 /** The two layers of the last opening picture (sky; prism with its light) and the meshes of cells they break into. */
 private class Swallowed(val layers: List<ImageBitmap>, val meshes: List<SwallowMesh>, val width: Int, val height: Int) {
