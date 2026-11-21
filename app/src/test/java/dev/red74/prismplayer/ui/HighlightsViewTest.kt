@@ -39,6 +39,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /** The featured events page: cards show, OK plays the channel, and the cursor returns to the card just watched. */
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w1280dp-h720dp")
 class HighlightsViewTest {
