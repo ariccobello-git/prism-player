@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -35,6 +35,8 @@ fun RemovedScreen(load: suspend () -> List<RemovedBatch>, onBack: () -> Unit) {
     val batches by produceState<List<RemovedBatch>?>(null) { value = load() }
     val firstFocus = remember { FocusRequester() }
     RequestFocusOnEnter(firstFocus)
+    // Back up to the button and down again lands on the item it left.
+    val rows = remember { ReturnFocus() }
     val format = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
     val live = stringResource(R.string.tab_live)
     val movie = stringResource(R.string.tab_movies)
@@ -44,7 +46,7 @@ fun RemovedScreen(load: suspend () -> List<RemovedBatch>, onBack: () -> Unit) {
     PrismBackground {
         GlassPanel(Modifier.fillMaxSize().padding(32.dp)) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rows), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     GlassButton(text = stringResource(R.string.action_back), onClick = onBack, focusRequester = firstFocus)
                     PrismText(text = stringResource(R.string.removed_title), size = 30.sp, weight = FontWeight.Bold)
                 }
@@ -54,7 +56,7 @@ fun RemovedScreen(load: suspend () -> List<RemovedBatch>, onBack: () -> Unit) {
                     shown == null -> PrismText(text = stringResource(R.string.removed_loading), size = 20.sp, color = PrismColors.TextSecondary)
                     shown.isEmpty() -> PrismText(text = stringResource(R.string.removed_empty), size = 20.sp, color = PrismColors.TextSecondary)
                     else -> LazyColumn(
-                        Modifier.fillMaxSize().depthFocus().confineFocus(),
+                        Modifier.fillMaxSize().depthFocus().returnSection(),
                         // Room around the rows so the focus lift never pushes one past the panel's edge.
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -70,7 +72,7 @@ fun RemovedScreen(load: suspend () -> List<RemovedBatch>, onBack: () -> Unit) {
                                     modifier = Modifier.padding(top = if (index == 0) 0.dp else 14.dp),
                                 )
                             }
-                            items(batch.items) { item ->
+                            itemsIndexed(batch.items) { at, item ->
                                 val type = when (item.type) {
                                     ContentType.LIVE -> live
                                     ContentType.MOVIE -> movie
@@ -80,7 +82,7 @@ fun RemovedScreen(load: suspend () -> List<RemovedBatch>, onBack: () -> Unit) {
                                     text = item.name,
                                     subtitle = type + " · " + (item.group?.takeIf { it.isNotBlank() } ?: ungrouped),
                                     onClick = {},
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier.fillMaxWidth().returnItem(rows, index * REMOVED_BATCH_IDS + at),
                                 )
                             }
                             val more = batch.total - batch.items.size
@@ -96,3 +98,6 @@ fun RemovedScreen(load: suspend () -> List<RemovedBatch>, onBack: () -> Unit) {
         }
     }
 }
+
+/** Room for the ids of one batch's rows, so that ids of different batches never meet. */
+private const val REMOVED_BATCH_IDS = 100_000

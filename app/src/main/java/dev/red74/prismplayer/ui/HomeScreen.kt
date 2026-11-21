@@ -28,7 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,6 +74,9 @@ fun HomeScreen(
 ) {
     val firstFocus = remember { FocusRequester() }
     val listFocus = remember { FocusRequester() }
+    // Between the menu and the playlists the cursor returns to the item it left, on either side.
+    val menuMemory = remember { ReturnFocus() }
+    val listMemory = remember { ReturnFocus() }
     var muted by remember { mutableStateOf(UiSounds.muted) }
     val menuScroll = rememberScrollState()
     RequestFocusOnEnter(firstFocus)
@@ -81,7 +84,7 @@ fun HomeScreen(
     var listFocused by remember { mutableStateOf(false) }
     androidx.activity.compose.BackHandler(enabled = listFocused) {
         UiSounds.play(UiSounds.Kind.BACK)
-        runCatching { firstFocus.requestFocus() }
+        runCatching { (menuMemory.target() ?: firstFocus).requestFocus() }
     }
 
     LaunchedEffect(notice) {
@@ -109,7 +112,7 @@ fun HomeScreen(
                     Modifier
                         .verticalScroll(menuScroll)
                         .padding(36.dp)
-                        .confineFocus(),
+                        .returnSection(androidx.compose.ui.focus.FocusDirection.Right to listMemory),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     PrismText(
@@ -155,6 +158,7 @@ fun HomeScreen(
                         for (code in listOf("it", "en")) {
                             FlagButton(
                                 focusRequester = flagFocus[code],
+                                modifier = Modifier.returnItem(menuMemory, if (code == "it") 0 else 1),
                                 italian = code == "it",
                                 selected = language == code,
                                 onClick = {
@@ -169,37 +173,37 @@ fun HomeScreen(
                         GlassButton(
                             text = stringResource(R.string.action_appearance),
                             onClick = onAppearance,
-                            modifier = Modifier.weight(1f).focusMemory("appearance"),
+                            modifier = Modifier.weight(1f).focusMemory("appearance").returnItem(menuMemory, 2),
                         )
                     }
                     Spacer(Modifier.height(8.dp))
                     GlassButton(
                         text = stringResource(R.string.action_check_updates),
                         onClick = onCheckUpdates,
-                        modifier = Modifier.fillMaxWidth().focusMemory("check_updates"),
+                        modifier = Modifier.fillMaxWidth().focusMemory("check_updates").returnItem(menuMemory, 3),
                         // At start the cursor sits on the first, top item of the menu.
                         focusRequester = firstFocus,
                     )
                     GlassButton(
                         text = stringResource(R.string.action_updates),
                         onClick = onUpdates,
-                        modifier = Modifier.fillMaxWidth().focusMemory("updates"),
+                        modifier = Modifier.fillMaxWidth().focusMemory("updates").returnItem(menuMemory, 4),
                     )
                     GlassButton(
                         text = stringResource(R.string.action_add_url),
                         onClick = onAddUrl,
-                        modifier = Modifier.fillMaxWidth().focusMemory("add"),
+                        modifier = Modifier.fillMaxWidth().focusMemory("add").returnItem(menuMemory, 5),
                     )
                     GlassButton(
                         text = stringResource(R.string.action_pair),
                         onClick = onPair,
-                        modifier = Modifier.fillMaxWidth().focusMemory("pair"),
+                        modifier = Modifier.fillMaxWidth().focusMemory("pair").returnItem(menuMemory, 6),
                     )
                     if (playlists.isNotEmpty()) {
                         GlassButton(
                             text = stringResource(R.string.action_verify_all),
                             onClick = onVerifyAll,
-                            modifier = Modifier.fillMaxWidth().focusMemory("verify_all"),
+                            modifier = Modifier.fillMaxWidth().focusMemory("verify_all").returnItem(menuMemory, 7),
                         )
                     }
                     if (playlists.isNotEmpty() || removedCount > 0) {
@@ -209,13 +213,13 @@ fun HomeScreen(
                             subtitle = if (removedCount > 0) stringResource(R.string.removed_count, removedCount)
                             else stringResource(R.string.removed_none),
                             onClick = onRemoved,
-                            modifier = Modifier.fillMaxWidth().focusMemory("removed"),
+                            modifier = Modifier.fillMaxWidth().focusMemory("removed").returnItem(menuMemory, 8),
                         )
                     }
                     GlassButton(
                         text = stringResource(R.string.action_shortcuts),
                         onClick = onShortcuts,
-                        modifier = Modifier.fillMaxWidth().focusMemory("shortcuts"),
+                        modifier = Modifier.fillMaxWidth().focusMemory("shortcuts").returnItem(menuMemory, 9),
                     )
                     GlassButton(
                         text = stringResource(if (muted) R.string.sound_off else R.string.sound_on),
@@ -224,7 +228,7 @@ fun HomeScreen(
                             UiSounds.setMuted(muted)
                             if (!muted) UiSounds.play(UiSounds.Kind.SELECT)
                         },
-                        modifier = Modifier.fillMaxWidth().focusMemory("sound"),
+                        modifier = Modifier.fillMaxWidth().focusMemory("sound").returnItem(menuMemory, 10),
                     )
                 }
             }
@@ -240,7 +244,7 @@ fun HomeScreen(
                         .fillMaxSize()
                         .focusRequester(listFocus)
                         .onFocusChanged { listFocused = it.hasFocus }
-                        .confineFocus()
+                        .returnSection(androidx.compose.ui.focus.FocusDirection.Left to menuMemory)
                         .padding(28.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
@@ -260,9 +264,11 @@ fun HomeScreen(
                             )
                         }
                     } else {
-                        items(playlists, key = { it.id }) { playlist ->
+                        itemsIndexed(playlists, key = { _, it -> it.id }) { index, playlist ->
                             PlaylistRow(
                                 modifier = Modifier.animateItem(),
+                                memory = listMemory,
+                                index = index,
                                 playlist = playlist,
                                 checking = playlist.id in verifying,
                                 onOpen = { onOpen(playlist.id) },
@@ -318,6 +324,8 @@ private fun noticeText(notice: Notice): String = when (notice) {
 @Composable
 private fun PlaylistRow(
     modifier: Modifier = Modifier,
+    memory: ReturnFocus,
+    index: Int,
     playlist: SavedPlaylist,
     checking: Boolean,
     onOpen: () -> Unit,
@@ -366,7 +374,7 @@ private fun PlaylistRow(
             subtitleColor = statusColor,
             tint = if (failed) PrismColors.Danger else null,
             onClick = onOpen,
-            modifier = Modifier.weight(1f).focusMemory("playlist:" + playlist.id),
+            modifier = Modifier.weight(1f).focusMemory("playlist:" + playlist.id).returnItem(memory, index * 3),
         )
         if (playlist.status != PlaylistStatus.OK && !checking) {
             GlassButton(
@@ -375,7 +383,7 @@ private fun PlaylistRow(
                 ),
                 onClick = onVerify,
                 emphasized = playlist.status == PlaylistStatus.UNVERIFIED,
-                modifier = Modifier.focusMemory("verify:" + playlist.id),
+                modifier = Modifier.focusMemory("verify:" + playlist.id).returnItem(memory, index * 3 + 1),
             )
         }
         Box {
@@ -387,6 +395,7 @@ private fun PlaylistRow(
                     if (confirming) onDelete() else confirming = true
                 },
                 danger = confirming,
+                modifier = Modifier.returnItem(memory, index * 3 + 2),
             )
         }
     }

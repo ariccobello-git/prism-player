@@ -42,16 +42,18 @@ fun UpdatesScreen(onBack: () -> Unit) {
     val codecs = remember { CodecScan.scan() }
     val firstFocus = remember { FocusRequester() }
     RequestFocusOnEnter(firstFocus)
+    // Back up to the button and down again lands on the row it left.
+    val rows = remember { ReturnFocus() }
 
     PrismBackground {
         GlassPanel(Modifier.fillMaxSize().padding(32.dp)) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rows), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     GlassButton(text = stringResource(R.string.action_back), onClick = onBack)
                     PrismText(text = stringResource(R.string.updates_title), size = 30.sp, weight = FontWeight.Bold)
                 }
                 LazyColumn(
-                    Modifier.fillMaxSize().depthFocus().confineFocus(),
+                    Modifier.fillMaxSize().depthFocus().returnSection(),
                     // Room around the rows so the focus lift never pushes one past the panel's edge.
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -68,10 +70,12 @@ fun UpdatesScreen(onBack: () -> Unit) {
                             selected = true,
                             onClick = { attempt++ },
                             focusRequester = firstFocus,
+                            modifier = Modifier.returnItem(rows, 0),
                         )
                     }
                     item {
                         InfoRow(
+                            modifier = Modifier.returnItem(rows, 1),
                             title = stringResource(R.string.updates_app),
                             body = when {
                                 r == null -> stringResource(R.string.updates_checking)
@@ -86,6 +90,7 @@ fun UpdatesScreen(onBack: () -> Unit) {
                     }
                     item {
                         InfoRow(
+                            modifier = Modifier.returnItem(rows, 2),
                             title = stringResource(R.string.updates_engine),
                             body = when {
                                 r == null -> stringResource(R.string.updates_checking)
@@ -108,6 +113,7 @@ fun UpdatesScreen(onBack: () -> Unit) {
                     items(codecs.size) { index ->
                         val row = codecs[index]
                         InfoRow(
+                            modifier = Modifier.returnItem(rows, 3 + index),
                             title = row.label,
                             body = stringResource(
                                 when {
@@ -141,13 +147,14 @@ private fun InfoRow(
     selected: Boolean = false,
     onClick: () -> Unit = {},
     focusRequester: FocusRequester? = null,
+    modifier: Modifier = Modifier,
 ) {
     GlassSurface(
         onClick = onClick,
         focusRequester = focusRequester,
         selected = selected,
         tint = if (highlight) PrismColors.Accent else null,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             PrismText(text = title, size = 18.sp, weight = FontWeight.SemiBold)
