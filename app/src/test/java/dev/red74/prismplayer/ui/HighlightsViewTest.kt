@@ -11,7 +11,13 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.pressKey
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import dev.red74.prismplayer.LibraryNav
 import dev.red74.prismplayer.LibraryTab
@@ -228,4 +234,45 @@ class HighlightsViewTest {
 
     private fun androidx.compose.ui.test.junit4.ComposeContentTestRule.onAllNodesWithTextCount(text: String): Int =
         onAllNodesWithText(text).fetchSemanticsNodes().size
+
+    @Test
+    fun theMenuIsOnTheLeftAndTheContentOnTheRight() {
+        show()
+        val menu = rule.onNodeWithText("Sport").getBoundsInRoot()
+        val hero = rule.onNodeWithTag("hero").getBoundsInRoot()
+        assertTrue("menu ${menu.right} must end before the hero ${hero.left}", menu.right <= hero.left)
+        assertTrue("menu width ${menu.right - menu.left}", (menu.right - menu.left).value in 150f..260f)
+        rule.onNodeWithText("Follow teams").assertIsDisplayed()
+    }
+
+    @Test
+    fun theCardsOfARowHaveTheSizeOfTheDesign() {
+        show()
+        val card = rule.onNodeWithText("Inter - Juventus").getBoundsInRoot()
+        // the title sits inside a card 240 x 138 dp, so it is narrower than the card and well inside it
+        assertTrue("card title width ${card.right - card.left}", (card.right - card.left).value in 80f..240f)
+        val hero = rule.onNodeWithTag("hero").getBoundsInRoot()
+        assertTrue("hero must be wider than four cards", (hero.right - hero.left).value > 4 * 200f)
+    }
+
+    @Test
+    fun aMenuEntryChangesThePageAndTheMenuStays() {
+        show()
+        rule.onNodeWithText("Films").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Heat").assertIsDisplayed()
+        rule.onNodeWithText("Sport").assertIsDisplayed()
+        assertEquals(1, nav.highlightKind)
+    }
+
+    @Test
+    fun leftFromTheContentLandsOnThePageShownInTheMenu() {
+        nav = nav.copy(highlightKind = 1)
+        show()
+        rule.onNodeWithText("Heat").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+        rule.waitForIdle()
+        rule.onNodeWithText("Films").assertIsFocused()
+    }
 }
