@@ -20,6 +20,8 @@ import dev.red74.prismplayer.data.Programme
 import dev.red74.prismplayer.data.SearchAllResult
 import dev.red74.prismplayer.data.Show
 import dev.red74.prismplayer.reminders.ReminderStore
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -68,6 +70,12 @@ class SearchAllScreenTest {
                 onBack = {},
             )
         }
+        settle()
+    }
+
+    /** The search starts after a pause (a delay in the page): the test clock is moved past it. */
+    private fun settle() {
+        rule.mainClock.advanceTimeBy(1_500)
         rule.waitForIdle()
     }
 
@@ -137,12 +145,15 @@ class SearchAllScreenTest {
     fun theSameQueryForTheSameDataIsNotSearchedAgainWhenTheScreenComesBack() {
         var calls = 0
         val page = SearchPage().apply { query = "ro" }
-        for (round in 1..2) {
-            rule.setContent {
-                SearchAllScreen(page, { calls++; everything }, "k", { _, _ -> }, {}, {}, {})
-            }
-            rule.waitForIdle()
+        var visible by androidx.compose.runtime.mutableStateOf(true)
+        rule.setContent {
+            if (visible) SearchAllScreen(page, { calls++; everything }, "k", { _, _ -> }, {}, {}, {})
         }
+        settle()
+        visible = false
+        rule.waitForIdle()
+        visible = true
+        settle()
         assertEquals("the second visit must reuse the result", 1, calls)
     }
 }
