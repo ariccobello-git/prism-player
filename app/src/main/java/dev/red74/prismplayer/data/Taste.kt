@@ -80,8 +80,16 @@ class TasteModel(
 object Suggestions {
     fun <T> pick(candidates: List<T>, key: (T) -> String, seen: Set<String>, daySeed: Long, limit: Int): List<T> =
         candidates.filter { key(it) !in seen }
-            .sortedBy { (key(it) + daySeed).hashCode() }
+            .sortedBy { mix(key(it), daySeed) }
             .take(limit)
+
+    /** A well mixed number per (entry, day): appending the day to the name would only shift every hash alike. */
+    private fun mix(key: String, seed: Long): Long {
+        var x = key.hashCode().toLong() * -0x61c8864680b583ebL + seed * 0x2545F4914F6CDD1DL
+        x = x xor (x ushr 31)
+        x *= -0x40a7b892e31b1a47L
+        return x xor (x ushr 29)
+    }
 }
 
 /** Keeps [TasteModel] on the device and updates it when something starts playing. */
