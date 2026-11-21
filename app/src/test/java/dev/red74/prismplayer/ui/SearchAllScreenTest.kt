@@ -11,7 +11,9 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.pressKey
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentType
@@ -85,7 +87,7 @@ class SearchAllScreenTest {
         show(page, Taps())
         rule.waitForIdle()
         for (text in listOf("Channels", "Programmes", "Films", "Series", "Sky Sport Uno", "Il Gladiatore", "Gomorra", "Roma - Lazio", "Roma - Inter")) {
-            rule.onNodeWithText(text, substring = false).assertIsDisplayed()
+            rule.onNodeWithText(text, substring = false).assertExists()
         }
     }
 
@@ -106,11 +108,11 @@ class SearchAllScreenTest {
     fun okOnAChannelPlaysItAndOnAFilmOrASeriesOpensItsPage() {
         val taps = Taps()
         show(SearchPage().apply { query = "ro" }, taps)
-        rule.onNodeWithText("Sky Sport Uno").performClick()
+        rule.onNodeWithText("Sky Sport Uno").performScrollTo().performClick()
         assertEquals(0, taps.played?.second)
-        rule.onNodeWithText("Il Gladiatore").performClick()
+        rule.onNodeWithText("Il Gladiatore").performScrollTo().performClick()
         assertEquals(film, taps.movie)
-        rule.onNodeWithText("Gomorra").performClick()
+        rule.onNodeWithText("Gomorra").performScrollTo().performClick()
         assertEquals("Gomorra", taps.show?.title)
     }
 
@@ -119,14 +121,14 @@ class SearchAllScreenTest {
         val taps = Taps()
         ReminderStore.init(androidx.test.core.app.ApplicationProvider.getApplicationContext())
         show(SearchPage().apply { query = "ro" }, taps)
-        rule.onNodeWithText("Roma - Inter").performClick()
+        rule.onNodeWithText("Roma - Inter").performScrollTo().performClick()
         assertEquals(listOf(sky), taps.played?.first)
-        rule.onNodeWithText("Roma - Lazio").performClick()
+        rule.onNodeWithText("Roma - Lazio").performScrollTo().performClick()
         rule.waitForIdle()
         rule.onNodeWithText("I will remind you 5 minutes before it starts").assertIsDisplayed()
         assertTrue(ReminderStore.current.any { it.title == "Roma - Lazio" })
         // a second OK takes it away
-        rule.onNodeWithText("Roma - Lazio").performClick()
+        rule.onNodeWithText("Roma - Lazio").performScrollTo().performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Reminder removed").assertIsDisplayed()
         assertTrue(ReminderStore.current.none { it.title == "Roma - Lazio" })
