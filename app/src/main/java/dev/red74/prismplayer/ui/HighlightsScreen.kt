@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -70,9 +71,10 @@ import kotlinx.coroutines.withContext
 /** The featured events found in the guide; filled in the background by the view model. */
 val LocalHighlights = compositionLocalOf { HighlightsData.Empty }
 
-private val CardWidth = 340.dp
-private val CardHeight = 156.dp
-private val HeroHeight = 230.dp
+private val CardWidth = 240.dp
+private val CardHeight = 138.dp
+private val HeroHeight = 226.dp
+private val MenuWidth = 210.dp
 
 /**
  * "In evidenza": the most awaited events of the next hours, by kind (Sport, Film, Entertainment), each with its time
@@ -118,30 +120,62 @@ fun HighlightsView(
         wasEditing = editing
     }
 
-    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        if (!editing) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                tabs.forEachIndexed { index, item ->
-                    GlassButton(
-                        text = tabLabel(item),
-                        onClick = { onNav { it.copy(highlightKind = index) } },
-                        emphasized = index == tabIndex,
-                    )
-                }
-                if (sport) {
-                    GlassButton(
-                        text = stringResource(R.string.sport_prefs_button),
-                        onClick = { editing = true },
-                        focusRequester = prefsFocus,
-                    )
-                }
+    val selectedFocus = remember { FocusRequester() }
+    if (editing) {
+        FollowScreen(prefs, onDone = { editing = false })
+        return
+    }
+    // A side menu on the left (the kinds of page and "Follow teams"), the content on the right. Going back into the menu
+    // always lands on the page being shown.
+    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+        Column(
+            Modifier
+                .width(MenuWidth)
+                .focusProperties { enter = { selectedFocus } },
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            tabs.forEachIndexed { index, item ->
+                MenuItem(
+                    text = tabLabel(item),
+                    selected = index == tabIndex,
+                    focusRequester = if (index == tabIndex) selectedFocus else null,
+                    onClick = { onNav { it.copy(highlightKind = index) } },
+                )
+            }
+            MenuItem(
+                text = stringResource(R.string.sport_prefs_button),
+                selected = false,
+                focusRequester = prefsFocus,
+                onClick = { editing = true },
+            )
+        }
+        Column(Modifier.weight(1f).fillMaxSize()) {
+            when {
+                tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups)
+                else -> SuggestionRow(catalog, tab == HighlightTab.Movies, if (tab == HighlightTab.Movies) movieGroups else seriesGroups, nav, onNav)
             }
         }
-        when {
-            editing -> FollowScreen(prefs, onDone = { editing = false })
-            tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups)
-            else -> SuggestionRow(catalog, tab == HighlightTab.Movies, if (tab == HighlightTab.Movies) movieGroups else seriesGroups, nav, onNav)
-        }
+    }
+}
+
+/** One entry of the side menu: the page shown is filled, the cursor adds the white border. */
+@Composable
+private fun MenuItem(text: String, selected: Boolean, focusRequester: FocusRequester?, onClick: () -> Unit) {
+    GlassSurface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(60.dp),
+        focusRequester = focusRequester,
+        selected = selected,
+        focusScale = 1.04f,
+    ) {
+        PrismText(
+            text = text,
+            size = 20.sp,
+            weight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            maxLines = 1,
+            modifier = Modifier.align(Alignment.CenterStart),
+        )
     }
 }
 
@@ -472,12 +506,13 @@ private fun EventCard(event: HighlightEvent, live: Boolean, liked: Boolean, remi
         onClick = onClick,
         modifier = Modifier.width(CardWidth).height(CardHeight),
         focusRequester = focusRequester,
-        focusScale = 1.05f,
+        tint = if (live) PrismColors.Danger else PrismColors.Accent,
+        focusScale = 1.06f,
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            EventHeader(event, live, liked)
-            PrismText(text = event.title, size = 24.sp, weight = FontWeight.Bold, maxLines = 2)
-            EventAction(event, reminder, 18.sp)
+            EventHeader(event, live, liked, compact = true)
+            PrismText(text = event.title, size = 20.sp, weight = FontWeight.Bold, maxLines = 2)
+            EventAction(event, reminder, 15.sp)
         }
     }
 }
@@ -496,22 +531,22 @@ private fun HeroCard(event: HighlightEvent, live: Boolean, liked: Boolean, remin
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             EventHeader(event, live, liked)
-            PrismText(text = event.title, size = 44.sp, weight = FontWeight.Bold, maxLines = 2)
+            PrismText(text = event.title, size = 40.sp, weight = FontWeight.Bold, maxLines = 2)
             EventAction(event, reminder, 24.sp, strong = true)
         }
     }
 }
 
 @Composable
-private fun EventHeader(event: HighlightEvent, live: Boolean, liked: Boolean) {
+private fun EventHeader(event: HighlightEvent, live: Boolean, liked: Boolean, compact: Boolean = false) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         TimeBadge(text = if (live) stringResource(R.string.highlights_on_air) else clockText(event.startMs), live = live)
         if (liked) {
             LineIcon(LineIcon.STAR_ON, size = 20.dp, color = PrismColors.Accent)
-            PrismText(text = stringResource(R.string.highlights_for_you), size = 17.sp, weight = FontWeight.SemiBold, color = PrismColors.Accent, maxLines = 1)
+            if (!compact) PrismText(text = stringResource(R.string.highlights_for_you), size = 17.sp, weight = FontWeight.SemiBold, color = PrismColors.Accent, maxLines = 1)
         }
         val topic = event.topic?.let { topicLabel(it) }.orEmpty()
-        if (topic.isNotEmpty()) PrismText(text = topic, size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
+        if (topic.isNotEmpty() && !compact) PrismText(text = topic, size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
     }
 }
 
