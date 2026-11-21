@@ -57,7 +57,7 @@ class HighlightsCacheTest {
 
     @Test
     fun theFileOnDiskIsSealedAndReadsBack() {
-        val dir = File.createTempFile("hl", "d").apply { delete(); mkdirs() }
+        val dir = File.createTempFile("hlc", "d").apply { delete(); mkdirs() }
         try {
             val box = SecureBox { SecretKeySpec(ByteArray(32) { it.toByte() }, "AES") }
             val store = HighlightsStore(dir, box)
