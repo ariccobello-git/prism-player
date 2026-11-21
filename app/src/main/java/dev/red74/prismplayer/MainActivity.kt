@@ -42,7 +42,25 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        inFront = true
         IdleExit.touch()
+    }
+
+    override fun onPause() {
+        inFront = false
+        super.onPause()
+    }
+
+    private val notificationPermission =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+
+    /** Android 13 and later ask before notifications show: the first reminder asks once (a refusal only means no notification outside the app). */
+    fun askNotificationPermission() {
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching { notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS) }
+        }
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
@@ -77,7 +95,11 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private companion object {
-        var current: java.lang.ref.WeakReference<MainActivity>? = null
+    companion object {
+        private var current: java.lang.ref.WeakReference<MainActivity>? = null
+
+        /** True while the app is in front (reminders then show their banner inside it instead of a notification). */
+        @Volatile var inFront: Boolean = false
+            private set
     }
 }

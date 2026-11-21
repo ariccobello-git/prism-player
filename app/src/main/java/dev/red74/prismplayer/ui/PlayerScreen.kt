@@ -68,6 +68,11 @@ import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.ui.PlayerView
 import dev.red74.prismplayer.R
 import dev.red74.prismplayer.data.Availability
+import dev.red74.prismplayer.data.CatchUp
+import dev.red74.prismplayer.data.CatchUpMarks
+import dev.red74.prismplayer.data.Programme
+import dev.red74.prismplayer.data.StreamAttempt
+import dev.red74.prismplayer.data.StreamFallback
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.device.DeviceProfile
@@ -77,7 +82,11 @@ import dev.red74.prismplayer.player.AspectMode
 import dev.red74.prismplayer.player.FastScan
 import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.StreamConnections
+import coil.imageLoader
+import coil.request.ImageRequest
+import dev.red74.prismplayer.player.Neighbours
 import dev.red74.prismplayer.player.StreamIdentity
+import dev.red74.prismplayer.player.ZapHistory
 import dev.red74.prismplayer.player.TrackPolicy
 import dev.red74.prismplayer.player.DisplayRate
 import dev.red74.prismplayer.player.StallStats
@@ -91,6 +100,22 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 private enum class PlayStatus { Loading, Ready, Ended, Error }
+
+/** The "last channel" key of TV remotes. */
+private val LAST_CHANNEL_KEY = Key(android.view.KeyEvent.KEYCODE_LAST_CHANNEL)
+
+/** A programme opened from its start: the addresses to try (see [CatchUp.addresses]) and the programme. */
+private class CatchUpRun(val addresses: List<String>, val programme: Programme)
+
+/** The tries to open [channel]: the form of the address and the identity, in order (see [StreamFallback.plan]). */
+private fun planFor(channel: Channel, catchUp: CatchUpRun?): List<StreamAttempt> {
+    if (catchUp == null) {
+        return StreamFallback.plan(channel.url, channel.type == ContentType.LIVE, StreamIdentity.preferred, StreamIdentity.CANDIDATES)
+    }
+    val agent = StreamIdentity.preferred
+    val other = StreamIdentity.CANDIDATES.firstOrNull { it != agent }
+    return catchUp.addresses.mapIndexed { i, url -> StreamAttempt(agent, url, i + 1) } + StreamAttempt(other, catchUp.addresses.first(), 1)
+}
 private enum class Panel { None, Tracks, Episodes, Info }
 
 private const val SKIP_MS = 10_000L
@@ -136,6 +161,8 @@ fun PlayerScreen(
     onPlaybackFailed: (Channel, Availability.Trouble, Boolean) -> Unit = { _, _, _ -> },
     /** The programme on air on a live channel (from the guide), shown in the banner after a change of channel. */
     nowTitle: (Channel) -> String? = { null },
+    /** The programme on air on a live channel, for catch-up ("from the start"). */
+    nowProgramme: (Channel) -> Programme? = { null },
 ) {
     val context = LocalContext.current
     var index by remember { mutableIntStateOf(startIndex.coerceIn(0, channels.lastIndex)) }
@@ -145,9 +172,11 @@ fun PlayerScreen(
     var errorName by remember { mutableStateOf<String?>(null) }
     var trouble by remember { mutableStateOf<Availability.Trouble?>(null) }
     var troubleHttp by remember { mutableStateOf<Int?>(null) }
-    /** Tries of the current channel (see [StreamIdentity.plan]) and a request for the next one. */
+    /** Tries of the current channel (see [StreamFallback.plan]) and a request for the next one. */
     var attempt by remember { mutableIntStateOf(0) }
-    var plan by remember { mutableStateOf(StreamIdentity.plan()) }
+    var plan by remember { mutableStateOf(planFor(channels[startIndex.coerceIn(0, channels.lastIndex)], null)) }
+    /** The programme being watched from its start (catch-up), or null while the channel plays live. */
+    var catchUp by remember { mutableStateOf<CatchUpRun?>(null) }
     var retryRequest by remember { mutableIntStateOf(0) }
     var startedOk by remember { mutableStateOf(false) }
     /** Audio and subtitles follow [TrackPolicy] until the viewer picks them in the panel. */
@@ -177,6 +206,7 @@ fun PlayerScreen(
 
     val player = remember { createPlayer(context) }
     val hold = remember { StreamHold() }
+    val zaps = remember { ZapHistory() }
     val remote = remember { DeviceProfile.get() }
     val rootFocus = remember { FocusRequester() }
     val playFocus = remember { FocusRequester() }
@@ -191,9 +221,15 @@ fun PlayerScreen(
     var bannerVisible by remember { mutableStateOf(false) }
 
     val current = channels[index]
+    /** The programme on air, when catch-up can restart it (see [CatchUp.offered]); looked at again whenever the controls open. */
+    val onAirNow = remember(index, overlayVisible, catchUp) {
+        if (current.type != ContentType.LIVE || catchUp != null || !overlayVisible) null
+        else nowProgramme(current)?.takeIf { CatchUp.offered(current.url, it, System.currentTimeMillis(), CatchUpMarks.isMarked(current.url)) }
+    }
     val isSeries = current.type == ContentType.SERIES
     val hasNext = isSeries && index < channels.lastIndex
-    val isLiveStream = liveFlag || current.type == ContentType.LIVE
+    // A programme watched from its start is a stretch of video like a film: it can be skipped and scanned.
+    val isLiveStream = (liveFlag || current.type == ContentType.LIVE) && catchUp == null
     val currentChannels by rememberUpdatedState(channels)
     val worked by rememberUpdatedState(onPlaybackWorked)
     /** Films and episodes remember where they were left (see [WatchProgress]); live channels do not. */
@@ -214,10 +250,16 @@ fun PlayerScreen(
                         if (!startedOk) {
                             startedOk = true
                             StreamIdentity.preferred = StreamIdentity.current
-                            currentChannels.getOrNull(index)?.let(worked)
+                            val playing = currentChannels.getOrNull(index)
+                            if (playing != null && catchUp == null) {
+                                // A form of the address that worked is tried first next time (see StreamFallback).
+                                plan.getOrNull(attempt)?.let { StreamFallback.remember(playing.url, it.url) }
+                            }
+                            playing?.let(worked)
                         }
                     }
-                    Player.STATE_ENDED -> {
+                    // The programme watched from its start is over: the channel goes on live.
+                    Player.STATE_ENDED -> if (catchUp != null) catchUp = null else {
                         status = PlayStatus.Ended
                         currentChannels.getOrNull(index)?.let { WatchProgress.clear(it.url) }
                     }
@@ -274,6 +316,15 @@ fun PlayerScreen(
                     retryRequest++
                     return
                 }
+                // A programme that cannot be opened from its start (no archive on this channel) is not a fault of the
+                // channel: it is remembered, and the channel goes on live.
+                val asked = catchUp
+                if (asked != null && !startedOk) {
+                    currentChannels.getOrNull(index)?.let { if (Availability.retries(kind)) CatchUpMarks.mark(it.url) }
+                    skipToast = context.getString(R.string.catchup_unavailable)
+                    catchUp = null
+                    return
+                }
                 currentChannels.getOrNull(index)?.let { failed(it, kind, attempt >= plan.lastIndex) }
                 trouble = kind
                 troubleHttp = http
@@ -326,6 +377,19 @@ fun PlayerScreen(
         }
     }
 
+    // The channels next to this one are prepared while it plays: their logos from other servers are loaded ahead (a
+    // logo on the provider's own server would be a second connection, so it is left alone, see ProviderImages).
+    // No stream is opened for them: the provider allows one connection per list.
+    LaunchedEffect(index, startedOk) {
+        if (!startedOk || current.type != ContentType.LIVE) return@LaunchedEffect
+        for (n in Neighbours.around(index, channels.size)) {
+            val logo = channels[n].logo ?: continue
+            val host = runCatching { java.net.URI(logo).host }.getOrNull() ?: continue
+            if (host in ProviderHosts) continue
+            context.imageLoader.enqueue(ImageRequest.Builder(context).data(logo).build())
+        }
+    }
+
     // While playing, the point is kept every few seconds, in case the TV is switched off.
     LaunchedEffect(index, isPlaying) {
         if (!keepsProgress || !isPlaying) return@LaunchedEffect
@@ -335,7 +399,7 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(index) {
+    LaunchedEffect(index, catchUp) {
         val zapping = flags[0]
         flags[0] = true
         // Changing channel: the old one is closed at once (its connection ends on the player's own thread).
@@ -345,13 +409,13 @@ fun PlayerScreen(
         trouble = null
         attempt = 0
         startedOk = false
-        plan = StreamIdentity.plan()
-        StreamIdentity.current = plan.first()
+        plan = planFor(channels[index], catchUp)
+        StreamIdentity.current = plan.first().agent
         // Panels often allow one connection per account: the preview's must be closed before this one opens.
         PreviewPlayers.stopAll()
         // Any list, guide or plot request still talking to the panel is closed before the stream opens.
         hold.acquire()
-        ProviderHosts.noteUrl(channels[index].url)
+        ProviderHosts.noteUrl(plan.first().url)
         // Every content starts in Italian without subtitles (see TrackPolicy); the tracks decide the rest.
         autoTracks = true
         appliedTracks[0] = null
@@ -375,10 +439,10 @@ fun PlayerScreen(
         StreamConnections.awaitNone()
         val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
         if (resumeMs != null && resumeMs > 0) {
-            player.setMediaItem(playbackItem(channels[index].url), resumeMs)
+            player.setMediaItem(playbackItem(plan.first().url), resumeMs)
             skipToast = context.getString(R.string.resume_toast, formatTime(resumeMs))
         } else {
-            player.setMediaItem(playbackItem(channels[index].url))
+            player.setMediaItem(playbackItem(plan.first().url))
         }
         player.playWhenReady = true
         // Gone to the background meanwhile: it connects when the app comes back.
@@ -395,17 +459,19 @@ fun PlayerScreen(
         val tryIndex = index
         delay(if (attempt == 1) Availability.RETRY_DELAY_MS else Availability.NEXT_IDENTITY_DELAY_MS)
         if (tryIndex != index) return@LaunchedEffect
-        StreamIdentity.current = plan[attempt.coerceAtMost(plan.lastIndex)]
+        val next = plan[attempt.coerceAtMost(plan.lastIndex)]
+        StreamIdentity.current = next.agent
         // In the background: the errored player keeps its item and tries again when the app comes back.
         if (flags[1]) { parked = true; return@LaunchedEffect }
         hold.acquire()
+        // The failed connection is closed before the next try opens: never two at once.
         StreamConnections.awaitNone()
-        ProviderHosts.noteUrl(channels[index].url)
+        ProviderHosts.noteUrl(next.url)
         val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
         if (resumeMs != null && resumeMs > 0) {
-            player.setMediaItem(playbackItem(channels[index].url), resumeMs)
+            player.setMediaItem(playbackItem(next.url), resumeMs)
         } else {
-            player.setMediaItem(playbackItem(channels[index].url))
+            player.setMediaItem(playbackItem(next.url))
         }
         player.prepare()
         player.playWhenReady = true
@@ -585,9 +651,34 @@ fun PlayerScreen(
         }
     }
 
+    fun goTo(target: Int) {
+        zaps.moved(index, target)
+        // A programme watched from its start belongs to the channel it was opened on.
+        catchUp = null
+        index = target
+    }
+
     fun changeChannel(delta: Int) {
-        index = (index + delta + channels.size) % channels.size
+        goTo((index + delta + channels.size) % channels.size)
         if (channels[index].type == ContentType.LIVE) bannerRequest++
+    }
+
+    /** The channel watched before this one (the remote's "last channel" key): pressing again goes back and forth. */
+    fun lastChannel() {
+        val back = zaps.target(index, channels.size) ?: return
+        goTo(back)
+        if (channels[index].type == ContentType.LIVE) bannerRequest++
+    }
+
+    /** Opens the programme on air from its start; the live stream is closed first, only one connection is ever open. */
+    fun startCatchUp(programme: Programme) {
+        val url = channels[index].url
+        val offset = CatchUp.offsetFor(url, java.util.TimeZone.getDefault().getOffset(programme.startMs).toLong())
+        val addresses = CatchUp.addresses(url, programme, offset)
+        if (addresses.isEmpty()) return
+        skipToast = context.getString(R.string.catchup_starting)
+        overlayVisible = false
+        catchUp = CatchUpRun(addresses, programme)
     }
 
     fun changeAspect(next: AspectMode) {
@@ -632,9 +723,12 @@ fun PlayerScreen(
         status = PlayStatus.Loading
         attempt = 0
         startedOk = false
-        plan = StreamIdentity.plan()
-        StreamIdentity.current = plan.first()
-        if (isLiveStream) player.seekToDefaultPosition()
+        plan = planFor(current, catchUp)
+        StreamIdentity.current = plan.first().agent
+        if (isLiveStream) {
+            // A live channel starts over from the first try (and from the form of the address that is tried first).
+            player.setMediaItem(playbackItem(plan.first().url))
+        }
         player.playWhenReady = true
         scope.launch {
             hold.acquire()
@@ -682,6 +776,10 @@ fun PlayerScreen(
                     Key.Info -> {
                         overlayVisible = true
                         panel = if (panel == Panel.Info) Panel.None else Panel.Info
+                        return@onPreviewKeyEvent true
+                    }
+                    LAST_CHANNEL_KEY, Key.Zero -> {
+                        if (current.type == ContentType.LIVE) lastChannel()
                         return@onPreviewKeyEvent true
                     }
                     else -> Unit
@@ -831,6 +929,11 @@ fun PlayerScreen(
                                 color = PrismColors.TextSecondary,
                                 maxLines = 1,
                             )
+                        } else if (catchUp != null) {
+                            PrismText(
+                                text = "↺ " + stringResource(R.string.catchup_watching, catchUp?.programme?.title.orEmpty()),
+                                size = 20.sp, color = PrismColors.Accent, maxLines = 1,
+                            )
                         } else {
                             current.group?.let {
                                 PrismText(text = it, size = 20.sp, color = PrismColors.TextSecondary, maxLines = 1)
@@ -908,6 +1011,23 @@ fun PlayerScreen(
                             GlassButton(text = stringResource(R.string.player_previous), onClick = { changeChannel(-1) })
                             GlassButton(text = stringResource(R.string.player_next), onClick = { changeChannel(+1) })
                         }
+                        if (current.type == ContentType.LIVE) {
+                            if (catchUp != null) {
+                                GlassButton(
+                                    text = stringResource(R.string.catchup_back_to_live),
+                                    onClick = { catchUp = null; overlayVisible = false },
+                                    emphasized = true,
+                                )
+                            } else if (onAirNow != null) {
+                                GlassButton(
+                                    text = stringResource(R.string.catchup_from_start),
+                                    onClick = { startCatchUp(onAirNow) },
+                                )
+                            }
+                            if (zaps.target(index, channels.size) != null) {
+                                GlassButton(text = stringResource(R.string.player_last_channel), onClick = ::lastChannel)
+                            }
+                        }
                     }
                     PrismText(
                         text = stringResource(if (remote.minimalRemote) R.string.player_hint_hold else R.string.player_hint),
@@ -923,7 +1043,7 @@ fun PlayerScreen(
                         when (panel) {
                             Panel.Tracks -> TracksPanel(tracks, player, panelFocus, onPicked = { autoTracks = false }) { panel = Panel.None }
                             Panel.Episodes -> EpisodesPanel(channels, index, panelFocus) {
-                                index = it
+                                goTo(it)
                                 panel = Panel.None
                             }
                             Panel.Info -> InfoPanel(player, panelFocus) { panel = Panel.None }

@@ -7,6 +7,7 @@ import coil.ImageLoader
 import coil.ImageLoaderFactory
 import dev.red74.prismplayer.data.AppSettings
 import dev.red74.prismplayer.data.CatalogStore
+import dev.red74.prismplayer.data.CatchUpMarks
 import dev.red74.prismplayer.data.ContentInfo
 import dev.red74.prismplayer.data.KeystoreKeyProvider
 import dev.red74.prismplayer.data.PlaylistFetcher
@@ -19,6 +20,7 @@ import dev.red74.prismplayer.data.SportPrefsStore
 import dev.red74.prismplayer.data.Taste
 import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.player.FrameRatePref
+import dev.red74.prismplayer.reminders.ReminderStore
 import dev.red74.prismplayer.pairing.PairingManager
 import java.io.File
 import okhttp3.OkHttpClient
@@ -45,6 +47,8 @@ class PrismApp : Application(), ImageLoaderFactory {
         Taste.init(this)
         FrameRatePref.init(this)
         ContentInfo.init(this)
+        CatchUpMarks.init(this)
+        ReminderStore.init(this)
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)

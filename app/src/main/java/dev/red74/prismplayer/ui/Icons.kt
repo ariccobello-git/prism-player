@@ -145,3 +145,23 @@ fun StarButton(favorite: Boolean, onToggle: () -> Unit, modifier: Modifier = Mod
         }
     }
 }
+
+/** The small round button next to a channel's star: arranges the channel (hide it, its group, groups of my own). */
+@Composable
+fun MoreButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    GlassSurface(
+        onClick = onClick,
+        modifier = modifier.size(52.dp),
+        cornerRadius = 26.dp,
+        contentPadding = PaddingValues(0.dp),
+        focusScale = 1.12f,
+    ) {
+        PrismText(
+            text = "•••",
+            size = 18.sp,
+            weight = FontWeight.Bold,
+            color = Color.White.copy(alpha = 0.55f),
+            modifier = Modifier.align(Alignment.Center),
+        )
+    }
+}

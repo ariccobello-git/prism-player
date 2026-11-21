@@ -275,4 +275,42 @@
     <string name="frame_rate_title">Frequenza dello schermo come il video</string>
     <string name="frame_rate_on">Attivo: movimento più fluido. Lo schermo può oscurarsi per un secondo al cambio. Premi OK per disattivare.</string>
     <string name="frame_rate_off">Disattivo. Premi OK per allineare la frequenza dello schermo al video (movimento più fluido su film e sport dal vivo).</string>
+
+    <!-- Ultimo canale, rivedi dall'inizio, promemoria, ricerca unica, organizzare i canali -->
+    <string name="player_last_channel">Ultimo canale</string>
+    <string name="catchup_from_start">Dall\'inizio</string>
+    <string name="catchup_back_to_live">Torna in diretta</string>
+    <string name="catchup_starting">Apro dall\'inizio…</string>
+    <string name="catchup_unavailable">Su questo canale non si può rivedere dall\'inizio</string>
+    <string name="catchup_watching">Dall\'inizio: %1$s</string>
+    <string name="reminder_remind">🔔 Ricordami</string>
+    <string name="reminder_active">🔔 Promemoria attivo</string>
+    <string name="reminder_toast_on">Ti avviso 5 minuti prima che inizi</string>
+    <string name="reminder_toast_off">Promemoria tolto</string>
+    <string name="reminder_in">Inizia tra %1$d min su %2$s</string>
+    <string name="reminder_now">Inizia ora su %1$s</string>
+    <string name="reminder_channel">Promemoria</string>
+    <string name="reminder_banner_in">%1$s inizia tra %2$d min · %3$s</string>
+    <string name="reminder_banner_now">%1$s inizia ora · %2$s</string>
+    <string name="search_all">Cerca ovunque</string>
+    <string name="search_all_hint">Canale, film, serie o programma</string>
+    <string name="search_all_channels">Canali</string>
+    <string name="search_all_movies">Film</string>
+    <string name="search_all_series">Serie</string>
+    <string name="search_all_programmes">Programmi</string>
+    <string name="organize_title">Organizza questo canale</string>
+    <string name="organize_hide_channel">Nascondi questo canale</string>
+    <string name="organize_hide_group">Nascondi il gruppo «%1$s»</string>
+    <string name="organize_add_to">Aggiungi a %1$s</string>
+    <string name="organize_remove_from">Togli da %1$s</string>
+    <string name="organize_group_name">Nuovo gruppo (nome)</string>
+    <string name="organize_create">Crea il gruppo e aggiungi</string>
+    <string name="organize_manage">Nascosti e miei gruppi</string>
+    <string name="manage_hidden_groups">Gruppi nascosti</string>
+    <string name="manage_hidden_channels">Canali nascosti</string>
+    <string name="manage_my_groups">I miei gruppi</string>
+    <string name="manage_show">Mostra di nuovo</string>
+    <string name="manage_delete">Elimina il gruppo</string>
+    <string name="manage_empty">Non hai nascosto nulla e non hai ancora gruppi tuoi.</string>
+    <string name="manage_channels_count">%1$d canali</string>
 </resources>
