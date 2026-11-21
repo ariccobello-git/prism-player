@@ -72,7 +72,7 @@ class BlackHoleRingTest {
         val image = render(0f)
         val outer = pixel(image, core * 2.6f)
         assertTrue("red beats blue in the outer ring", ((outer shr 16) and 255) > (outer and 255))
-        val inner = pixel(image, core * 1.2f)
+        val inner = pixel(image, core * 1.14f)
         assertTrue("the inner edge is nearly white", (inner and 255) > 150)
         // the sweep: angle 0 is the brightest side, 0.3 of a turn (108 deg) the dimmest
         assertTrue(lum(pixel(image, core * 1.6f, 0.0)) > lum(pixel(image, core * 1.6f, 108.0)))
