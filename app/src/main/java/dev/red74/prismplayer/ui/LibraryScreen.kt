@@ -759,14 +759,27 @@ private val SORT_OPTIONS = listOf(
  * on it; the user moves away with the arrows.
  */
 @Composable
-private fun SortBar(nav: LibraryNav, onNav: NavChange) {
+private fun SortBar(nav: LibraryNav, onNav: NavChange, sortFocus: FocusRequester) {
     val index = SORT_OPTIONS.indexOfFirst { it.first == nav.sort }.coerceAtLeast(0)
     val next = SORT_OPTIONS[(index + 1) % SORT_OPTIONS.size]
     GlassButton(
         text = stringResource(R.string.sort_button, stringResource(SORT_OPTIONS[index].second)),
         subtitle = stringResource(R.string.sort_next, stringResource(next.second)),
         onClick = { onNav { it.copy(sort = next.first, itemIndex = 0) } },
+        focusRequester = sortFocus,
     )
+}
+
+/**
+ * Back from the channels or contents puts the cursor on the sort button above them (the first Back step); a second
+ * Back is then handled by the screen as usual. Only active while the cursor is inside the list.
+ */
+@Composable
+internal fun SortBackHandler(sortFocus: FocusRequester, listFocused: Boolean) {
+    BackHandler(enabled = listFocused) {
+        UiSounds.play(UiSounds.Kind.BACK)
+        runCatching { sortFocus.requestFocus() }
+    }
 }
 
 @Composable
@@ -814,6 +827,9 @@ private fun LiveView(
     // Back up from the channels to the sort button and down again lands on the channel it left.
     val rowMemory = remember(listState, nav.tab, nav.category, nav.sub) { ReturnFocus(visible = { id -> listState.layoutInfo.visibleItemsInfo.any { it.index == id } }) }
     val rowFocus = rowMemory.requester(target)
+    val sortFocus = remember { FocusRequester() }
+    var listFocused by remember { mutableStateOf(false) }
+    SortBackHandler(sortFocus, listFocused)
     val unavailable = LocalReachability.current.unavailable
 
     LaunchedEffect(nav.resume) {
@@ -828,11 +844,12 @@ private fun LiveView(
 
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rowMemory)) { SortBar(nav, onNav) }
+        Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rowMemory)) { SortBar(nav, onNav, sortFocus) }
         LazyColumn(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
+                .onFocusChanged { listFocused = it.hasFocus }
                 .returnSection(),
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1118,6 +1135,9 @@ private fun ItemGrid(
     // Back up from the posters to the sort button and down again lands on the poster it left.
     val itemMemory = remember(gridState, nav.tab, nav.category, nav.sub) { ReturnFocus(visible = { id -> gridState.layoutInfo.visibleItemsInfo.any { it.index == id } }) }
     val itemFocus = itemMemory.requester(target)
+    val sortFocus = remember { FocusRequester() }
+    var listFocused by remember { mutableStateOf(false) }
+    SortBackHandler(sortFocus, listFocused)
     val sortAtStart = remember { nav.sort }
     LaunchedEffect(nav.sort) { if (nav.sort != sortAtStart) gridState.scrollToItem(0) }
     var focusedIndex by remember { mutableIntStateOf(-1) }
@@ -1131,11 +1151,11 @@ private fun ItemGrid(
     }
 
     Column(Modifier.fillMaxSize().depthFocus().confineFocus(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to itemMemory)) { SortBar(nav, onNav) }
+        Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to itemMemory)) { SortBar(nav, onNav, sortFocus) }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
             state = gridState,
-            modifier = Modifier.weight(1f).fillMaxWidth().returnSection(),
+            modifier = Modifier.weight(1f).fillMaxWidth().onFocusChanged { listFocused = it.hasFocus }.returnSection(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(8.dp),
