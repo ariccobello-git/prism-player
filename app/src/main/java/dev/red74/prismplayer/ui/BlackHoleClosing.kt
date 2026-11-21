@@ -26,15 +26,11 @@ import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import dev.red74.prismplayer.R
-import kotlin.math.atan2
-import kotlin.math.cos
-import kotlin.math.hypot
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -69,8 +65,11 @@ internal object BlackHoleTimeline {
     /** Core radius of the black hole as a share of the screen height; with its glow it spans about a third. */
     const val CORE = 0.065f
 
-    /** Outer edge of the thin glowing corona, in core radii. */
-    const val DISK = 1.45f
+    /** Inner edge of the glowing ring, sharp and thin, in core radii. */
+    const val RING_IN = 1.12f
+
+    /** Outer edge where the ring has faded away, in core radii (about the size of the moon in the scene). */
+    const val RING_OUT = 3.4f
 
     /** Size of the black hole from 0 to 1 at [t] seconds. */
     fun holeScale(t: Float): Float = when {
@@ -97,16 +96,24 @@ internal object BlackHoleTimeline {
     private fun easeIn(x: Float): Float = x.pow(2.2f)
 }
 
-/** One piece of the picture being swallowed. */
-private class Piece(val layer: Int, val col: Int, val row: Int, val start: Float, val duration: Float, val spin: Float)
+private const val COLS = 80
+private const val ROWS = 45
 
-private const val COLS = 16
-private const val ROWS = 9
+/** The two layers of the last opening picture (sky; prism with its light) and the meshes of cells they break into. */
+private class Swallowed(val layers: List<ImageBitmap>, val meshes: List<SwallowMesh>, val width: Int, val height: Int) {
+    private val max = meshes.maxOf { it.count }
+    val verts = FloatArray(max * SwallowMesh.FLOATS_PER_QUAD)
+    val texs = FloatArray(max * SwallowMesh.FLOATS_PER_QUAD)
+    val colors = IntArray(max * 4)
+    val indices = SwallowMesh.indices(max)
+    val paints: List<android.graphics.Paint> = layers.map { layer ->
+        android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG).apply {
+            shader = android.graphics.BitmapShader(layer.asAndroidBitmap(), android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP)
+        }
+    }
+}
 
-/** The two layers of the last opening picture (sky; prism with its light) and the pieces they break into. */
-private class Swallowed(val layers: List<ImageBitmap>, val pieces: List<Piece>, val width: Int, val height: Int)
-
-/** Draws the opening's last picture into two separate layers and cuts them into pieces with random timings. */
+/** Draws the opening's last picture into two separate layers and cuts them into fine cells with random timings. */
 private fun DrawScope.prepare(images: SplashImages?): Swallowed {
     val w = size.width.roundToInt().coerceAtLeast(1)
     val h = size.height.roundToInt().coerceAtLeast(1)
@@ -119,25 +126,25 @@ private fun DrawScope.prepare(images: SplashImages?): Swallowed {
         }
         bitmap
     }
-    val random = java.util.Random(74)
-    val pieces = ArrayList<Piece>()
     val light = layers[1].asAndroidBitmap()
-    for (layer in 0..1) for (row in 0 until ROWS) for (col in 0 until COLS) {
-        if (layer == 1) {
-            // the light layer is empty almost everywhere: only pieces with something in them are kept
-            var any = false
-            for (sy in 0..4) for (sx in 0..4) {
-                val x = ((col + sx / 4f) * w / COLS).toInt().coerceIn(0, w - 1)
-                val y = ((row + sy / 4f) * h / ROWS).toInt().coerceIn(0, h - 1)
-                if ((light.getPixel(x, y) ushr 24) > 10) any = true
+    val meshes = layers.indices.map { layer ->
+        val cells = ArrayList<Int>()
+        for (row in 0 until ROWS) for (col in 0 until COLS) {
+            if (layer == 1) {
+                // the light layer is empty almost everywhere: only cells with something in them are kept
+                var any = false
+                for (sy in 0..2) for (sx in 0..2) {
+                    val x = ((col + sx / 2f) * w / COLS).toInt().coerceIn(0, w - 1)
+                    val y = ((row + sy / 2f) * h / ROWS).toInt().coerceIn(0, h - 1)
+                    if ((light.getPixel(x, y) ushr 24) > 10) any = true
+                }
+                if (!any) continue
             }
-            if (!any) continue
+            cells += row * COLS + col
         }
-        val start = BlackHoleTimeline.SWALLOW_START + random.nextFloat() * BlackHoleTimeline.SWALLOW_SPREAD
-        val duration = BlackHoleTimeline.PIECE_MIN + random.nextFloat() * (BlackHoleTimeline.PIECE_MAX - BlackHoleTimeline.PIECE_MIN)
-        pieces += Piece(layer, col, row, start, duration, (random.nextFloat() - 0.5f) * 240f)
+        SwallowMesh(COLS, ROWS, w, h, cells.toIntArray(), 74L + layer)
     }
-    return Swallowed(layers, pieces, w, h)
+    return Swallowed(layers, meshes, w, h)
 }
 
 /** The closing animation with its music; [onFinished] is called once the screen has stayed black for 1.5 s. */
@@ -200,35 +207,18 @@ private fun DrawScope.drawBlackHole(t: Float, s: Swallowed) {
     val hole = Offset(w / 2f, h / 2f)
     val k = BlackHoleTimeline.holeScale(t)
     val core = h * BlackHoleTimeline.CORE * k
-    val pw = s.width / COLS
-    val ph = s.height / ROWS
 
-    // --- the picture, piece by piece: still ones in place, falling ones spiralling into the hole --------------------
-    for (layer in 0..1) for (p in s.pieces) {
-        if (p.layer != layer) continue
-        val f = BlackHoleTimeline.fall(t, p.start, p.duration)
-        if (f >= 1f) continue
-        val srcOffset = IntOffset(p.col * pw, p.row * ph)
-        val srcSize = IntSize(if (p.col == COLS - 1) s.width - p.col * pw else pw, if (p.row == ROWS - 1) s.height - p.row * ph else ph)
-        if (f <= 0f) {
-            drawImage(s.layers[layer], srcOffset, srcSize, srcOffset, srcSize)
-            continue
-        }
-        val home = Offset(srcOffset.x + srcSize.width / 2f, srcOffset.y + srcSize.height / 2f)
-        val r0 = hypot(home.x - hole.x, home.y - hole.y)
-        val a0 = atan2(home.y - hole.y, home.x - hole.x)
-        val r = r0 * (1f - f)
-        val a = a0 + 2.4f * f.pow(1.3f)
-        val at = Offset(hole.x + cos(a) * r, hole.y + sin(a) * r)
-        val shrink = (1f - f).pow(0.8f)
-        val stretch = 1f + 1.6f * f
-        val turn = Math.toDegrees((a - a0).toDouble()).toFloat() + p.spin * f
-        withTransform({
-            translate(at.x - home.x, at.y - home.y)
-            rotate(turn, home)
-            scale(shrink * stretch, shrink / stretch, home)
-        }) {
-            drawImage(s.layers[layer], srcOffset, srcSize, srcOffset, srcSize, alpha = (1f - f).pow(0.35f))
+    // --- the picture, cell by cell: still ones in place, falling ones streaking along a spiral into the hole -----
+    drawIntoCanvas { canvas ->
+        val native = canvas.nativeCanvas
+        for (layer in s.meshes.indices) {
+            val quads = s.meshes[layer].fill(t, hole.x, hole.y, s.verts, s.texs, s.colors)
+            if (quads == 0) continue
+            // drawVertices counts FLOATS (2 per point), not points
+            native.drawVertices(
+                android.graphics.Canvas.VertexMode.TRIANGLES,
+                quads * SwallowMesh.FLOATS_PER_QUAD, s.verts, 0, s.texs, 0, s.colors, 0, s.indices, 0, quads * 6, s.paints[layer],
+            )
         }
     }
 
@@ -237,30 +227,12 @@ private fun DrawScope.drawBlackHole(t: Float, s: Swallowed) {
 
     // --- the black hole: a dark core inside a turning, glowing disk of matter ------------------------------------------
     if (k > 0f) {
-        val disk = core * BlackHoleTimeline.DISK
         val glowUp = if (t > BlackHoleTimeline.SHRINK_START) 1f + 1.5f * ((t - BlackHoleTimeline.SHRINK_START) / BlackHoleTimeline.SHRINK).coerceIn(0f, 1f) else 1f
         drawCircle(
-            Brush.radialGradient(listOf(Color(0xFFFF9A3D).copy(alpha = 0.22f * glowUp.coerceAtMost(2f)), Color(0xFF7A3CFF).copy(alpha = 0.10f), Color.Transparent), center = hole, radius = core * 2.6f),
-            radius = core * 2.6f, center = hole, blendMode = BlendMode.Plus,
+            Brush.radialGradient(listOf(Color(0xFFFF9A3D).copy(alpha = 0.16f * glowUp.coerceAtMost(2f)), Color(0xFF7A3CFF).copy(alpha = 0.07f), Color.Transparent), center = hole, radius = core * BlackHoleTimeline.RING_OUT),
+            radius = core * BlackHoleTimeline.RING_OUT, center = hole, blendMode = BlendMode.Plus,
         )
-        rotate(t * 140f, hole) {
-            drawCircle(
-                Brush.sweepGradient(
-                    listOf(
-                        Color(0xFFFFB25A).copy(alpha = 0.85f), Color(0xFFFF5A3C).copy(alpha = 0.25f), Color(0xFFFFE6B0).copy(alpha = 0.9f),
-                        Color(0xFF8A4BFF).copy(alpha = 0.30f), Color(0xFFFFB25A).copy(alpha = 0.85f),
-                    ),
-                    center = hole,
-                ),
-                radius = (core * 1.12f + disk) / 2f, center = hole, style = Stroke(width = (disk - core * 1.12f) * 0.7f), blendMode = BlendMode.Plus,
-            )
-        }
-        rotate(-t * 230f, hole) {
-            drawCircle(
-                Brush.sweepGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.5f), Color.Transparent, Color(0xFFFFD08A).copy(alpha = 0.45f), Color.Transparent), center = hole),
-                radius = core * 1.2f, center = hole, style = Stroke(width = core * 0.08f), blendMode = BlendMode.Plus,
-            )
-        }
+        drawAccretionRing(hole, core, t)
         // the photon ring, bright and thin, right at the edge of the dark
         drawCircle(Color(0xFFFFE9C4).copy(alpha = (0.75f * glowUp).coerceAtMost(1f)), radius = core * 1.08f, center = hole, style = Stroke(width = 2.dp.toPx()), blendMode = BlendMode.Plus)
         drawCircle(
@@ -286,5 +258,51 @@ private fun DrawScope.drawBlackHole(t: Float, s: Swallowed) {
             Brush.radialGradient(listOf(Color.White.copy(alpha = light), Color.White.copy(alpha = 0.6f * light), Color.Transparent), center = hole, radius = 9.dp.toPx()),
             radius = 9.dp.toPx(), center = hole,
         )
+    }
+}
+
+/**
+ * The turning ring of matter: a thin, sharp, white-hot edge right at the black core that widens outwards into a soft
+ * fade, reddening (red shift) until it vanishes at [BlackHoleTimeline.RING_OUT]. One side is brighter, as matter
+ * moving towards the viewer is, and that bright side turns with the ring.
+ */
+internal fun DrawScope.drawAccretionRing(hole: Offset, core: Float, t: Float) {
+    val outer = core * BlackHoleTimeline.RING_OUT
+    val edge = BlackHoleTimeline.RING_IN / BlackHoleTimeline.RING_OUT
+    fun at(share: Float) = edge + (1f - edge) * share
+    drawIntoCanvas { canvas ->
+        val bounds = androidx.compose.ui.geometry.Rect(hole.x - outer, hole.y - outer, hole.x + outer, hole.y + outer)
+        canvas.saveLayer(bounds, androidx.compose.ui.graphics.Paint())
+        // colour and strength by distance: sharp white-hot inner edge, then orange, then deep red, then nothing
+        drawCircle(
+            Brush.radialGradient(
+                0f to Color.Transparent,
+                (edge * 0.985f) to Color.Transparent,
+                edge to Color(0xFFFFF4DC),
+                at(0.04f) to Color(0xFFFFD08A).copy(alpha = 0.92f),
+                at(0.14f) to Color(0xFFFF9440).copy(alpha = 0.62f),
+                at(0.32f) to Color(0xFFE2501F).copy(alpha = 0.34f),
+                at(0.58f) to Color(0xFFA02A18).copy(alpha = 0.14f),
+                at(0.85f) to Color(0xFF5A1410).copy(alpha = 0.04f),
+                1f to Color.Transparent,
+                center = hole, radius = outer,
+            ),
+            radius = outer, center = hole,
+        )
+        // the bright side that turns with the ring (multiplies what was drawn, softly)
+        rotate(t * 140f, hole) {
+            drawCircle(
+                Brush.sweepGradient(
+                    0f to Color.White,
+                    0.30f to Color.White.copy(alpha = 0.40f),
+                    0.55f to Color.White.copy(alpha = 0.70f),
+                    0.80f to Color.White.copy(alpha = 0.32f),
+                    1f to Color.White,
+                    center = hole,
+                ),
+                radius = outer, center = hole, blendMode = BlendMode.DstIn,
+            )
+        }
+        canvas.restore()
     }
 }
