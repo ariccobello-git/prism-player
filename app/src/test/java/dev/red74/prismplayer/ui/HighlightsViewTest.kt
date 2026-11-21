@@ -166,8 +166,8 @@ class HighlightsViewTest {
     fun theFirstEventIsAHeroCardMuchLargerThanTheOthers() {
         show()
         val hero = rule.onNodeWithTag("hero").getBoundsInRoot()
-        assertTrue("hero width ${hero.width}", hero.width.value > 700f)
-        assertTrue("hero height ${hero.height}", hero.height.value >= 200f)
+        assertTrue("hero width ${hero.right - hero.left}", (hero.right - hero.left).value > 700f)
+        assertTrue("hero height ${hero.bottom - hero.top}", (hero.bottom - hero.top).value >= 200f)
         rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
         assertEquals("the hero event is not repeated in a row", 1, rule.onAllNodesWithTextCount("Roma - Lazio"))
     }
