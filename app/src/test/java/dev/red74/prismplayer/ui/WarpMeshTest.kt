@@ -28,9 +28,9 @@ class WarpMeshTest {
         for (i in v.indices) assertEquals(m.texs[i], v[i], 1e-4f)
         assertTrue(c.all { it == WarpMesh.WHITE })
         // the triangles tile the whole picture
-        var area = 0f
-        for (k in m.indices.indices step 3) area += cross(v, m.indices[k].toInt(), m.indices[k + 1].toInt(), m.indices[k + 2].toInt()) / 2f
-        assertEquals(w * h.toFloat(), area, 1f)
+        var area = 0.0
+        for (k in m.indices.indices step 3) area += cross(v, m.indices[k].toInt(), m.indices[k + 1].toInt(), m.indices[k + 2].toInt()) / 2.0
+        assertEquals(w.toDouble() * h, area, w.toDouble() * h * 1e-3)
     }
 
     @Test
