@@ -116,7 +116,7 @@ fun StarButton(favorite: Boolean, onToggle: () -> Unit, modifier: Modifier = Mod
     )
     GlassSurface(
         onClick = onToggle,
-        modifier = modifier.size(52.dp).semantics { contentDescription = description },
+        modifier = modifier.size(52.dp),
         cornerRadius = 26.dp,
         contentPadding = PaddingValues(0.dp),
         focusScale = 1.12f,
