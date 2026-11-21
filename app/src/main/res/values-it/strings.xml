@@ -237,4 +237,25 @@
     <string name="palette_coffee">Caffè</string>
     <string name="palette_silver">Argento</string>
     <string name="palette_roma">AS Roma</string>
+    <string name="tab_highlights">In evidenza</string>
+    <string name="highlights_sport">Sport</string>
+    <string name="highlights_film">Film</string>
+    <string name="highlights_entertainment">Intrattenimento</string>
+    <string name="highlights_now">In onda adesso</string>
+    <string name="highlights_today">Più tardi oggi</string>
+    <string name="highlights_tomorrow">Domani</string>
+    <string name="highlights_on_air">IN ONDA</string>
+    <string name="highlights_empty">Nessun evento in evidenza per ora. La guida potrebbe essere ancora in caricamento, o la lista non ha la guida delle prossime 36 ore.</string>
+    <string name="topic_football">Calcio</string>
+    <string name="topic_tennis">Tennis</string>
+    <string name="topic_motors">Motori</string>
+    <string name="topic_basketball">Basket</string>
+    <string name="topic_rugby">Rugby</string>
+    <string name="topic_cycling">Ciclismo</string>
+    <string name="topic_volleyball">Pallavolo</string>
+    <string name="topic_golf">Golf</string>
+    <string name="topic_combat">Sport da combattimento</string>
+    <string name="topic_american_football">Football americano</string>
+    <string name="topic_hockey">Hockey</string>
+    <string name="topic_olympics">Olimpiadi</string>
 </resources>

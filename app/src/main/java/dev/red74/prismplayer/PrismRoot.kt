@@ -128,6 +128,7 @@ private fun PrismNavigation(
     val library by viewModel.library.collectAsStateWithLifecycle()
     val nav by viewModel.nav.collectAsStateWithLifecycle()
     val epg by viewModel.epg.collectAsStateWithLifecycle()
+    val highlights by viewModel.highlights.collectAsStateWithLifecycle()
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val unavailable by viewModel.unavailable.collectAsStateWithLifecycle()
     val favoriteList by viewModel.favoriteList.collectAsStateWithLifecycle()
@@ -301,6 +302,7 @@ private fun PrismNavigation(
                     state = library,
                     nav = nav,
                     epg = epg,
+                    highlights = highlights,
                     favorites = favorites,
                     onNav = viewModel::updateNav,
                     onPlay = { items, index, follow ->
