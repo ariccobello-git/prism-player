@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -48,6 +48,9 @@ fun ShortcutsScreen(onBack: () -> Unit) {
     val settings = remember { (context.applicationContext as PrismApp).container.settings }
     var pinned by remember { mutableStateOf(settings.shortcuts) }
     var message by remember { mutableStateOf<String?>(null) }
+    // Between the two lists (and up to the button) the cursor returns to the item it left.
+    val pinnedMemory = remember { ReturnFocus() }
+    val availableMemory = remember { ReturnFocus() }
     val firstFocus = remember { FocusRequester() }
     RequestFocusOnEnter(firstFocus)
 
@@ -83,7 +86,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 GlassPanel(Modifier.weight(1f).fillMaxHeight().depthFocus()) {
                     LazyColumn(
-                        Modifier.fillMaxSize().confineFocus().padding(24.dp),
+                        Modifier.fillMaxSize().returnSection(pinnedMemory).padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         item { PrismText(text = stringResource(R.string.shortcuts_mine), size = 24.sp, weight = FontWeight.SemiBold) }
@@ -96,7 +99,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
                                 )
                             }
                         }
-                        items(pinned, key = { it }) { pkg ->
+                        itemsIndexed(pinned, key = { _, it -> it }) { at, pkg ->
                             val app = byPackage[pkg]
                             var confirming by remember { mutableStateOf(false) }
                             LaunchedEffect(confirming) {
@@ -115,13 +118,14 @@ fun ShortcutsScreen(onBack: () -> Unit) {
                                     text = app?.label ?: pkg,
                                     subtitle = if (app == null && installed != null) stringResource(R.string.shortcuts_missing) else null,
                                     onClick = { if (!InstalledApps.open(context, pkg)) message = cannotOpen },
-                                    modifier = Modifier.weight(1f).focusMemory("app:$pkg"),
+                                    modifier = Modifier.weight(1f).focusMemory("app:$pkg").returnItem(pinnedMemory, at * 2),
                                     focusRequester = if (pkg == pinned.first()) firstFocus else null,
                                 )
                                 GlassButton(
                                     text = stringResource(if (confirming) R.string.action_delete_confirm else R.string.shortcuts_remove),
                                     onClick = { if (confirming) save(Shortcuts.remove(pinned, pkg)) else confirming = true },
                                     danger = confirming,
+                                    modifier = Modifier.returnItem(pinnedMemory, at * 2 + 1),
                                 )
                             }
                         }
@@ -130,7 +134,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
                 GlassPanel(Modifier.weight(1f).fillMaxHeight().depthFocus()) {
                     val available = installed?.filter { it.packageName !in pinned }
                     LazyColumn(
-                        Modifier.fillMaxSize().confineFocus().padding(24.dp),
+                        Modifier.fillMaxSize().returnSection(availableMemory).padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         item { PrismText(text = stringResource(R.string.shortcuts_add), size = 24.sp, weight = FontWeight.SemiBold) }
@@ -141,7 +145,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
                             available.isEmpty() -> item {
                                 PrismText(text = stringResource(R.string.shortcuts_none_left), size = 18.sp, color = PrismColors.TextSecondary)
                             }
-                            else -> items(available, key = { it.packageName }) { app ->
+                            else -> itemsIndexed(available, key = { _, it -> it.packageName }) { at, app ->
                                 Row(
                                     Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -152,7 +156,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
                                         text = app.label,
                                         subtitle = stringResource(R.string.shortcuts_press_to_add),
                                         onClick = { save(Shortcuts.add(pinned, app.packageName)) },
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier.weight(1f).returnItem(availableMemory, at),
                                     )
                                 }
                             }

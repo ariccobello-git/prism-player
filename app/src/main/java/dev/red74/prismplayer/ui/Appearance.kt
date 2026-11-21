@@ -210,6 +210,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBritishFlag() {
 fun AppearanceScreen(onDone: () -> Unit) {
     var chosen by remember { mutableIntStateOf(Appearance.paletteIndex) }
     val first = remember { FocusRequester() }
+    // Up from Confirm lands on the colour it came from.
+    val colours = remember { ReturnFocus(initial = Appearance.paletteIndex) }
     val confirm = remember { FocusRequester() }
     val crest = androidx.compose.ui.graphics.ImageBitmap.imageResource(R.drawable.roma_crest)
     RequestFocusOnEnter(first)
@@ -220,7 +222,7 @@ fun AppearanceScreen(onDone: () -> Unit) {
             Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 PrismText(text = stringResource(R.string.appearance_title), size = 30.sp, weight = FontWeight.Bold)
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-                    Column(Modifier.weight(0.42f).fillMaxHeight().confineFocus(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(0.42f).fillMaxHeight().returnSection(colours), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         PrismText(text = stringResource(R.string.appearance_pick), size = 18.sp, color = PrismColors.TextSecondary)
                         for (rowStart in 0 until Appearance.palettes.size step 6) {
                             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(vertical = 2.dp)) {
@@ -228,6 +230,7 @@ fun AppearanceScreen(onDone: () -> Unit) {
                                     val p = Appearance.palettes[i]
                                     RoundButton(
                                         size = 56.dp,
+                                        modifier = Modifier.returnItem(colours, i),
                                         onClick = {
                                             chosen = i
                                             // OK on a colour moves the cursor to Confirm, keeping that colour.

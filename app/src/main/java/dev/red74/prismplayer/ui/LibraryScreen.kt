@@ -805,7 +805,9 @@ private fun LiveView(
     val nowMs = rememberNowMs()
     var preview by remember(list) { mutableStateOf<Channel?>(null) }
     var fullscreen by remember { mutableStateOf(false) }
-    val rowFocus = remember { FocusRequester() }
+    // Back up from the channels to the sort button and down again lands on the channel it left.
+    val rowMemory = remember(listState, nav.tab, nav.category, nav.sub) { ReturnFocus(visible = { id -> listState.layoutInfo.visibleItemsInfo.any { it.index == id } }) }
+    val rowFocus = rowMemory.requester(target)
     val unavailable = LocalReachability.current.unavailable
 
     LaunchedEffect(nav.resume) {
@@ -824,7 +826,8 @@ private fun LiveView(
         LazyColumn(
             Modifier
                 .weight(1f)
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .returnSection(rowMemory),
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -837,7 +840,7 @@ private fun LiveView(
                     isFavorite = FavoriteKey.of(channel) in favorites,
                     unavailable = FavoriteKey.of(channel) in unavailable,
                     onToggleFavorite = { onToggleFavorite(FavoriteKey.of(channel)) },
-                    focusRequester = if (index == target) rowFocus else null,
+                    focusModifier = Modifier.returnItem(rowMemory, index),
                     onFocused = { preview = channel },
                     onClick = {
                         fullscreen = true
@@ -869,7 +872,7 @@ private fun ChannelRow(
     isFavorite: Boolean,
     unavailable: Boolean,
     onToggleFavorite: () -> Unit,
-    focusRequester: FocusRequester?,
+    focusModifier: Modifier,
     onFocused: () -> Unit,
     onClick: () -> Unit,
 ) {
@@ -877,8 +880,7 @@ private fun ChannelRow(
     GlassSurface(
         onClick = onClick,
         onFocused = onFocused,
-        focusRequester = focusRequester,
-        modifier = Modifier.weight(1f),
+        modifier = Modifier.weight(1f).then(focusModifier),
         focusScale = 1.02f,
     ) {
         Row(
@@ -1106,8 +1108,10 @@ private fun ItemGrid(
     entry: (Int) -> GridEntry,
 ) {
     val gridState = rememberLazyGridState(initialFirstVisibleItemIndex = nav.itemIndex.coerceIn(0, (total - 1).coerceAtLeast(0)))
-    val itemFocus = remember { FocusRequester() }
     val target = nav.itemIndex.coerceIn(0, (total - 1).coerceAtLeast(0))
+    // Back up from the posters to the sort button and down again lands on the poster it left.
+    val itemMemory = remember(gridState, nav.tab, nav.category, nav.sub) { ReturnFocus(visible = { id -> gridState.layoutInfo.visibleItemsInfo.any { it.index == id } }) }
+    val itemFocus = itemMemory.requester(target)
     val sortAtStart = remember { nav.sort }
     LaunchedEffect(nav.sort) { if (nav.sort != sortAtStart) gridState.scrollToItem(0) }
     var focusedIndex by remember { mutableIntStateOf(-1) }
@@ -1125,7 +1129,7 @@ private fun ItemGrid(
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
             state = gridState,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier.weight(1f).fillMaxWidth().returnSection(itemMemory),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(8.dp),
@@ -1149,7 +1153,7 @@ private fun ItemGrid(
                 GlassSurface(
                     onClick = item.onClick,
                     onFocused = { focusedIndex = index },
-                    focusRequester = if (index == target) itemFocus else null,
+                    modifier = Modifier.returnItem(itemMemory, index),
                     tint = if (item.favorite) PrismColors.Favorite else null,
                     contentPadding = PaddingValues(6.dp),
                 ) {
@@ -1325,11 +1329,14 @@ private fun ShowDetail(
     val seasons = show.seasons.ifEmpty { listOf(0) }
     val season = if (nav.season in seasons) nav.season else seasons.first()
     val episodes = remember(show, season) { show.episodesOf(season) }
-    val seasonFocus = remember { FocusRequester() }
-    val episodeFocus = remember { FocusRequester() }
+    // The cursor comes back to the season it left (and to the episode it left) when it moves between the two rows.
+    val seasonMemory = remember { ReturnFocus(initial = seasons.indexOf(season)) }
+    val episodeMemory = remember(show, season) { ReturnFocus() }
     // Coming back from an episode puts the cursor on it (the next one, if the player went on by itself).
     val playedIndex = remember(episodes, nav.played) { nav.played?.let { url -> episodes.indexOfFirst { it.url == url } } ?: -1 }
     val episodeTarget = playedIndex.coerceAtLeast(0)
+    val seasonFocus = seasonMemory.requester(seasons.indexOf(season).coerceAtLeast(0))
+    val episodeFocus = episodeMemory.requester(episodeTarget)
     val episodeState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = episodeTarget)
     LaunchedEffect(Unit) {
         if (playedIndex >= 0) episodeFocus.requestWhenReady() else seasonFocus.requestWhenReady()
@@ -1366,13 +1373,14 @@ private fun ShowDetail(
             Badges(tags.badges)
             Description(show, maxLines = 4) { ContentInfo.seriesPlot(show.episodes.firstOrNull()?.url, show.title) }
             LazyRow(
-                Modifier.depthFocus().confineFocus(),
+                Modifier.depthFocus().returnSection(seasonMemory),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(vertical = 6.dp),
             ) {
                 lastWatched?.let { (episode, point) ->
                     item {
                         GlassButton(
+                            modifier = Modifier.returnItem(seasonMemory, RESUME_ID),
                             text = stringResource(R.string.action_resume_episode, episode.season, episode.episode, formatTime(WatchProgress.resumeFrom(point))),
                             onClick = {
                                 val list = show.episodesOf(episode.season)
@@ -1383,28 +1391,27 @@ private fun ShowDetail(
                         )
                     }
                 }
-                item { StarButton(key in favorites, { onToggleFavorite(key) }) }
+                item { StarButton(key in favorites, { onToggleFavorite(key) }, Modifier.returnItem(seasonMemory, STAR_ID)) }
                 itemsIndexed(seasons) { index, number ->
                     GlassButton(
+                        modifier = Modifier.returnItem(seasonMemory, index),
                         text = if (number == 0) stringResource(R.string.season_none) else stringResource(R.string.season_n, number),
                         onClick = { onNav { it.copy(season = number) }; enterEpisodes = true },
                         onFocused = { if (number != season) onNav { it.copy(season = number) } },
                         emphasized = number == season,
-                        focusRequester = if (index == 0) seasonFocus else null,
                     )
                 }
             }
             LazyColumn(
-                Modifier.fillMaxSize().onFocusChanged { episodesFocused = it.hasFocus }.depthFocus().confineFocus(),
+                Modifier.fillMaxSize().onFocusChanged { episodesFocused = it.hasFocus }.depthFocus().returnSection(episodeMemory),
                 state = episodeState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 itemsIndexed(episodes, key = { index, _ -> index }) { index, episode ->
                     val missing = FavoriteKey.of(episode) in unavailable
                     GlassSurface(
-                        focusRequester = if (index == episodeTarget) episodeFocus else null,
                         onClick = { onNav { it.copy(episodeUrl = episode.url, season = season, resume = false) } },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().returnItem(episodeMemory, index),
                         focusScale = 1.02f,
                     ) {
                         Row(
@@ -1431,6 +1438,10 @@ private fun ShowDetail(
         }
     }
 }
+
+/** Ids of the season row's two buttons before the seasons (the seasons use their own index). */
+private const val RESUME_ID = -2
+private const val STAR_ID = -1
 
 // --- favourites -------------------------------------------------------------------------------------------------
 
@@ -1463,7 +1474,6 @@ private fun FavoritesView(
     }
     val playable = remember(entries) { entries.mapNotNull { it.channel } }
     val groupBadges = remember(entries) { VariantTags.distinctGroupBadges(entries.map { it.group }) }
-    val firstFocus = remember { FocusRequester() }
     // The cursor goes to the favourite watched or opened last; when a favourite is removed, to the row that takes
     // its place, so it never disappears from the page (and Back keeps working from there).
     var focusedIndex by remember { mutableIntStateOf(-1) }
@@ -1478,9 +1488,11 @@ private fun FavoritesView(
         }
     }
     val listState = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = target)
-    LaunchedEffect(entries.size) { firstFocus.requestWhenReady() }
+    // Up to the tabs and down again lands on the favourite it left.
+    val rowMemory = remember(listState) { ReturnFocus(visible = { id -> listState.layoutInfo.visibleItemsInfo.any { it.index == id } }) }
+    LaunchedEffect(entries.size) { rowMemory.requester(target).requestWhenReady() }
     val unavailable = LocalReachability.current.unavailable
-    LazyColumn(Modifier.fillMaxSize(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize().returnSection(rowMemory), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(entries) { index, entry ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             GlassSurface(
@@ -1497,8 +1509,7 @@ private fun FavoritesView(
                         }
                     }
                 },
-                modifier = Modifier.weight(1f),
-                focusRequester = if (index == target) firstFocus else null,
+                modifier = Modifier.weight(1f).returnItem(rowMemory, index),
                 onFocused = { focusedIndex = index },
                 focusScale = 1.02f,
             ) {
