@@ -45,10 +45,8 @@ class BlackHoleTimelineTest {
     }
 
     @Test
-    fun everyPieceIsSwallowedBeforeTheHoleCloses() {
-        val last = BlackHoleTimeline.SWALLOW_START + BlackHoleTimeline.SWALLOW_SPREAD + BlackHoleTimeline.PIECE_MAX
-        assertTrue(last <= BlackHoleTimeline.SHRINK_START + 1e-4f)
-        assertEquals(1f, BlackHoleTimeline.fall(last, BlackHoleTimeline.SWALLOW_START + BlackHoleTimeline.SWALLOW_SPREAD, BlackHoleTimeline.PIECE_MAX), 1e-6f)
+    fun everythingIsPulledInBeforeTheHoleCloses() {
+        assertTrue(BlackHoleTimeline.WARP_END <= BlackHoleTimeline.SHRINK_START + 1e-4f)
     }
 
     @Test
