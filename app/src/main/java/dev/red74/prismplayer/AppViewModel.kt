@@ -193,6 +193,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _highlights = MutableStateFlow(HighlightsData.Empty)
     val highlights: StateFlow<HighlightsData> = _highlights.asStateFlow()
 
+    /** The guide is being downloaded and read: the featured page shows placeholders instead of "nothing". */
+    private val _guideLoading = MutableStateFlow(false)
+    val highlightsLoading: StateFlow<Boolean> = combine(_guideLoading, _highlights) { loading, data -> loading && data.isEmpty }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     private val _favorites = MutableStateFlow(container.settings.favorites)
     val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
 
@@ -422,6 +427,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _highlights.value = HighlightsData.Empty
         _library.value = LibraryState(playlistId = id, playlistName = playlist.name, loading = true)
         retireCatalogs()
+        // The featured events of the last opening come first of all, before the list itself is opened.
+        showSavedHighlights(id)
         loadJob = viewModelScope.launch {
             // The list database opens at once (only group names and counts are read); the network is used only
             // to refresh it when it is old (or on request).
@@ -430,7 +437,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (stored != null) {
                     openCatalogs += stored
                     _library.update { it.copy(loading = false, error = null, catalog = stored) }
-                    showSavedHighlights(playlist.id, stored)
                     loadGuide(playlist, stored)
                     val age = container.catalogStore.ageMs(id)
                     if (stored.outdated || (age != null && age > COPY_FRESH_MS)) refreshInBackground(playlist, stored.totalEntries, swap = stored.outdated)
@@ -450,7 +456,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val catalog = buildCatalog(parsed)
             _library.update { it.copy(loading = false, error = null, catalog = catalog) }
             recordStatus(id, PlaylistStatus.OK, parsed.count, null, null)
-            showSavedHighlights(playlist.id, catalog)
             loadGuide(playlist, catalog)
             saveDatabase(playlist, catalog)
         }
@@ -514,20 +519,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * The featured events of the last opening, shown at once (the guide is downloaded again in the background and
-     * replaces them silently). Channels are found again by their hashed keys; what is over or gone is dropped.
+     * replaces them silently). They are read from their own small file: the list is not touched, so this takes a
+     * few milliseconds even on a very big list.
      */
-    private fun showSavedHighlights(id: String, catalog: Catalog) {
+    private fun showSavedHighlights(id: String) {
         viewModelScope.launch {
             val saved = withContext(Dispatchers.IO) {
-                val text = container.highlightsStore.read(id) ?: return@withContext null
-                val wanted = HashSet<String>()
-                for (line in text.lineSequence().drop(1)) line.split('\t', limit = 7).getOrNull(5)?.split(',')?.let { wanted += it }
-                val found = HashMap<String, Channel>()
-                for (channel in catalog.allLive()) {
-                    val key = FavoriteKey.of(channel)
-                    if (key in wanted) found.putIfAbsent(key, channel)
-                }
-                HighlightsCache.decode(text, System.currentTimeMillis()) { found[it] }
+                container.highlightsStore.read(id)?.let { HighlightsCache.decode(it, System.currentTimeMillis()) }
             } ?: return@launch
             if (!saved.isEmpty && _library.value.playlistId == id && _highlights.value.isEmpty) _highlights.value = saved
         }
@@ -537,12 +535,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadGuide(playlist: SavedPlaylist, catalog: Catalog) {
         val url = EpgUrl.derive(playlist.url, catalog.epgUrl) ?: return
         epgJob?.cancel()
+        _guideLoading.value = true
         epgJob = viewModelScope.launch {
+            try {
+                readGuide(playlist, catalog, url)
+            } finally {
+                // A newer guide job (another list) keeps the flag; only the last one turns it off.
+                if (epgJob == currentCoroutineContext()[Job] || epgJob?.isActive != true) _guideLoading.value = false
+            }
+        }
+    }
+
+    private suspend fun readGuide(playlist: SavedPlaylist, catalog: Catalog, url: String) {
+        run {
             val job = currentCoroutineContext()[Job]
             val ids = HashSet<String>()
             val names = HashSet<String>()
+            // Every live channel is read (and unsealed) once, for the guide and for the featured events.
+            val live = withContext(Dispatchers.IO) { catalog.allLive() }
             withContext(Dispatchers.IO) {
-                for (channel in catalog.allLive()) {
+                for (channel in live) {
                     channel.tvgId?.lowercase()?.let(ids::add)
                     EpgData.normalize(channel.tvgName)?.let(names::add)
                     EpgData.normalize(channel.name)?.let(names::add)
@@ -562,11 +574,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     keepGoing = { job?.isActive != false },
                 )
             }
-            val guide = result.getOrNull() ?: return@launch
+            val guide = result.getOrNull() ?: return
             _epg.value = guide
             // The featured events are worked out here, once, off the main thread: opening the page costs nothing.
             val featured = runCatching {
-                withContext(Dispatchers.IO) { Highlights.build(guide, catalog.allLive(), System.currentTimeMillis()) }
+                withContext(Dispatchers.IO) { Highlights.build(guide, live, System.currentTimeMillis()) }
             }.getOrNull()
             if (featured != null && job?.isActive != false) {
                 _highlights.value = featured

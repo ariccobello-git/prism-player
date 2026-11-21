@@ -99,7 +99,9 @@ fun HighlightsView(
             (if (seriesGroups.isNotEmpty()) listOf(HighlightTab.Series) else emptyList())
     }
     if (tabs.isEmpty()) {
-        PrismText(text = stringResource(R.string.highlights_empty), size = 20.sp, color = PrismColors.TextSecondary)
+        // Still looking for the events (the guide is being read): placeholders, not an "empty" message.
+        if (LocalHighlightsLoading.current) HighlightsSkeleton()
+        else PrismText(text = stringResource(R.string.highlights_empty), size = 20.sp, color = PrismColors.TextSecondary)
         return
     }
     val tabIndex = nav.highlightKind.coerceIn(0, tabs.size - 1)

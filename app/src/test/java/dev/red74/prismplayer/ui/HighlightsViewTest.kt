@@ -134,6 +134,18 @@ class HighlightsViewTest {
     }
 
     @Test
+    fun whileTheGuideLoadsPlaceholdersShowInsteadOfAnEmptyMessage() {
+        rule.setContent {
+            CompositionLocalProvider(LocalHighlights provides HighlightsData.Empty, LocalHighlightsLoading provides true) {
+                HighlightsView(nav = nav, onNav = { change -> nav = change(nav) }, onPlay = { _, _, _ -> })
+            }
+        }
+        rule.onNodeWithTag("skeleton").assertIsDisplayed()
+        rule.onNodeWithText("Looking for the featured events…").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithTextCount("No featured events for now. The guide may still be loading, or your list has no guide for the next 36 hours."))
+    }
+
+    @Test
     fun customizeOpensTheEditorAndSavesTheChoice() {
         show()
         rule.onNodeWithText("Follow teams").performClick()
