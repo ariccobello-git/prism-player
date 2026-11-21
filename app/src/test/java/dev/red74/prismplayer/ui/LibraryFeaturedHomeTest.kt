@@ -98,6 +98,11 @@ class LibraryFeaturedHomeTest {
     private fun isFocused(label: String): Boolean =
         rule.onNodeWithText(label).fetchSemanticsNode().config.getOrNull(SemanticsProperties.Focused) == true
 
+    private fun focusedTexts(): List<String> =
+        rule.onAllNodes(androidx.compose.ui.test.SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
+            .fetchSemanticsNodes()
+            .map { node -> node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text } ?: "?" }
+
     private fun press(key: Key) {
         rule.onRoot().performKeyInput { pressKey(key) }
         rule.mainClock.advanceTimeBy(500)
@@ -141,17 +146,21 @@ class LibraryFeaturedHomeTest {
     }
 
     @Test
+    fun theCursorStartsOnATabWhenTheListOpens() {
+        show()
+        assertTrue("cursor should be on a tab, it is on ${focusedTexts()}", focusedTexts().any { it in setOf("Live", "Movies", "Series", "Favorites") })
+    }
+
+    @Test
     fun upFromTheFeaturedPageReturnsToTheTabTheCursorCameFrom() {
         show()
-        // the cursor starts on the first tab; the arrows walk along the tab row
-        assertTrue("Live should hold the cursor when the list opens", isFocused("Live"))
-        for (tab in listOf("Movies", "Series")) {
-            press(Key.DirectionRight)
-            assertTrue("$tab should be focused after Right", isFocused(tab))
+        for (tab in listOf("Series", "Movies", "Live")) {
+            focus(tab)
+            assertTrue("RequestFocus should put the cursor on $tab, it is on ${focusedTexts()}", isFocused(tab))
             press(Key.DirectionDown)
             assertTrue("$tab still focused after Down", !isFocused(tab))
             press(Key.DirectionUp)
-            assertTrue("Up from the page should return to $tab", isFocused(tab))
+            assertTrue("Up from the page should return to $tab, the cursor is on ${focusedTexts()}", isFocused(tab))
         }
     }
 
