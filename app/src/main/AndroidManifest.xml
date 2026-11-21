@@ -8,6 +8,11 @@
          Android's own installer, which asks for confirmation. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Reminders for programmes: a notification a few minutes before one starts (Android 13 and later ask for it),
+         and the alarms are set again after the device restarts. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <!-- Android TV / Google TV: remote-controlled, no touchscreen required. -->
     <uses-feature
         android:name="android.hardware.touchscreen"
@@ -52,6 +57,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".reminders.ReminderReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".reminders.ReminderBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Lets Android's installer read the downloaded update (and nothing else) from the app's cache. -->
         <provider

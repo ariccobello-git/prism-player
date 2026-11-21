@@ -199,8 +199,8 @@ object StreamConnections {
 /**
  * The identity (User-Agent) streams are asked with. Some panels serve part of their channels (often the HD and
  * FHD ones, from other servers) only to identities they know, and answer 403 or 404 to the others. The full-screen
- * player tries them in turn when a channel answers with an HTTP error, and the one that works is kept for the
- * rest of the session (previews use it too).
+ * player tries them in turn when a channel answers with an HTTP error (see [dev.red74.prismplayer.data.StreamFallback]),
+ * and the one that works is kept for the rest of the session (previews use it too).
  */
 object StreamIdentity {
     /** null is the platform's own identity, which worked for most channels so far. */
@@ -211,11 +211,6 @@ object StreamIdentity {
     /** What the full-screen player is using right now. */
     @Volatile var current: String? = null
 
-    /**
-     * Identity of each try of one channel: the usual one twice (the second time a moment later, when a connection
-     * still open from the preview has closed), then the others.
-     */
-    fun plan(): List<String?> = listOf(preferred, preferred) + CANDIDATES.filter { it != preferred }
 }
 
 /** Upper limit for the preview's video when the stream offers a choice (HLS/DASH variants). */

@@ -107,6 +107,9 @@ private val LocalReachability = androidx.compose.runtime.compositionLocalOf { Re
 /** The favourites already found by the view model (null while the first search runs). */
 private val LocalFavoriteList = androidx.compose.runtime.compositionLocalOf<dev.red74.prismplayer.data.FavoriteList?> { null }
 
+/** Opens the page that arranges one live channel (hide it, its group, my groups); null where that does not apply. */
+private val LocalOrganize = androidx.compose.runtime.compositionLocalOf<((Channel) -> Unit)?> { null }
+
 private const val UNAVAILABLE_SIGN = "⊘"
 private const val UNAVAILABLE_ALPHA = 0.45f
 
@@ -125,6 +128,10 @@ fun LibraryScreen(
     onPreviewWorked: (Channel) -> Unit = {},
     favoriteList: dev.red74.prismplayer.data.FavoriteList? = null,
     highlights: dev.red74.prismplayer.data.HighlightsData = dev.red74.prismplayer.data.HighlightsData.Empty,
+    channelPrefs: dev.red74.prismplayer.data.ChannelPrefs = dev.red74.prismplayer.data.ChannelPrefs(),
+    onPrefs: PrefsChange = {},
+    onManage: () -> Unit = {},
+    onSearchAll: () -> Unit = {},
 ) {
     val reachability = remember(unavailable, onPreviewWorked) { Reachability(unavailable, onPreviewWorked) }
     androidx.compose.runtime.CompositionLocalProvider(
@@ -132,7 +139,7 @@ fun LibraryScreen(
         LocalFavoriteList provides favoriteList,
         LocalHighlights provides highlights,
     ) {
-        LibraryContent(state, nav, epg, favorites, onNav, onPlay, onToggleFavorite, onRetry, onBack)
+        LibraryContent(state, nav, epg, favorites, onNav, onPlay, onToggleFavorite, onRetry, onBack, channelPrefs, onPrefs, onManage, onSearchAll)
     }
 }
 
@@ -147,8 +154,14 @@ private fun LibraryContent(
     onToggleFavorite: (String) -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    channelPrefs: dev.red74.prismplayer.data.ChannelPrefs,
+    onPrefs: PrefsChange,
+    onManage: () -> Unit,
+    onSearchAll: () -> Unit,
 ) {
     val retryFocus = remember { FocusRequester() }
+    /** The live channel whose page "Organize" is open: it takes the place of the list until Back. */
+    var organizing by remember { mutableStateOf<Channel?>(null) }
     // The tab row remembers the tab the cursor was on last: going back up from the content lands on the tab it came
     // from. With the featured page showing (no tab selected) the cursor starts on the first tab.
     val tabMemory = remember { ReturnFocus(initial = LibraryTab.LIVE.ordinal) }
@@ -231,6 +244,13 @@ private fun LibraryContent(
         onNav { it.copy(episodeUrl = null, played = it.episodeUrl, resume = true) }
     }
 
+    // Declared last, so it is the first to get Back: the page that arranges a channel closes before anything else.
+    BackHandler(enabled = organizing != null) {
+        UiSounds.play(UiSounds.Kind.BACK)
+        organizing = null
+        onNav { it.copy(resume = true) }
+    }
+
     PrismBackground {
         GlassPanel(
             Modifier
@@ -260,7 +280,7 @@ private fun LibraryContent(
                         size = 30.sp, weight = FontWeight.Bold, maxLines = 1,
                     )
                 }
-                if (!state.loading && state.error == null) TopBar(nav, onNav, tabMemory)
+                if (!state.loading && state.error == null && organizing == null) TopBar(nav, onNav, tabMemory, onSearchAll)
                 }
 
                 when {
@@ -292,8 +312,30 @@ private fun LibraryContent(
                                 color = PrismColors.Warn,
                             )
                         }
-                        Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }.returnSection(androidx.compose.ui.focus.FocusDirection.Up to tabMemory).depthFocus()) {
-                            LibraryBody(state.catalog, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
+                        val organized = organizing
+                        if (organized != null) {
+                            OrganizePanel(
+                                channel = organized,
+                                prefs = channelPrefs,
+                                onChange = onPrefs,
+                                onHidden = { groupHidden ->
+                                    organizing = null
+                                    // A hidden group leaves the group list: the cursor goes back to the groups.
+                                    onNav {
+                                        if (groupHidden) it.copy(level = 0, category = 0, sub = 0, itemIndex = 0, resume = true)
+                                        else it.copy(resume = true)
+                                    }
+                                },
+                                onManage = { organizing = null; onManage() },
+                                onClose = {
+                                    organizing = null
+                                    onNav { it.copy(resume = true) }
+                                },
+                            )
+                        } else Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }.returnSection(androidx.compose.ui.focus.FocusDirection.Up to tabMemory).depthFocus()) {
+                            androidx.compose.runtime.CompositionLocalProvider(LocalOrganize provides { channel -> organizing = channel }) {
+                                LibraryBody(state.catalog, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
+                            }
                         }
                     }
                 }
@@ -303,7 +345,7 @@ private fun LibraryContent(
 }
 
 @Composable
-private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus) {
+private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus, onSearchAll: () -> Unit) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -335,6 +377,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus) {
                 modifier = Modifier.returnItem(tabMemory, tab.ordinal),
             )
         }
+        GlassButton(text = "🔍", onClick = onSearchAll, subtitle = null, modifier = Modifier.returnItem(tabMemory, SEARCH_ALL_ID))
         GlassTextField(
             value = nav.query,
             onValueChange = { text ->
@@ -347,6 +390,9 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus) {
         )
     }
 }
+
+/** Id of the "search everywhere" button in the tab row's cursor memory (the tabs use their own numbers). */
+private const val SEARCH_ALL_ID = 100
 
 private data class Entry(val channel: Channel?, val show: Show?) {
     val title: String get() = channel?.name ?: show?.title.orEmpty()
@@ -848,6 +894,7 @@ private fun LiveView(
     var listFocused by remember { mutableStateOf(false) }
     SortBackHandler(sortFocus, listFocused)
     val unavailable = LocalReachability.current.unavailable
+    val organize = LocalOrganize.current
 
     LaunchedEffect(nav.resume) {
         if (nav.resume) {
@@ -880,6 +927,13 @@ private fun LiveView(
                     isFavorite = FavoriteKey.of(channel) in favorites,
                     unavailable = FavoriteKey.of(channel) in unavailable,
                     onToggleFavorite = { onToggleFavorite(FavoriteKey.of(channel)) },
+                    onOrganize = organize?.let { open ->
+                        {
+                            // The list is left for a moment: it comes back at this channel.
+                            onNav { it.copy(itemIndex = if (restorable) index else 0, played = channel.url) }
+                            open(channel)
+                        }
+                    },
                     focusModifier = Modifier.returnItem(rowMemory, index),
                     onFocused = { preview = channel },
                     onClick = {
@@ -912,6 +966,7 @@ private fun ChannelRow(
     isFavorite: Boolean,
     unavailable: Boolean,
     onToggleFavorite: () -> Unit,
+    onOrganize: (() -> Unit)?,
     focusModifier: Modifier,
     onFocused: () -> Unit,
     onClick: () -> Unit,
@@ -962,6 +1017,7 @@ private fun ChannelRow(
         }
     }
     StarButton(isFavorite, onToggleFavorite)
+    if (onOrganize != null) MoreButton(onOrganize)
     }
 }
 

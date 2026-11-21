@@ -44,8 +44,10 @@ class HighlightsViewTest {
     private val cinema = Channel("Sky Cinema Uno", "http://x/3", "Cinema", tvgId = "f1")
 
     private val soon = System.currentTimeMillis() + 3_600_000L
+    // The first card is on air (OK plays it); the others have not started (OK sets a reminder).
+    private val onAirStart = System.currentTimeMillis() - 600_000L
     private val sport = listOf(
-        HighlightEvent(HighlightKind.SPORT, "Roma - Lazio", null, soon, soon + 7_200_000L, 50, listOf(sky)),
+        HighlightEvent(HighlightKind.SPORT, "Roma - Lazio", null, onAirStart, onAirStart + 7_200_000L, 50, listOf(sky)),
         HighlightEvent(HighlightKind.SPORT, "Inter - Juventus", null, soon + 600_000L, soon + 7_800_000L, 40, listOf(dazn)),
     )
     private val film = listOf(HighlightEvent(HighlightKind.FILM, "Heat", null, soon, soon + 7_000_000L, 40, listOf(cinema)))

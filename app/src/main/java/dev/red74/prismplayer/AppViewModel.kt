@@ -7,6 +7,12 @@ import androidx.lifecycle.viewModelScope
 import dev.red74.prismplayer.data.AppUpdater
 import dev.red74.prismplayer.data.Availability
 import dev.red74.prismplayer.data.Catalog
+import dev.red74.prismplayer.data.CatchUp
+import dev.red74.prismplayer.data.ChannelPrefs
+import dev.red74.prismplayer.data.CustomizedCatalog
+import dev.red74.prismplayer.data.EpgIndex
+import dev.red74.prismplayer.data.SearchAllResult
+import dev.red74.prismplayer.data.UnifiedSearch
 import dev.red74.prismplayer.data.CatalogBuilder
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.EpgData
@@ -37,7 +43,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
@@ -148,6 +160,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _library = MutableStateFlow(LibraryState())
     val library: StateFlow<LibraryState> = _library.asStateFlow()
+
+    /** How the viewer arranged the live channels of the open list (hidden groups and channels, groups of their own). */
+    private val _channelPrefs = MutableStateFlow(ChannelPrefs())
+    val channelPrefs: StateFlow<ChannelPrefs> = _channelPrefs.asStateFlow()
+
+    /**
+     * The open list as the screens show it: [library] with its live groups arranged by [channelPrefs]. The arranged
+     * catalog is worked out off the main thread; until it is ready the plain one is shown.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val shownLibrary: StateFlow<LibraryState> = combine(_library, _channelPrefs) { library, prefs -> library to prefs }
+        .mapLatest { (library, prefs) ->
+            if (prefs.isEmpty || library.catalog.isEmpty) library
+            else library.copy(
+                catalog = runCatching { withContext(Dispatchers.IO) { CustomizedCatalog.of(library.catalog, prefs) } }.getOrDefault(library.catalog),
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, _library.value)
 
     private val _nav = MutableStateFlow(LibraryNav())
     val nav: StateFlow<LibraryNav> = _nav.asStateFlow()
@@ -283,6 +313,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 container.catalogStore.delete(id)
+                container.settings.setChannelPrefs(id, ChannelPrefs())
                 container.removedStore.deleteList(id)
                 _removedCount.value = container.removedStore.count()
             }
@@ -293,6 +324,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 epgJob?.cancel()
                 refreshJob?.cancel()
                 _library.value = LibraryState()
+                _channelPrefs.value = ChannelPrefs()
                 _epg.value = EpgData.Empty
                 _highlights.value = HighlightsData.Empty
                 retireCatalogs()
@@ -376,7 +408,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val playlist = store.find(id) ?: return
         ProviderHosts.noteUrl(playlist.url)
 
-        if (current.playlistId != id) _nav.value = LibraryNav()
+        if (current.playlistId != id) {
+            _nav.value = LibraryNav()
+            _channelPrefs.value = container.settings.channelPrefs(id)
+        }
         loadJob?.cancel()
         epgJob?.cancel()
         // The old list's quiet refresh would keep the one line to the panel busy while this list waits for it.
@@ -509,7 +544,57 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 withContext(Dispatchers.IO) { Highlights.build(guide, catalog.allLive(), System.currentTimeMillis()) }
             }.getOrNull()
             if (featured != null && job?.isActive != false) _highlights.value = featured
+            readPanelClock(catalog)
         }
+    }
+
+    /**
+     * Catch-up asks the panel for a programme in the panel's own clock, which can differ from UTC. It is read once
+     * per panel, here, after the guide (the one line to the panel is busy with one request at a time and a stream
+     * never runs with it); until it is known the TV's own time zone is assumed.
+     */
+    private suspend fun readPanelClock(catalog: Catalog) {
+        val sample = withContext(Dispatchers.IO) { catalog.live.firstOrNull()?.items?.firstOrNull()?.url } ?: return
+        if (CatchUp.knowsOffset(sample)) return
+        val address = CatchUp.clockAddress(sample) ?: return
+        val offset = container.fetcher.fetchBytes(address) { input ->
+            CatchUp.serverOffset(java.io.InputStreamReader(input, Charsets.UTF_8))
+        }.getOrNull() ?: return
+        CatchUp.setOffset(sample, offset)
+    }
+
+    // --- the viewer's arrangement of live channels, the one search --------------------------------------------
+
+    fun updateChannelPrefs(change: (ChannelPrefs) -> ChannelPrefs) {
+        val id = _library.value.playlistId ?: return
+        val next = change(_channelPrefs.value)
+        if (next == _channelPrefs.value) return
+        _channelPrefs.value = next
+        container.settings.setChannelPrefs(id, next)
+    }
+
+    private val indexLock = Mutex()
+    private var indexedGuide: EpgData? = null
+    private var indexedCatalog: Catalog? = null
+    private var searchIndex: EpgIndex = EpgIndex.Empty
+
+    /** The guide ready to be searched: built the first time a search needs it (never at start-up) and again when the guide or the list changes. */
+    private suspend fun epgIndex(catalog: Catalog, guide: EpgData): EpgIndex = indexLock.withLock {
+        if (indexedGuide === guide && indexedCatalog === catalog) return@withLock searchIndex
+        val built = EpgIndex.build(guide, catalog.allLive(), System.currentTimeMillis())
+        searchIndex = built
+        indexedGuide = guide
+        indexedCatalog = catalog
+        built
+    }
+
+    /** One search over live channels, films, series and programmes of the guide, off the main thread. */
+    suspend fun searchAll(query: String): SearchAllResult = withContext(Dispatchers.IO) {
+        val catalog = shownLibrary.value.catalog
+        if (catalog.isEmpty) return@withContext SearchAllResult.Empty
+        val guide = _epg.value
+        val ready = if (UnifiedSearch.words(query).sumOf { it.length } < UnifiedSearch.MIN_LENGTH) EpgIndex.Empty else epgIndex(catalog, guide)
+        UnifiedSearch.run(catalog, ready, query, System.currentTimeMillis())
     }
 
     private suspend fun recordStatus(id: String, status: PlaylistStatus, count: Int, error: LoadError?, http: Int?) {

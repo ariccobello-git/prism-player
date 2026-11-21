@@ -275,4 +275,42 @@
     <string name="frame_rate_title">Screen rate follows the video</string>
     <string name="frame_rate_on">On: smoother motion. The screen may go dark for a second when the rate changes. Press OK to turn off.</string>
     <string name="frame_rate_off">Off. Press OK to match the screen refresh rate to the video (smoother motion on films and live sport).</string>
+
+    <!-- Last channel, catch-up (from the start), reminders, one search, arranging channels -->
+    <string name="player_last_channel">Last channel</string>
+    <string name="catchup_from_start">From the start</string>
+    <string name="catchup_back_to_live">Back to live</string>
+    <string name="catchup_starting">Opening from the start…</string>
+    <string name="catchup_unavailable">Not available from the start on this channel</string>
+    <string name="catchup_watching">From the start: %1$s</string>
+    <string name="reminder_remind">🔔 Remind me</string>
+    <string name="reminder_active">🔔 Reminder set</string>
+    <string name="reminder_toast_on">I will remind you 5 minutes before it starts</string>
+    <string name="reminder_toast_off">Reminder removed</string>
+    <string name="reminder_in">Starts in %1$d min on %2$s</string>
+    <string name="reminder_now">Starting now on %1$s</string>
+    <string name="reminder_channel">Reminders</string>
+    <string name="reminder_banner_in">%1$s starts in %2$d min · %3$s</string>
+    <string name="reminder_banner_now">%1$s starts now · %2$s</string>
+    <string name="search_all">Search everywhere</string>
+    <string name="search_all_hint">Channel, film, series or programme</string>
+    <string name="search_all_channels">Channels</string>
+    <string name="search_all_movies">Films</string>
+    <string name="search_all_series">Series</string>
+    <string name="search_all_programmes">Programmes</string>
+    <string name="organize_title">Arrange this channel</string>
+    <string name="organize_hide_channel">Hide this channel</string>
+    <string name="organize_hide_group">Hide the group “%1$s”</string>
+    <string name="organize_add_to">Add to %1$s</string>
+    <string name="organize_remove_from">Remove from %1$s</string>
+    <string name="organize_group_name">New group (name)</string>
+    <string name="organize_create">Create group and add</string>
+    <string name="organize_manage">Hidden items and my groups</string>
+    <string name="manage_hidden_groups">Hidden groups</string>
+    <string name="manage_hidden_channels">Hidden channels</string>
+    <string name="manage_my_groups">My groups</string>
+    <string name="manage_show">Show again</string>
+    <string name="manage_delete">Delete group</string>
+    <string name="manage_empty">Nothing is hidden and there are no groups of your own yet.</string>
+    <string name="manage_channels_count">%1$d channels</string>
 </resources>

@@ -41,7 +41,17 @@ class AppSettings(context: Context) {
             prefs.edit().putLong(KEY_UPDATE_CHECK, value).apply()
         }
 
+    /** How the viewer arranged the live channels of one list (see [ChannelPrefs]): names and hashed keys only. */
+    fun channelPrefs(playlistId: String): ChannelPrefs = ChannelPrefs.decode(prefs.getString(KEY_CHANNEL_PREFS + playlistId, null))
+
+    fun setChannelPrefs(playlistId: String, value: ChannelPrefs) {
+        val editor = prefs.edit()
+        if (value.isEmpty) editor.remove(KEY_CHANNEL_PREFS + playlistId) else editor.putString(KEY_CHANNEL_PREFS + playlistId, value.encode())
+        editor.apply()
+    }
+
     private companion object {
+        const val KEY_CHANNEL_PREFS = "channel_prefs_"
         const val KEY_UPDATE_CHECK = "last_update_check"
         const val KEY_SHORTCUTS = "shortcuts"
 

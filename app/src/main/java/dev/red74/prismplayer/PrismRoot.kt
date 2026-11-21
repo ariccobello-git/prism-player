@@ -57,6 +57,8 @@ private sealed interface Screen {
     data object Removed : Screen
     data object VerifyLists : Screen
     data object Appearance : Screen
+    data object SearchAll : Screen
+    data object ManageChannels : Screen
     data object Exit : Screen
     data class Library(val playlistId: String) : Screen
     data object Player : Screen
@@ -126,7 +128,10 @@ private fun PrismNavigation(
     }
 
     val playlists by viewModel.playlists.collectAsStateWithLifecycle()
-    val library by viewModel.library.collectAsStateWithLifecycle()
+    // The open list as shown: its live groups arranged by the viewer (hidden ones left out, groups of their own first).
+    val library by viewModel.shownLibrary.collectAsStateWithLifecycle()
+    val channelPrefs by viewModel.channelPrefs.collectAsStateWithLifecycle()
+    val searchPage = remember { dev.red74.prismplayer.ui.SearchPage() }
     val nav by viewModel.nav.collectAsStateWithLifecycle()
     val epg by viewModel.epg.collectAsStateWithLifecycle()
     val highlights by viewModel.highlights.collectAsStateWithLifecycle()
@@ -317,9 +322,53 @@ private fun PrismNavigation(
                     unavailable = unavailable.keys,
                     onPreviewWorked = viewModel::playbackWorked,
                     favoriteList = favoriteList,
+                    channelPrefs = channelPrefs,
+                    onPrefs = viewModel::updateChannelPrefs,
+                    onManage = { push(Screen.ManageChannels) },
+                    onSearchAll = {
+                        searchPage.reset()
+                        push(Screen.SearchAll)
+                    },
                     onBack = ::pop,
                 )
             }
+
+            Screen.ManageChannels -> dev.red74.prismplayer.ui.ManageChannelsScreen(
+                prefs = channelPrefs,
+                onChange = viewModel::updateChannelPrefs,
+                onBack = ::pop,
+            )
+
+            Screen.SearchAll -> dev.red74.prismplayer.ui.SearchAllScreen(
+                page = searchPage,
+                search = viewModel::searchAll,
+                dataKey = epg to library.catalog,
+                onPlay = { items, index ->
+                    viewModel.play(items, index, false)
+                    push(Screen.Player)
+                },
+                onOpenMovie = { movie ->
+                    viewModel.updateNav {
+                        it.copy(
+                            tab = LibraryTab.MOVIES, category = 0, level = 0, sub = 0, itemIndex = 0, query = "",
+                            movieUrl = movie.url, showTitle = null, showGroup = null, episodeUrl = null, season = -1,
+                            resume = true, origin = null, returnKey = null,
+                        )
+                    }
+                    pop()
+                },
+                onOpenShow = { show ->
+                    viewModel.updateNav {
+                        it.copy(
+                            tab = LibraryTab.SERIES, category = 0, level = 0, sub = 0, itemIndex = 0, query = "",
+                            movieUrl = null, showTitle = show.title, showGroup = show.group, episodeUrl = null, season = -1,
+                            resume = true, origin = null, returnKey = null,
+                        )
+                    }
+                    pop()
+                },
+                onBack = ::pop,
+            )
 
             Screen.Player -> {
                 if (queue.items.isEmpty()) {
@@ -337,6 +386,7 @@ private fun PrismNavigation(
                             viewModel.playbackFailed(channel, trouble, afterRetry, preview = false)
                         },
                         nowTitle = { channel -> epg.nowNext(channel, System.currentTimeMillis()).now?.title },
+                        nowProgramme = { channel -> epg.nowNext(channel, System.currentTimeMillis()).now },
                     )
                 }
             }
@@ -344,6 +394,8 @@ private fun PrismNavigation(
         }
     }
     idleSeconds?.let { IdleCountdown(it) }
+    // A programme the viewer asked to be reminded of is about to start: a notice over whatever is on screen.
+    dev.red74.prismplayer.ui.ReminderBanner(onShown = { UiSounds.play(UiSounds.Kind.SELECT) })
     }
 }
 
@@ -359,6 +411,8 @@ private fun screenKey(screen: Screen): String = when (screen) {
     Screen.Removed -> "removed"
     Screen.VerifyLists -> "verify_lists"
     Screen.Appearance -> "appearance"
+    Screen.SearchAll -> "search_all"
+    Screen.ManageChannels -> "manage_channels"
     Screen.Exit -> "exit"
     is Screen.Library -> "library"
     Screen.Player -> "player"

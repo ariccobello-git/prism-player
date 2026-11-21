@@ -170,6 +170,18 @@ private fun EventRows(
     val target = remember(rows, played) { locate(rows, played) }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = target.first)
     val cardFocus = remember { FocusRequester() }
+    // A programme that has not started: OK sets or removes a reminder (a notification a few minutes before it begins).
+    val toggleReminder = rememberReminderToggle()
+    val reminders = dev.red74.prismplayer.reminders.ReminderStore.current
+    var notice by remember { mutableStateOf<String?>(null) }
+    val noticeOn = stringResource(R.string.reminder_toast_on)
+    val noticeOff = stringResource(R.string.reminder_toast_off)
+    LaunchedEffect(notice) {
+        if (notice != null) {
+            delay(2_500)
+            notice = null
+        }
+    }
 
     LaunchedEffect(nav.resume) {
         if (nav.resume && rows.isNotEmpty()) {
@@ -182,6 +194,8 @@ private fun EventRows(
         PrismText(text = stringResource(R.string.search_none), size = 20.sp, color = PrismColors.TextSecondary)
         return
     }
+    // The notice floats over the rows: nothing moves when it appears, so the cursor never shifts.
+    Box(Modifier.fillMaxSize()) {
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
@@ -198,20 +212,33 @@ private fun EventRows(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     itemsIndexed(row.events, key = { _, event -> event.title + event.startMs }) { column, event ->
+                        val onAir = event.isLive(nowMs)
+                        val reminder = remember(event) { reminderFor(event.title, event.startMs, event.channels.first()) }
                         EventCard(
                             event = event,
-                            live = event.isLive(nowMs),
+                            live = onAir,
                             liked = row.forYou,
+                            reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                             focusRequester = if (rowIndex == target.first && column == target.second) cardFocus else null,
                             onClick = {
-                                onNav { it.copy(resume = true) }
-                                onPlay(event.channels, 0, false)
+                                if (onAir) {
+                                    onNav { it.copy(resume = true) }
+                                    onPlay(event.channels, 0, false)
+                                } else {
+                                    notice = if (toggleReminder(reminder)) noticeOn else noticeOff
+                                }
                             },
                         )
                     }
                 }
             }
         }
+    }
+    notice?.let {
+        GlassPanel(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp), cornerRadius = 18.dp) {
+            PrismText(text = it, size = 18.sp, weight = FontWeight.SemiBold, color = PrismColors.Accent, modifier = Modifier.padding(horizontal = 22.dp, vertical = 10.dp))
+        }
+    }
     }
 }
 
@@ -366,7 +393,7 @@ internal fun locate(rows: List<HighlightRow>, played: String?): Pair<Int, Int> {
 }
 
 @Composable
-private fun EventCard(event: HighlightEvent, live: Boolean, liked: Boolean, focusRequester: FocusRequester?, onClick: () -> Unit) {
+private fun EventCard(event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?, onClick: () -> Unit) {
     val channel = event.channels.first().name
     val more = event.channels.size - 1
     GlassSurface(
@@ -383,9 +410,13 @@ private fun EventCard(event: HighlightEvent, live: Boolean, liked: Boolean, focu
             }
             PrismText(text = event.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 2)
             PrismText(
-                text = "▶ " + channel + if (more > 0) "  +$more" else "",
+                text = when (reminder) {
+                    null -> "▶ " + channel + if (more > 0) "  +$more" else ""
+                    true -> stringResource(R.string.reminder_active)
+                    false -> stringResource(R.string.reminder_remind)
+                },
                 size = 16.sp,
-                color = PrismColors.TextSecondary,
+                color = if (reminder == true) PrismColors.Accent else PrismColors.TextSecondary,
                 maxLines = 1,
             )
         }
