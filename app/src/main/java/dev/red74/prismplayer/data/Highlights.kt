@@ -133,9 +133,13 @@ object Highlights {
         return if (forYou.isEmpty()) main else listOf(HighlightRow(forYou.any { it.isLive(nowMs) }, 0, forYou, forYou = true)) + main
     }
 
+    /**
+     * Sport: only what the viewer follows (sports, teams) is "for you"; the groups watched most say nothing about a
+     * team, and on a sports list they would make every match "for you". Films and shows: the groups watched most.
+     */
     fun isForYou(event: HighlightEvent, prefs: SportPrefs, likedGroups: Set<String>): Boolean =
-        (event.kind == HighlightKind.SPORT && prefs.matches(event)) ||
-            (likedGroups.isNotEmpty() && event.channels.any { it.group != null && it.group in likedGroups })
+        if (event.kind == HighlightKind.SPORT) prefs.matches(event)
+        else likedGroups.isNotEmpty() && event.channels.any { it.group != null && it.group in likedGroups }
 
     // --- classification -------------------------------------------------------------------------------------
 

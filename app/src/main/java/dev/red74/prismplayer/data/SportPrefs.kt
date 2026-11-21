@@ -32,7 +32,7 @@ data class SportPrefs(val topics: Set<SportTopic> = emptySet(), val keywords: Li
     fun encode(): String = topics.joinToString(",") { it.name } + "\n" + keywords.joinToString("\n")
 
     companion object {
-        const val MAX_KEYWORDS = 8
+        const val MAX_KEYWORDS = 24
         const val MAX_LENGTH = 30
 
         fun decode(text: String?): SportPrefs {

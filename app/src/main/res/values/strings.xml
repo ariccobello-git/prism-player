@@ -263,9 +263,13 @@
     <string name="topic_hockey">Hockey</string>
     <string name="topic_olympics">Olympics</string>
     <string name="highlights_for_you">For you</string>
-    <string name="sport_prefs_button">Customize</string>
+    <string name="sport_prefs_button">Follow teams</string>
+    <string name="highlights_watch_on">Watch now · %1$s</string>
+    <string name="follow_sports">Sports</string>
+    <string name="follow_teams">Teams and competitions</string>
+    <string name="search_all_button">Search everywhere</string>
     <string name="sport_prefs_done">Done</string>
-    <string name="sport_prefs_hint">Pick the sports you follow and add teams or competitions (for example Roma or Formula 1).</string>
+    <string name="sport_prefs_hint">Tap a sport or a team to follow it (filled star). The For you row shows only what you follow.</string>
     <string name="sport_prefs_team">Team or competition</string>
     <string name="sport_prefs_add">Add</string>
     <string name="suggestions_movies">Films for you</string>
@@ -283,8 +287,8 @@
     <string name="catchup_starting">Opening from the start…</string>
     <string name="catchup_unavailable">Not available from the start on this channel</string>
     <string name="catchup_watching">From the start: %1$s</string>
-    <string name="reminder_remind">🔔 Remind me</string>
-    <string name="reminder_active">🔔 Reminder set</string>
+    <string name="reminder_remind">Remind me</string>
+    <string name="reminder_active">Reminder set</string>
     <string name="reminder_toast_on">I will remind you 5 minutes before it starts</string>
     <string name="reminder_toast_off">Reminder removed</string>
     <string name="reminder_in">Starts in %1$d min on %2$s</string>
@@ -313,4 +317,5 @@
     <string name="manage_delete">Delete group</string>
     <string name="manage_empty">Nothing is hidden and there are no groups of your own yet.</string>
     <string name="manage_channels_count">%1$d channels</string>
+    <string name="organize_channel">Arrange channel</string>
 </resources>

@@ -10,6 +10,8 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.red74.prismplayer.LibraryNav
@@ -141,8 +143,8 @@ class ChannelOrganizerTest {
         // Rai Due is hidden: only the first channel of the group is listed, with its own button
         rule.onNodeWithText("Rai Uno").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Rai Due").fetchSemanticsNodes().size)
-        assertEquals(1, rule.onAllNodesWithText("•••").fetchSemanticsNodes().size)
-        rule.onNodeWithText("•••").performClick()
+        assertEquals(1, rule.onAllNodesWithContentDescription("Arrange channel").fetchSemanticsNodes().size)
+        rule.onNodeWithContentDescription("Arrange channel").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Arrange this channel").assertIsDisplayed()
         assertTrue("the cursor should be on the first action, it is on ${focusedTexts()}", "Hide this channel" in focusedTexts())

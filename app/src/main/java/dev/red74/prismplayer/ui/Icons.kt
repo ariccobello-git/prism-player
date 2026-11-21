@@ -18,6 +18,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -114,7 +116,7 @@ fun StarButton(favorite: Boolean, onToggle: () -> Unit, modifier: Modifier = Mod
     )
     GlassSurface(
         onClick = onToggle,
-        modifier = modifier.size(52.dp),
+        modifier = modifier.size(52.dp).semantics { contentDescription = description },
         cornerRadius = 26.dp,
         contentPadding = PaddingValues(0.dp),
         focusScale = 1.12f,
@@ -149,19 +151,14 @@ fun StarButton(favorite: Boolean, onToggle: () -> Unit, modifier: Modifier = Mod
 /** The small round button next to a channel's star: arranges the channel (hide it, its group, groups of my own). */
 @Composable
 fun MoreButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val description = androidx.compose.ui.res.stringResource(dev.red74.prismplayer.R.string.organize_channel)
     GlassSurface(
         onClick = onClick,
-        modifier = modifier.size(52.dp),
+        modifier = modifier.size(52.dp).semantics { contentDescription = description },
         cornerRadius = 26.dp,
         contentPadding = PaddingValues(0.dp),
         focusScale = 1.12f,
     ) {
-        PrismText(
-            text = "•••",
-            size = 18.sp,
-            weight = FontWeight.Bold,
-            color = Color.White.copy(alpha = 0.55f),
-            modifier = Modifier.align(Alignment.Center),
-        )
+        LineIcon(LineIcon.MORE, Modifier.align(Alignment.Center), size = 28.dp, color = Color.White.copy(alpha = 0.6f))
     }
 }

@@ -263,9 +263,13 @@
     <string name="topic_hockey">Hockey</string>
     <string name="topic_olympics">Olimpiadi</string>
     <string name="highlights_for_you">Per te</string>
-    <string name="sport_prefs_button">Personalizza</string>
+    <string name="sport_prefs_button">Segui squadre</string>
+    <string name="highlights_watch_on">Guarda ora · %1$s</string>
+    <string name="follow_sports">Sport</string>
+    <string name="follow_teams">Squadre e competizioni</string>
+    <string name="search_all_button">Cerca ovunque</string>
     <string name="sport_prefs_done">Fatto</string>
-    <string name="sport_prefs_hint">Scegli gli sport che segui e aggiungi squadre o competizioni (per esempio Roma o Formula 1).</string>
+    <string name="sport_prefs_hint">Tocca uno sport o una squadra per seguirla (stella piena). La riga Per te mostra solo ciò che segui.</string>
     <string name="sport_prefs_team">Squadra o competizione</string>
     <string name="sport_prefs_add">Aggiungi</string>
     <string name="suggestions_movies">Film per te</string>
@@ -283,8 +287,8 @@
     <string name="catchup_starting">Apro dall\'inizio…</string>
     <string name="catchup_unavailable">Su questo canale non si può rivedere dall\'inizio</string>
     <string name="catchup_watching">Dall\'inizio: %1$s</string>
-    <string name="reminder_remind">🔔 Ricordami</string>
-    <string name="reminder_active">🔔 Promemoria attivo</string>
+    <string name="reminder_remind">Ricordami</string>
+    <string name="reminder_active">Promemoria attivo</string>
     <string name="reminder_toast_on">Ti avviso 5 minuti prima che inizi</string>
     <string name="reminder_toast_off">Promemoria tolto</string>
     <string name="reminder_in">Inizia tra %1$d min su %2$s</string>
@@ -313,4 +317,5 @@
     <string name="manage_delete">Elimina il gruppo</string>
     <string name="manage_empty">Non hai nascosto nulla e non hai ancora gruppi tuoi.</string>
     <string name="manage_channels_count">%1$d canali</string>
+    <string name="organize_channel">Organizza canale</string>
 </resources>
