@@ -153,15 +153,9 @@ private fun PrismNavigation(
             else -> UiSounds.play(UiSounds.Kind.SELECT)
         }
     }
-    // The automatic update check (at every start) starts a few seconds after the home page is on screen, so the
-    // opening stays as quick as before. When it finds a newer version, the "Update?" card opens over the home page.
+    // The update check runs at every start, during the opening (see AppViewModel). When it finds a newer version,
+    // the "Update?" card opens over the home page as soon as it appears.
     val onHome = current is Screen.Home
-    LaunchedEffect(onHome) {
-        if (onHome) {
-            kotlinx.coroutines.delay(AUTO_UPDATE_DELAY_MS)
-            viewModel.autoCheckForUpdate()
-        }
-    }
     LaunchedEffect(update is UpdateState.Available, onHome) {
         if (update is UpdateState.Available && onHome) push(Screen.AppUpdate)
     }
@@ -353,7 +347,6 @@ private fun PrismNavigation(
     }
 }
 
-private const val AUTO_UPDATE_DELAY_MS = 5_000L
 
 /** One name per kind of screen, for [dev.red74.prismplayer.ui.FocusMemory]. */
 private fun screenKey(screen: Screen): String = when (screen) {

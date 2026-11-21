@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.xmlpull.v1.XmlPullParser
 
 enum class Notice {
@@ -207,8 +208,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val openCatalogs = ArrayList<Catalog>()
 
     init {
+        // The update check starts with the app, while the opening plays, and the opening only ends once it has an
+        // answer (or after UPDATE_WAIT_MS), so a newer version is offered the moment the home page appears.
+        autoCheckForUpdate()
         viewModelScope.launch {
             runCatching { store.load() }
+            withTimeoutOrNull(UPDATE_WAIT_MS) { updateJob?.join() }
             _ready.value = true
         }
         // The favourites are looked up in the background as soon as a list is ready and after every change; a
@@ -629,8 +634,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * The automatic check, at every start: called a few seconds after the home page shows, so it never slows the
-     * start. It reads GitHub's list of releases and the engine's (audio and video codecs) latest version. A newer
+     * The automatic check, at every start: started with the app, while the opening plays (the opening waits for it,
+     * see [UPDATE_WAIT_MS]). It reads GitHub's list of releases and the engine's (audio and video codecs) latest version. A newer
      * release opens the update page (see PrismRoot), with the engine's news in it; a newer engine alone is said in a
      * short notice (it arrives with the next release); no news and no connection stay silent.
      */
@@ -724,5 +729,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         const val GUIDE_PAST_MS = 3L * 60 * 60 * 1000
         const val GUIDE_FUTURE_MS = Highlights.FUTURE_MS
         const val RETIRE_DELAY_MS = 30_000L
+
+        /** The opening waits at most this long for the update check (it plays 10 s, so the wait is normally nil). */
+        const val UPDATE_WAIT_MS = 7_000L
     }
 }
