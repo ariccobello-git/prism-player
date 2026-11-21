@@ -296,7 +296,6 @@
     <string name="reminder_channel">Reminders</string>
     <string name="reminder_banner_in">%1$s starts in %2$d min · %3$s</string>
     <string name="reminder_banner_now">%1$s starts now · %2$s</string>
-    <string name="search_all">Search everywhere</string>
     <string name="search_all_hint">Channel, film, series or programme</string>
     <string name="search_all_channels">Channels</string>
     <string name="search_all_movies">Films</string>

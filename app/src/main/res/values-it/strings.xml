@@ -296,7 +296,6 @@
     <string name="reminder_channel">Promemoria</string>
     <string name="reminder_banner_in">%1$s inizia tra %2$d min · %3$s</string>
     <string name="reminder_banner_now">%1$s inizia ora · %2$s</string>
-    <string name="search_all">Cerca ovunque</string>
     <string name="search_all_hint">Canale, film, serie o programma</string>
     <string name="search_all_channels">Canali</string>
     <string name="search_all_movies">Film</string>
