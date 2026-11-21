@@ -716,7 +716,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val GUIDE_PAST_MS = 3L * 60 * 60 * 1000
-        const val GUIDE_FUTURE_MS = 36L * 60 * 60 * 1000
+        const val GUIDE_FUTURE_MS = Highlights.FUTURE_MS
         const val RETIRE_DELAY_MS = 30_000L
     }
 }

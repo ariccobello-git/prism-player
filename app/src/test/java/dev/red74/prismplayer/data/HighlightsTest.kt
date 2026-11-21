@@ -1,6 +1,5 @@
 package dev.red74.prismplayer.data
 
-import dev.red74.prismplayer.AppViewModel
 import java.util.TimeZone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -25,11 +24,6 @@ class HighlightsTest {
 
     private fun build(guide: Map<String, List<Programme>>, vararg channels: Channel, zone: TimeZone = utc): HighlightsData =
         Highlights.build(EpgData(guide, emptyMap()), channels.toList(), now, zone)
-
-    @Test
-    fun windowMatchesTheDownloadWindow() {
-        assertEquals(AppViewModel.GUIDE_FUTURE_MS, Highlights.FUTURE_MS)
-    }
 
     @Test
     fun picksAMatchOnASportChannelAndNamesTheSport() {
