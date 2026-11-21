@@ -83,6 +83,7 @@ import dev.red74.prismplayer.player.TrackPolicy
 import dev.red74.prismplayer.player.DisplayRate
 import dev.red74.prismplayer.player.StallStats
 import dev.red74.prismplayer.player.createPlayer
+import dev.red74.prismplayer.player.playbackItem
 import dev.red74.prismplayer.player.AudioSafety
 import dev.red74.prismplayer.data.ProviderHosts
 import dev.red74.prismplayer.data.StreamHold
@@ -375,10 +376,10 @@ fun PlayerScreen(
         StreamConnections.awaitNone()
         val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
         if (resumeMs != null && resumeMs > 0) {
-            player.setMediaItem(MediaItem.fromUri(channels[index].url), resumeMs)
+            player.setMediaItem(playbackItem(channels[index].url), resumeMs)
             skipToast = context.getString(R.string.resume_toast, formatTime(resumeMs))
         } else {
-            player.setMediaItem(MediaItem.fromUri(channels[index].url))
+            player.setMediaItem(playbackItem(channels[index].url))
         }
         player.playWhenReady = true
         // Gone to the background meanwhile: it connects when the app comes back.
@@ -403,9 +404,9 @@ fun PlayerScreen(
         ProviderHosts.noteUrl(channels[index].url)
         val resumeMs = if (keepsProgress) WatchProgress.get(channels[index].url)?.let(WatchProgress::resumeFrom) else null
         if (resumeMs != null && resumeMs > 0) {
-            player.setMediaItem(MediaItem.fromUri(channels[index].url), resumeMs)
+            player.setMediaItem(playbackItem(channels[index].url), resumeMs)
         } else {
-            player.setMediaItem(MediaItem.fromUri(channels[index].url))
+            player.setMediaItem(playbackItem(channels[index].url))
         }
         player.prepare()
         player.playWhenReady = true

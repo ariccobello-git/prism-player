@@ -275,17 +275,13 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
         .setMediaSourceFactory(sources)
         .setLoadControl(loadControl)
         .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
+    // Live never changes speed to catch up with or build a cushion against the live edge: Media3's default
+    // (0.97x to 1.03x) made live look smooth but in slight slow motion, out of step with real time. Real time wins.
+    builder.setLivePlaybackSpeedControl(steadyLiveSpeed())
     if (preview) {
-        // The preview never changes speed to catch up with a live edge (that is what made it run fast with
-        // warbling sound) and, where the stream offers several qualities, takes the best one within SD: the window
-        // is a third of the screen wide. The very lowest variant is not forced any more: on some panels it is the
-        // one with fewer frames per second, which makes the preview look jerky.
-        builder.setLivePlaybackSpeedControl(
-            DefaultLivePlaybackSpeedControl.Builder()
-                .setFallbackMinPlaybackSpeed(1f)
-                .setFallbackMaxPlaybackSpeed(1f)
-                .build(),
-        )
+        // Where the stream offers several qualities, the preview takes the best one within SD: the window is a third
+        // of the screen wide. The very lowest variant is not forced any more: on some panels it is the one with
+        // fewer frames per second, which makes the preview look jerky.
         val selector = DefaultTrackSelector(context)
         selector.setParameters(
             selector.buildUponParameters()
@@ -297,8 +293,16 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
     return builder.build()
 }
 
-/** A preview item: a live stream's own speed range is overridden too, so nothing but 1x is ever used. */
-fun previewItem(url: String): MediaItem = MediaItem.Builder()
+/** Live playback speed control that never leaves 1x (the stream's own range is overridden by [playbackItem]). */
+fun steadyLiveSpeed(): DefaultLivePlaybackSpeedControl = DefaultLivePlaybackSpeedControl.Builder()
+    .setFallbackMinPlaybackSpeed(1f)
+    .setFallbackMaxPlaybackSpeed(1f)
+    .build()
+
+/** An item for a live stream or a film: a stream's own speed range is overridden, so nothing but 1x is ever used. */
+fun playbackItem(url: String): MediaItem = MediaItem.Builder()
     .setUri(url)
     .setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f).build())
     .build()
+
+fun previewItem(url: String): MediaItem = playbackItem(url)
