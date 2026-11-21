@@ -258,4 +258,17 @@
     <string name="topic_american_football">American football</string>
     <string name="topic_hockey">Hockey</string>
     <string name="topic_olympics">Olympics</string>
+    <string name="highlights_for_you">For you</string>
+    <string name="sport_prefs_button">Customize</string>
+    <string name="sport_prefs_done">Done</string>
+    <string name="sport_prefs_hint">Pick the sports you follow and add teams or competitions (for example Roma or Formula 1).</string>
+    <string name="sport_prefs_team">Team or competition</string>
+    <string name="sport_prefs_add">Add</string>
+    <string name="suggestions_movies">Films for you</string>
+    <string name="suggestions_series">Series for you</string>
+    <string name="suggestions_title">You might like</string>
+    <string name="suggestions_none">Nothing to suggest yet: watch a few films or series and they will show up here.</string>
+    <string name="frame_rate_title">Screen rate follows the video</string>
+    <string name="frame_rate_on">On: smoother motion. The screen may go dark for a second when the rate changes. Press OK to turn off.</string>
+    <string name="frame_rate_off">Off. Press OK to match the screen refresh rate to the video (smoother motion on films and live sport).</string>
 </resources>

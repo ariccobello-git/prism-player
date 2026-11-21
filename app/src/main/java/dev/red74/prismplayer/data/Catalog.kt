@@ -141,7 +141,9 @@ object FavoriteKey {
 
     fun ofUrl(url: String): String = hash(url)
 
-    fun ofShow(show: Show): String = hash("show|${show.group}|${show.title}")
+    fun ofShow(show: Show): String = ofShow(show.group, show.title)
+
+    fun ofShow(group: String?, title: String): String = hash("show|$group|$title")
 
     // Hundreds of thousands of keys are computed for a big list (favourites, unavailable marks): one digest per
     // thread and a hex table instead of a String.format per byte make that about ten times faster.

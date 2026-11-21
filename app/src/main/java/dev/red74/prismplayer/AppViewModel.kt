@@ -20,6 +20,7 @@ import dev.red74.prismplayer.data.ListChanges
 import dev.red74.prismplayer.data.ListDiff
 import dev.red74.prismplayer.data.CatalogDb
 import dev.red74.prismplayer.data.RemovedBatch
+import dev.red74.prismplayer.data.Taste
 import dev.red74.prismplayer.data.WatchProgress
 import dev.red74.prismplayer.data.HttpAgent
 import dev.red74.prismplayer.data.M3uParser
@@ -583,7 +584,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun play(items: List<Channel>, startIndex: Int, follow: Boolean = false) {
         val start = startIndex.coerceIn(0, (items.size - 1).coerceAtLeast(0))
         _queue.value = PlayQueue(items, start, follow)
-        items.getOrNull(start)?.let { first -> _nav.update { it.copy(played = first.url) } }
+        items.getOrNull(start)?.let { first ->
+            _nav.update { it.copy(played = first.url) }
+            Taste.record(first)
+        }
     }
 
     fun setLastIndex(index: Int) {

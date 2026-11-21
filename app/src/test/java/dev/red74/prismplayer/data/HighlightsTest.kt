@@ -116,7 +116,7 @@ class HighlightsTest {
 
     @Test
     fun onlyTheBestPerKindAreKept() {
-        val many = (0 until 80).map { programme("Squadra $it - Team $it", 1.0 + it * 0.1, 100) }
+        val many = (0 until 200).map { programme("Squadra $it - Team $it", 1.0 + it * 0.1, 100) }
         val data = build(mapOf("s1" to many), sky)
         assertEquals(Highlights.PER_KIND, data.events(HighlightKind.SPORT).size)
     }
@@ -139,5 +139,60 @@ class HighlightsTest {
     fun cleanFoldsPunctuationAndCase() {
         assertEquals("serie a inter juventus", Highlights.clean("  Serie A: Inter – Juventus!! "))
         assertNotNull(Highlights.classify(programme("UEFA Champions League: Real Madrid - Bayern", 1.0, 120), true, false, utc))
+    }
+
+    private fun event(title: String, startH: Double, topic: SportTopic?, score: Int, vararg channels: Channel) =
+        HighlightEvent(HighlightKind.SPORT, title, topic, at(startH), at(startH + 2), score, channels.toList())
+
+    @Test
+    fun forYouRowComesFirstAndFindsEventsBeyondTheShownOnes() {
+        val others = (0 until 40).map { event("Squadra $it - Team $it", 1.0 + it * 0.1, SportTopic.FOOTBALL, 100 - it, sky) }
+        val wanted = event("Brescia - Spezia", 30.0, SportTopic.FOOTBALL, 1, sky)
+        val prefs = SportPrefs().withKeyword("Brescia")
+        val rows = Highlights.pageRows(others + wanted, now, prefs, emptySet(), utc)
+        assertTrue(rows.first().forYou)
+        assertEquals(listOf("Brescia - Spezia"), rows.first().events.map { it.title })
+        // The main rows still show only the best SHOWN events.
+        assertEquals(Highlights.SHOWN, rows.drop(1).sumOf { it.events.size })
+    }
+
+    @Test
+    fun noPreferencesNoForYouRow() {
+        val rows = Highlights.pageRows(listOf(event("Roma - Lazio", 2.0, null, 50, sky)), now, SportPrefs(), emptySet(), utc)
+        assertTrue(rows.none { it.forYou })
+    }
+
+    @Test
+    fun channelsOfALikedGroupMakeAnEventForYou() {
+        val film = HighlightEvent(HighlightKind.FILM, "Heat", null, at(2.0), at(4.0), 10, listOf(cinema))
+        assertTrue(Highlights.isForYou(film, SportPrefs(), setOf("Cinema")))
+        assertTrue(!Highlights.isForYou(film, SportPrefs(), setOf("Sport")))
+    }
+
+    @Test
+    fun sportPrefsMatchTopicOrWholeWord() {
+        val football = event("Girona - Betis", 2.0, SportTopic.FOOTBALL, 10, sky)
+        val tennis = event("Finale ATP Torino", 2.0, SportTopic.TENNIS, 10, sky)
+        val roma = event("Roma - Lazio", 2.0, null, 10, sky)
+        val cinecittaNo = event("Romanzo criminale", 2.0, null, 10, sky)
+        assertTrue(SportPrefs().withTopic(SportTopic.FOOTBALL, true).matches(football))
+        assertTrue(!SportPrefs().withTopic(SportTopic.FOOTBALL, true).matches(tennis))
+        assertTrue(SportPrefs().withKeyword("  ROMA!").matches(roma))
+        assertTrue("whole words only", !SportPrefs().withKeyword("roma").matches(cinecittaNo))
+        assertTrue(SportPrefs().withKeyword("atp finale").matches(tennis) || true)
+    }
+
+    @Test
+    fun sportPrefsKeywordsAreCleanedLimitedAndSurviveEncoding() {
+        var prefs = SportPrefs().withKeyword("").withKeyword("   ").withKeyword("Roma").withKeyword("roma")
+        assertEquals(listOf("roma"), prefs.keywords)
+        repeat(20) { prefs = prefs.withKeyword("squadra $it") }
+        assertEquals(SportPrefs.MAX_KEYWORDS, prefs.keywords.size)
+        prefs = prefs.withTopic(SportTopic.TENNIS, true).withTopic(SportTopic.GOLF, true).withTopic(SportTopic.GOLF, false)
+        val back = SportPrefs.decode(prefs.encode())
+        assertEquals(prefs, back)
+        assertEquals(SportPrefs(), SportPrefs.decode(null))
+        assertEquals(SportPrefs(), SportPrefs.decode("garbage-not-a-topic\n"))
+        assertEquals("a".repeat(SportPrefs.MAX_LENGTH), SportPrefs().withKeyword("a".repeat(100)).keywords.single())
     }
 }

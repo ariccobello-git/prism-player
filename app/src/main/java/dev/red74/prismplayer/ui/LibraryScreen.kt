@@ -375,7 +375,7 @@ private fun LibraryBody(
             }
         }
 
-        LibraryTab.HIGHLIGHTS -> HighlightsView(nav, onNav, onPlay)
+        LibraryTab.HIGHLIGHTS -> HighlightsView(nav, onNav, onPlay, catalog)
 
         LibraryTab.MOVIES -> {
             val names = remember(catalog) { catalog.movies.map { it.name } }
