@@ -33,6 +33,8 @@ class HighlightsViewTest {
     @get:Rule
     val rule = createComposeRule()
 
+    private val TOLERANCE = 8f
+
     private val sky = Channel("Sky Sport Uno", "http://x/1", "Sport", tvgId = "s1")
     private val dazn = Channel("DAZN 1", "http://x/2", "Sport", tvgId = "d1")
     private val cinema = Channel("Sky Cinema Uno", "http://x/3", "Cinema", tvgId = "f1")
@@ -93,7 +95,8 @@ class HighlightsViewTest {
     @Test
     fun comingBackPutsTheCursorOnTheCardWatchedAndNothingMoves() {
         show()
-        // The focused card is drawn a little larger around the same centre: compare centres, not edges.
+        // The focused card is drawn 4% larger around its centre, which moves the title by a few dp inside it; a real
+        // jump (a scrolled list, a moved row) is tens of dp. Compare with a tolerance of 8 dp.
         fun centre(title: String): Pair<Float, Float> =
             rule.onNodeWithText(title).getBoundsInRoot().let { (it.left.value + it.right.value) / 2 to (it.top.value + it.bottom.value) / 2 }
         val first = centre("Roma - Lazio")
@@ -103,10 +106,10 @@ class HighlightsViewTest {
             rule.mainClock.advanceTimeBy(1000)
             rule.waitForIdle()
             rule.onNodeWithText(if (url.endsWith("2")) "Inter - Juventus" else "Roma - Lazio").assertIsFocused()
-            assertEquals("card moved", first.first, centre("Roma - Lazio").first, 0.5f)
-            assertEquals("card moved", first.second, centre("Roma - Lazio").second, 0.5f)
-            assertEquals("card moved", second.first, centre("Inter - Juventus").first, 0.5f)
-            assertEquals("card moved", second.second, centre("Inter - Juventus").second, 0.5f)
+            assertEquals("card moved", first.first, centre("Roma - Lazio").first, TOLERANCE)
+            assertEquals("card moved", first.second, centre("Roma - Lazio").second, TOLERANCE)
+            assertEquals("card moved", second.first, centre("Inter - Juventus").first, TOLERANCE)
+            assertEquals("card moved", second.second, centre("Inter - Juventus").second, TOLERANCE)
         }
     }
 
