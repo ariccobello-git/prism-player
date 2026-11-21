@@ -25,22 +25,22 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [34])
 class BlackHoleRingTest {
-    private val size = 600
+    private val px = 600
     private val core = 50f
 
     private fun render(t: Float): ImageBitmap {
-        val bitmap = ImageBitmap(size, size)
-        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(bitmap), Size(size.toFloat(), size.toFloat())) {
+        val bitmap = ImageBitmap(px, px)
+        CanvasDrawScope().draw(Density(1f), LayoutDirection.Ltr, androidx.compose.ui.graphics.Canvas(bitmap), Size(px.toFloat(), px.toFloat())) {
             drawRect(Color.Black)
-            drawAccretionRing(Offset(size / 2f, size / 2f), core, t)
+            drawAccretionRing(Offset(px / 2f, px / 2f), core, t)
         }
         return bitmap
     }
 
     private fun pixel(image: ImageBitmap, radius: Float, angleDeg: Double = 0.0): Int {
         val a = Math.toRadians(angleDeg)
-        val x = (size / 2f + kotlin.math.cos(a) * radius).toInt()
-        val y = (size / 2f + kotlin.math.sin(a) * radius).toInt()
+        val x = (px / 2f + kotlin.math.cos(a) * radius).toInt()
+        val y = (px / 2f + kotlin.math.sin(a) * radius).toInt()
         return image.asAndroidBitmap().getPixel(x, y)
     }
 
