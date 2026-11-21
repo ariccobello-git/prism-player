@@ -124,11 +124,13 @@ fun LibraryScreen(
     unavailable: Set<String> = emptySet(),
     onPreviewWorked: (Channel) -> Unit = {},
     favoriteList: dev.red74.prismplayer.data.FavoriteList? = null,
+    highlights: dev.red74.prismplayer.data.HighlightsData = dev.red74.prismplayer.data.HighlightsData.Empty,
 ) {
     val reachability = remember(unavailable, onPreviewWorked) { Reachability(unavailable, onPreviewWorked) }
     androidx.compose.runtime.CompositionLocalProvider(
         LocalReachability provides reachability,
         LocalFavoriteList provides favoriteList,
+        LocalHighlights provides highlights,
     ) {
         LibraryContent(state, nav, epg, favorites, onNav, onPlay, onToggleFavorite, onRetry, onBack)
     }
@@ -188,6 +190,7 @@ private fun LibraryContent(
     val groupNames = remember(state.catalog, nav.tab) {
         when (nav.tab) {
             LibraryTab.LIVE -> state.catalog.live.map { it.name }
+            LibraryTab.HIGHLIGHTS -> emptyList()
             LibraryTab.MOVIES -> state.catalog.movies.map { it.name }
             LibraryTab.SERIES -> state.catalog.series.map { it.name }
             LibraryTab.FAVORITES -> emptyList()
@@ -293,6 +296,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
     ) {
         val tabs = listOf(
             LibraryTab.LIVE to R.string.tab_live,
+            LibraryTab.HIGHLIGHTS to R.string.tab_highlights,
             LibraryTab.MOVIES to R.string.tab_movies,
             LibraryTab.SERIES to R.string.tab_series,
             LibraryTab.FAVORITES to R.string.tab_favorites,
@@ -370,6 +374,8 @@ private fun LibraryBody(
                 LiveView(sorted, false, nav, epg, favorites, groups, onNav, onPlay, onToggleFavorite)
             }
         }
+
+        LibraryTab.HIGHLIGHTS -> HighlightsView(nav, onNav, onPlay)
 
         LibraryTab.MOVIES -> {
             val names = remember(catalog) { catalog.movies.map { it.name } }

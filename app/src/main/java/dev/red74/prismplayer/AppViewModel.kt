@@ -11,6 +11,8 @@ import dev.red74.prismplayer.data.CatalogBuilder
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.EpgUrl
+import dev.red74.prismplayer.data.Highlights
+import dev.red74.prismplayer.data.HighlightsData
 import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.FavoriteList
 import dev.red74.prismplayer.data.FetchException
@@ -92,7 +94,7 @@ data class LibraryState(
     val catalog: Catalog = Catalog.Empty,
 )
 
-enum class LibraryTab { LIVE, MOVIES, SERIES, FAVORITES }
+enum class LibraryTab { LIVE, HIGHLIGHTS, MOVIES, SERIES, FAVORITES }
 
 /** Where the user was in the library, kept here so coming back from the player restores it. */
 data class LibraryNav(
@@ -125,6 +127,8 @@ data class LibraryNav(
     val origin: LibraryNav? = null,
     /** Favourite key of the series to put the cursor on when going back to Favourites. */
     val returnKey: String? = null,
+    /** Which kind of the featured events page is open: index into the kinds that have events. */
+    val highlightKind: Int = 0,
 )
 
 /** What the full-screen player plays: a list (a category, a season) and where to start in it. */
@@ -150,6 +154,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _epg = MutableStateFlow(EpgData.Empty)
     val epg: StateFlow<EpgData> = _epg.asStateFlow()
+
+    /** Featured events found in the guide, worked out once in the background when the guide arrives. */
+    private val _highlights = MutableStateFlow(HighlightsData.Empty)
+    val highlights: StateFlow<HighlightsData> = _highlights.asStateFlow()
 
     private val _favorites = MutableStateFlow(container.settings.favorites)
     val favorites: StateFlow<Set<String>> = _favorites.asStateFlow()
@@ -279,6 +287,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 refreshJob?.cancel()
                 _library.value = LibraryState()
                 _epg.value = EpgData.Empty
+                _highlights.value = HighlightsData.Empty
                 retireCatalogs()
             }
         }
@@ -366,6 +375,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // The old list's quiet refresh would keep the one line to the panel busy while this list waits for it.
         refreshJob?.cancel()
         _epg.value = EpgData.Empty
+        _highlights.value = HighlightsData.Empty
         _library.value = LibraryState(playlistId = id, playlistName = playlist.name, loading = true)
         retireCatalogs()
         loadJob = viewModelScope.launch {
@@ -485,7 +495,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     keepGoing = { job?.isActive != false },
                 )
             }
-            result.getOrNull()?.let { _epg.value = it }
+            val guide = result.getOrNull() ?: return@launch
+            _epg.value = guide
+            // The featured events are worked out here, once, off the main thread: opening the page costs nothing.
+            val featured = runCatching {
+                withContext(Dispatchers.IO) { Highlights.build(guide, catalog.allLive(), System.currentTimeMillis()) }
+            }.getOrNull()
+            if (featured != null && job?.isActive != false) _highlights.value = featured
         }
     }
 
@@ -700,7 +716,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val GUIDE_PAST_MS = 3L * 60 * 60 * 1000
-        const val GUIDE_FUTURE_MS = 36L * 60 * 60 * 1000
+        const val GUIDE_FUTURE_MS = Highlights.FUTURE_MS
         const val RETIRE_DELAY_MS = 30_000L
     }
 }

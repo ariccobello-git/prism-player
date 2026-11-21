@@ -237,4 +237,25 @@
     <string name="palette_coffee">Coffee</string>
     <string name="palette_silver">Silver</string>
     <string name="palette_roma">AS Roma</string>
+    <string name="tab_highlights">Featured</string>
+    <string name="highlights_sport">Sport</string>
+    <string name="highlights_film">Films</string>
+    <string name="highlights_entertainment">Entertainment</string>
+    <string name="highlights_now">On air now</string>
+    <string name="highlights_today">Later today</string>
+    <string name="highlights_tomorrow">Tomorrow</string>
+    <string name="highlights_on_air">ON AIR</string>
+    <string name="highlights_empty">No featured events for now. The guide may still be loading, or your list has no guide for the next 36 hours.</string>
+    <string name="topic_football">Football</string>
+    <string name="topic_tennis">Tennis</string>
+    <string name="topic_motors">Motors</string>
+    <string name="topic_basketball">Basketball</string>
+    <string name="topic_rugby">Rugby</string>
+    <string name="topic_cycling">Cycling</string>
+    <string name="topic_volleyball">Volleyball</string>
+    <string name="topic_golf">Golf</string>
+    <string name="topic_combat">Combat sports</string>
+    <string name="topic_american_football">American football</string>
+    <string name="topic_hockey">Hockey</string>
+    <string name="topic_olympics">Olympics</string>
 </resources>
