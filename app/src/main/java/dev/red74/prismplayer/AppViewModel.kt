@@ -100,7 +100,8 @@ enum class LibraryTab { LIVE, HIGHLIGHTS, MOVIES, SERIES, FAVORITES }
 
 /** Where the user was in the library, kept here so coming back from the player restores it. */
 data class LibraryNav(
-    val tab: LibraryTab = LibraryTab.LIVE,
+    /** The featured page is what a list opens on; the tab row (Live, Movies, Series, Favourites) is below its title. */
+    val tab: LibraryTab = LibraryTab.HIGHLIGHTS,
     val category: Int = 0,
     /**
      * Where the cursor lives in the group levels of Live, Movies and Series: 0 the main groups, 1 the sub-groups,

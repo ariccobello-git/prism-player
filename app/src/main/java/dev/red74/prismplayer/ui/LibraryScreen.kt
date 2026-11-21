@@ -149,14 +149,17 @@ private fun LibraryContent(
     onBack: () -> Unit,
 ) {
     val retryFocus = remember { FocusRequester() }
-    val tabFocus = remember { FocusRequester() }
+    // The tab row remembers the tab the cursor was on last: going back up from the content lands on the tab it came
+    // from. With the featured page showing (no tab selected) the cursor starts on the first tab.
+    val tabMemory = remember { ReturnFocus(initial = LibraryTab.LIVE.ordinal) }
+    val tabTarget = { tabMemory.target() ?: tabMemory.requester(if (nav.tab == LibraryTab.HIGHLIGHTS) LibraryTab.LIVE.ordinal else nav.tab.ordinal) }
     RequestFocusOnEnter(retryFocus, key = state.error)
     // The tab row takes the cursor on entry, except when coming back to a content (the item played, a detail page):
     // both asking at once left the cursor on the tabs instead of the channel just watched.
     LaunchedEffect(state.loading) {
         if (nav.resume || nav.movieUrl != null || nav.showTitle != null) return@LaunchedEffect
         withFrameNanos { }
-        runCatching { tabFocus.requestFocus() }
+        runCatching { tabTarget().requestFocus() }
     }
 
     // A search never survives leaving the screen or opening an item: coming back finds the field empty.
@@ -177,7 +180,19 @@ private fun LibraryContent(
     }
     BackHandler(enabled = contentFocused) {
         UiSounds.play(UiSounds.Kind.BACK)
-        runCatching { tabFocus.requestFocus() }
+        runCatching { tabTarget().requestFocus() }
+    }
+    // The featured page is the home of the library: Back from the tab row of any other tab returns to it, and one
+    // more Back leaves the screen.
+    BackHandler(enabled = !contentFocused && nav.tab != LibraryTab.HIGHLIGHTS && nav.query.isEmpty() &&
+        nav.movieUrl == null && nav.showTitle == null && nav.episodeUrl == null) {
+        UiSounds.play(UiSounds.Kind.BACK)
+        onNav {
+            it.copy(
+                tab = LibraryTab.HIGHLIGHTS, category = 0, level = 0, sub = 0, itemIndex = 0, season = -1, resume = false,
+                origin = null, returnKey = null,
+            )
+        }
     }
     // A request to focus the content that found nothing to focus (empty tab) must not linger.
     LaunchedEffect(nav.resume) {
@@ -245,7 +260,7 @@ private fun LibraryContent(
                         size = 30.sp, weight = FontWeight.Bold, maxLines = 1,
                     )
                 }
-                if (!state.loading && state.error == null) TopBar(nav, onNav, tabFocus)
+                if (!state.loading && state.error == null) TopBar(nav, onNav, tabMemory)
                 }
 
                 when {
@@ -277,7 +292,7 @@ private fun LibraryContent(
                                 color = PrismColors.Warn,
                             )
                         }
-                        Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }.depthFocus()) {
+                        Box(Modifier.fillMaxSize().onFocusChanged { contentFocused = it.hasFocus }.returnSection(androidx.compose.ui.focus.FocusDirection.Up to tabMemory).depthFocus()) {
                             LibraryBody(state.catalog, nav, epg, favorites, onNav, onPlay, onToggleFavorite)
                         }
                     }
@@ -288,7 +303,7 @@ private fun LibraryContent(
 }
 
 @Composable
-private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) {
+private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -296,7 +311,6 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
     ) {
         val tabs = listOf(
             LibraryTab.LIVE to R.string.tab_live,
-            LibraryTab.HIGHLIGHTS to R.string.tab_highlights,
             LibraryTab.MOVIES to R.string.tab_movies,
             LibraryTab.SERIES to R.string.tab_series,
             LibraryTab.FAVORITES to R.string.tab_favorites,
@@ -318,12 +332,15 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabFocus: FocusRequester) 
                     }
                 },
                 emphasized = nav.tab == tab,
-                focusRequester = if (nav.tab == tab) tabFocus else null,
+                modifier = Modifier.returnItem(tabMemory, tab.ordinal),
             )
         }
         GlassTextField(
             value = nav.query,
-            onValueChange = { text -> onNav { it.copy(query = text.take(60), itemIndex = 0) } },
+            onValueChange = { text ->
+                // The featured page has nothing to search: a search typed there looks through the live channels.
+                onNav { it.copy(tab = if (it.tab == LibraryTab.HIGHLIGHTS && text.isNotEmpty()) LibraryTab.LIVE else it.tab, query = text.take(60), itemIndex = 0) }
+            },
             label = stringResource(R.string.search_label),
             modifier = Modifier.weight(1f),
             imeAction = androidx.compose.ui.text.input.ImeAction.Search,
