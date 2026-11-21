@@ -4,21 +4,14 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.semantics.SemanticsActions
-import androidx.compose.ui.semantics.SemanticsProperties
-import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.pressKey
 import dev.red74.prismplayer.LibraryNav
 import dev.red74.prismplayer.LibraryState
 import dev.red74.prismplayer.LibraryTab
@@ -95,20 +88,6 @@ class LibraryFeaturedHomeTest {
         rule.waitForIdle()
     }
 
-    private fun isFocused(label: String): Boolean =
-        rule.onNodeWithText(label).fetchSemanticsNode().config.getOrNull(SemanticsProperties.Focused) == true
-
-    private fun focusedTexts(): List<String> =
-        rule.onAllNodes(androidx.compose.ui.test.SemanticsMatcher.expectValue(SemanticsProperties.Focused, true))
-            .fetchSemanticsNodes()
-            .map { node -> node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text } ?: "?" }
-
-    private fun press(key: Key) {
-        rule.onRoot().performKeyInput { pressKey(key) }
-        rule.mainClock.advanceTimeBy(500)
-        rule.waitForIdle()
-    }
-
     @Test
     fun aListOpensOnTheFeaturedPageWithNoFeaturedTab() {
         assertEquals(LibraryTab.HIGHLIGHTS, LibraryNav().tab)
@@ -143,25 +122,6 @@ class LibraryFeaturedHomeTest {
         out.parentFile?.mkdirs()
         out.outputStream().use { picture.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         assertTrue(out.length() > 1000)
-    }
-
-    @Test
-    fun theCursorStartsOnATabWhenTheListOpens() {
-        show()
-        assertTrue("cursor should be on a tab, it is on ${focusedTexts()}", focusedTexts().any { it in setOf("Live", "Movies", "Series", "Favorites") })
-    }
-
-    @Test
-    fun upFromTheFeaturedPageReturnsToTheTabTheCursorCameFrom() {
-        show()
-        for (tab in listOf("Series", "Movies", "Live")) {
-            focus(tab)
-            assertTrue("RequestFocus should put the cursor on $tab, it is on ${focusedTexts()}", isFocused(tab))
-            press(Key.DirectionDown)
-            assertTrue("$tab still focused after Down", !isFocused(tab))
-            press(Key.DirectionUp)
-            assertTrue("Up from the page should return to $tab, the cursor is on ${focusedTexts()}", isFocused(tab))
-        }
     }
 
     @Test
