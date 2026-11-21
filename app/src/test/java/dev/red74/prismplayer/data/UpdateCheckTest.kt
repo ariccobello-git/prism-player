@@ -96,16 +96,6 @@ class AppReleaseTest {
     }
 
     @Test
-    fun autoCheckEveryThreeDays() {
-        val day = 24L * 60 * 60 * 1000
-        val now = 100 * day
-        assertTrue(UpdateCheck.autoCheckDue(0L, now))
-        assertFalse(UpdateCheck.autoCheckDue(now - 2 * day, now))
-        assertTrue(UpdateCheck.autoCheckDue(now - 3 * day, now))
-        assertTrue(UpdateCheck.autoCheckDue(now + day, now))
-    }
-
-    @Test
     fun readsShaFile() {
         val hex = "A".repeat(64)
         assertEquals("a".repeat(64), UpdateCheck.shaFromFile("$hex  prism-player-debug.apk\n"))

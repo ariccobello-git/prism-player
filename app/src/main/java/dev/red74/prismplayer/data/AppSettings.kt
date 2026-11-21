@@ -34,7 +34,7 @@ class AppSettings(context: Context) {
             prefs.edit().putString(KEY_SHORTCUTS, Shortcuts.encode(value)).apply()
         }
 
-    /** When the app last read GitHub's list of releases (the automatic check runs once every 3 days). */
+    /** When the app last read GitHub's list of releases (the automatic check runs at every start). */
     var lastUpdateCheck: Long
         get() = prefs.getLong(KEY_UPDATE_CHECK, 0L)
         set(value) {

@@ -125,7 +125,7 @@ Segnare ogni voce come OK / KO / non provata. Le voci KO vanno riportate con la 
 
 **Home**
 - [ ] Le playlist salvate ci sono ancora dopo l'aggiornamento.
-- [ ] *Verifica tutte le liste* (con VPN) colora ogni lista in verde con il numero di voci, o in rosso con il motivo.
+- [ ] *Verifica liste…* (con VPN: si spuntano una o più liste e si preme Verifica) colora ogni lista in verde con il numero di voci, o in rosso con il motivo.
 - [ ] L'interruttore suoni silenzia e riattiva, e resta com'era dopo aver chiuso e riaperto l'app.
 
 **Telecomando e fuoco**

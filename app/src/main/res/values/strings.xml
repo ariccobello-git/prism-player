@@ -77,7 +77,12 @@
     <string name="status_checking">Checking…</string>
     <string name="action_verify">Verify</string>
     <string name="action_retry">Retry</string>
-    <string name="action_verify_all">Verify all lists</string>
+    <string name="action_verify_lists">Verify lists…</string>
+    <string name="verify_pick_title">Pick lists to verify</string>
+    <string name="verify_select_all">Select all</string>
+    <string name="verify_select_none">Select none</string>
+    <string name="verify_start">Verify %1$d</string>
+    <string name="verify_pick_hint">Pick one or more lists, then start the check.</string>
     <string name="notice_verify_ok">Playlist verified</string>
     <string name="notice_verify_failed">Check failed. If the list needs a VPN, turn it on and try again.</string>
     <string name="notice_verify_all_ok">All playlists verified</string>
@@ -168,7 +173,7 @@
     <string name="updates_engine_ok">Up to date (%1$s).</string>
     <string name="action_close">Close</string>
     <string name="action_ok">OK</string>
-    <string name="notice_update_ok">Prism is up to date</string>
+    <string name="notice_update_engine">Newer audio/video codecs are out: they come with the next update</string>
     <string name="update_title">Check for updates</string>
     <string name="update_checking">Looking on GitHub for a new version of Prism…</string>
     <string name="update_offline">Could not reach GitHub. Check the connection and try again.</string>
