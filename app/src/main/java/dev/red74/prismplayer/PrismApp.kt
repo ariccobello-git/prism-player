@@ -15,7 +15,10 @@ import dev.red74.prismplayer.data.ProviderImages
 import dev.red74.prismplayer.data.SecureBox
 import dev.red74.prismplayer.data.SymbolGlyphs
 import dev.red74.prismplayer.data.TextCleaner
+import dev.red74.prismplayer.data.SportPrefsStore
+import dev.red74.prismplayer.data.Taste
 import dev.red74.prismplayer.data.WatchProgress
+import dev.red74.prismplayer.player.FrameRatePref
 import dev.red74.prismplayer.pairing.PairingManager
 import java.io.File
 import okhttp3.OkHttpClient
@@ -38,6 +41,9 @@ class PrismApp : Application(), ImageLoaderFactory {
         TextCleaner.canDraw = { text -> SymbolGlyphs.draws(text.codePointAt(0)) }
         container = AppContainer(this)
         WatchProgress.init(this)
+        SportPrefsStore.init(this)
+        Taste.init(this)
+        FrameRatePref.init(this)
         ContentInfo.init(this)
     }
 

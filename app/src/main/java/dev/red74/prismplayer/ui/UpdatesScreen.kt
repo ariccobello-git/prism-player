@@ -27,6 +27,7 @@ import dev.red74.prismplayer.BuildConfig
 import dev.red74.prismplayer.R
 import dev.red74.prismplayer.data.UpdateCheck
 import dev.red74.prismplayer.device.CodecScan
+import dev.red74.prismplayer.player.FrameRatePref
 
 /**
  * Checks the web for a newer release of the app and of its video/audio engine, and lists what this device decodes.
@@ -123,6 +124,16 @@ fun UpdatesScreen(onBack: () -> Unit) {
                                 },
                             ),
                             highlight = false,
+                        )
+                    }
+                    item {
+                        val on = FrameRatePref.enabled
+                        InfoRow(
+                            modifier = Modifier.returnItem(rows, 3 + codecs.size),
+                            title = stringResource(R.string.frame_rate_title),
+                            body = stringResource(if (on) R.string.frame_rate_on else R.string.frame_rate_off),
+                            highlight = on,
+                            onClick = { FrameRatePref.set(!on) },
                         )
                     }
                     item {

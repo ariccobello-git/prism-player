@@ -48,6 +48,8 @@ object BufferPlan {
     )
 
     val FULL = Durations(minMs = 30_000, maxMs = 60_000, startMs = 1_500, afterStallMs = 3_500, backMs = 20_000, maxBytes = 64 shl 20)
+    /** For a viewer whose playback stalled several times lately: the same memory, but resumes after more seconds. */
+    val STEADY = Durations(minMs = 40_000, maxMs = 60_000, startMs = 3_000, afterStallMs = 9_000, backMs = 20_000, maxBytes = 64 shl 20)
     val PREVIEW = Durations(minMs = 15_000, maxMs = 30_000, startMs = 1_500, afterStallMs = 3_500, backMs = 0, maxBytes = 24 shl 20)
 
     /** Audio kept in the sound card: a longer queue does not run dry when the stick is busy drawing the menus. */
@@ -258,7 +260,11 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
     }.setEnableDecoderFallback(true)
     val sources = DefaultMediaSourceFactory(httpFactory)
         .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(8))
-    val plan = if (preview) BufferPlan.PREVIEW else BufferPlan.FULL
+    val plan = when {
+        preview -> BufferPlan.PREVIEW
+        StallStats.log.struggling(System.currentTimeMillis()) -> BufferPlan.STEADY
+        else -> BufferPlan.FULL
+    }
     val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(plan.minMs, plan.maxMs, plan.startMs, plan.afterStallMs)
         .setBackBuffer(plan.backMs, /* retainBackBufferFromKeyframe = */ true)

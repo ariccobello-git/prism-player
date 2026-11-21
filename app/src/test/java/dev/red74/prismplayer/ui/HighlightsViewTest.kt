@@ -18,8 +18,12 @@ import dev.red74.prismplayer.data.HighlightEvent
 import dev.red74.prismplayer.data.HighlightKind
 import dev.red74.prismplayer.data.HighlightRow
 import dev.red74.prismplayer.data.HighlightsData
+import dev.red74.prismplayer.data.SportPrefs
+import dev.red74.prismplayer.data.SportPrefsStore
+import dev.red74.prismplayer.data.SportTopic
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,6 +50,11 @@ class HighlightsViewTest {
     )
     private val film = listOf(HighlightEvent(HighlightKind.FILM, "Heat", null, soon, soon + 7_000_000L, 40, listOf(cinema)))
     private val data = HighlightsData(mapOf(HighlightKind.SPORT to sport, HighlightKind.FILM to film))
+
+    @Before
+    fun resetChoices() {
+        SportPrefsStore.update { SportPrefs() }
+    }
 
     private var nav by mutableStateOf(LibraryNav(tab = LibraryTab.HIGHLIGHTS))
     private var played: List<Channel>? = null
@@ -118,6 +127,39 @@ class HighlightsViewTest {
         show(HighlightsData.Empty)
         assertEquals(0, rule.onAllNodesWithTextCount("Sport"))
         assertEquals(1, rule.onAllNodesWithTextCount("No featured events for now. The guide may still be loading, or your list has no guide for the next 36 hours."))
+    }
+
+    @Test
+    fun customizeOpensTheEditorAndSavesTheChoice() {
+        show()
+        rule.onNodeWithText("Customize").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Done").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithTextCount("Roma - Lazio"))
+        rule.onNodeWithText("Football").performClick()
+        rule.waitForIdle()
+        assertTrue(SportTopic.FOOTBALL in SportPrefsStore.current.topics)
+        rule.onNodeWithText("✓ Football").performClick()
+        rule.waitForIdle()
+        assertTrue(SportPrefsStore.current.topics.isEmpty())
+        rule.onNodeWithText("Done").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
+    }
+
+    @Test
+    fun aFollowedTeamGetsAForYouRowAtTheTop() {
+        SportPrefsStore.update { it.withKeyword("Inter") }
+        show()
+        rule.onNodeWithText("For you").assertIsDisplayed()
+        assertEquals("shown in the for-you row and in its day row", 2, rule.onAllNodesWithTextCount("Inter - Juventus"))
+        assertEquals(1, rule.onAllNodesWithTextCount("Roma - Lazio"))
+    }
+
+    @Test
+    fun noChoicesNoForYouRow() {
+        show()
+        assertEquals(0, rule.onAllNodesWithTextCount("For you"))
     }
 
     @Test

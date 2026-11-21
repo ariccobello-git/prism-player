@@ -263,4 +263,17 @@
     <string name="topic_american_football">Football americano</string>
     <string name="topic_hockey">Hockey</string>
     <string name="topic_olympics">Olimpiadi</string>
+    <string name="highlights_for_you">Per te</string>
+    <string name="sport_prefs_button">Personalizza</string>
+    <string name="sport_prefs_done">Fatto</string>
+    <string name="sport_prefs_hint">Scegli gli sport che segui e aggiungi squadre o competizioni (per esempio Roma o Formula 1).</string>
+    <string name="sport_prefs_team">Squadra o competizione</string>
+    <string name="sport_prefs_add">Aggiungi</string>
+    <string name="suggestions_movies">Film per te</string>
+    <string name="suggestions_series">Serie per te</string>
+    <string name="suggestions_title">Potrebbe piacerti</string>
+    <string name="suggestions_none">Per ora nessun suggerimento: guarda qualche film o serie e compariranno qui.</string>
+    <string name="frame_rate_title">Frequenza dello schermo come il video</string>
+    <string name="frame_rate_on">Attivo: movimento più fluido. Lo schermo può oscurarsi per un secondo al cambio. Premi OK per disattivare.</string>
+    <string name="frame_rate_off">Disattivo. Premi OK per allineare la frequenza dello schermo al video (movimento più fluido su film e sport dal vivo).</string>
 </resources>

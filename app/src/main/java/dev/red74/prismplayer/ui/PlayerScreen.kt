@@ -80,6 +80,8 @@ import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.StreamConnections
 import dev.red74.prismplayer.player.StreamIdentity
 import dev.red74.prismplayer.player.TrackPolicy
+import dev.red74.prismplayer.player.DisplayRate
+import dev.red74.prismplayer.player.StallStats
 import dev.red74.prismplayer.player.createPlayer
 import dev.red74.prismplayer.player.AudioSafety
 import dev.red74.prismplayer.data.ProviderHosts
@@ -202,7 +204,10 @@ fun PlayerScreen(
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 when (playbackState) {
-                    Player.STATE_BUFFERING -> status = PlayStatus.Loading
+                    Player.STATE_BUFFERING -> {
+                        status = PlayStatus.Loading
+                        if (startedOk) StallStats.log.record(System.currentTimeMillis())
+                    }
                     Player.STATE_READY -> {
                         status = PlayStatus.Ready
                         errorName = null
@@ -230,6 +235,7 @@ fun PlayerScreen(
 
             override fun onTracksChanged(newTracks: Tracks) {
                 tracks = newTracks
+                DisplayRate.apply(context, newTracks)
                 if (autoTracks) applyTrackPolicy(player, newTracks, appliedTracks)
             }
 
@@ -279,6 +285,7 @@ fun PlayerScreen(
         }
         player.addListener(listener)
         onDispose {
+            DisplayRate.restore(context)
             player.removeListener(listener)
             player.release()
             hold.release()

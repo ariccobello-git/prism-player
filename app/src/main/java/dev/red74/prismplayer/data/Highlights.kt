@@ -41,14 +41,19 @@ class HighlightsData(private val byKind: Map<HighlightKind, List<HighlightEvent>
 }
 
 /** A row of the page: events already on air, or those starting [day] days from today (0 = today). */
-data class HighlightRow(val live: Boolean, val day: Int, val events: List<HighlightEvent>)
+data class HighlightRow(val live: Boolean, val day: Int, val events: List<HighlightEvent>, val forYou: Boolean = false)
 
 /**
  * Picks the most awaited events out of the programme guide the list already carries: no network, no other service.
  * Only channels of the user's list are looked at, so every event shown can be watched.
  */
 object Highlights {
-    const val PER_KIND = 30
+    /** Events kept per kind: more than the page shows, so favourite sports and teams can still be found. */
+    const val PER_KIND = 120
+
+    /** Events the page shows per kind besides those picked for the viewer. */
+    const val SHOWN = 30
+    const val FOR_YOU_MAX = 12
 
     /** How far ahead the guide reaches; equal to the download window in the view model. */
     const val FUTURE_MS = 36L * 60 * 60 * 1000
@@ -109,6 +114,28 @@ object Highlights {
         for (day in later.keys.sorted()) rows += HighlightRow(false, day, later.getValue(day).sortedBy { it.startMs })
         return rows
     }
+
+    /**
+     * The rows of one kind: first "for you" (events matching the favourite sports/teams, or carried by channels from
+     * the groups watched most), then the best [SHOWN] events by day.
+     */
+    fun pageRows(
+        all: List<HighlightEvent>,
+        nowMs: Long,
+        prefs: SportPrefs,
+        likedGroups: Set<String>,
+        zone: TimeZone = TimeZone.getDefault(),
+    ): List<HighlightRow> {
+        val forYou = all.filter { it.endMs > nowMs && isForYou(it, prefs, likedGroups) }
+            .sortedWith(compareBy<HighlightEvent> { !it.isLive(nowMs) }.thenBy { it.startMs })
+            .take(FOR_YOU_MAX)
+        val main = rows(all.take(SHOWN), nowMs, zone)
+        return if (forYou.isEmpty()) main else listOf(HighlightRow(forYou.any { it.isLive(nowMs) }, 0, forYou, forYou = true)) + main
+    }
+
+    fun isForYou(event: HighlightEvent, prefs: SportPrefs, likedGroups: Set<String>): Boolean =
+        (event.kind == HighlightKind.SPORT && prefs.matches(event)) ||
+            (likedGroups.isNotEmpty() && event.channels.any { it.group != null && it.group in likedGroups })
 
     // --- classification -------------------------------------------------------------------------------------
 
