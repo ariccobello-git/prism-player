@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
@@ -35,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -68,8 +70,9 @@ import kotlinx.coroutines.withContext
 /** The featured events found in the guide; filled in the background by the view model. */
 val LocalHighlights = compositionLocalOf { HighlightsData.Empty }
 
-private val CardWidth = 290.dp
-private val CardHeight = 132.dp
+private val CardWidth = 340.dp
+private val CardHeight = 156.dp
+private val HeroHeight = 230.dp
 
 /**
  * "In evidenza": the most awaited events of the next hours, by kind (Sport, Film, Entertainment), each with its time
@@ -133,7 +136,7 @@ fun HighlightsView(
             }
         }
         when {
-            editing -> SportPrefsEditor(prefs, onDone = { editing = false })
+            editing -> FollowScreen(prefs, onDone = { editing = false })
             tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups)
             else -> SuggestionRow(catalog, tab == HighlightTab.Movies, if (tab == HighlightTab.Movies) movieGroups else seriesGroups, nav, onNav)
         }
@@ -165,11 +168,21 @@ private fun EventRows(
             query.isEmpty() || event.title.lowercase().contains(query) || event.channels.any { it.name.lowercase().contains(query) }
         }
     }
-    val rows = remember(events, minute, prefs, likedGroups) { Highlights.pageRows(events, nowMs, prefs, likedGroups) }
+    val pageRows = remember(events, minute, prefs, likedGroups) { Highlights.pageRows(events, nowMs, prefs, likedGroups) }
+    // The first event of the page (the one the viewer is most likely after) is shown large on top, once.
+    val hero = pageRows.firstOrNull()?.events?.firstOrNull()
+    val rows = remember(pageRows, hero) {
+        if (hero == null) pageRows else pageRows.map { row -> row.copy(events = row.events.filter { it !== hero }) }.filter { it.events.isNotEmpty() }
+    }
     val played = nav.played
+    val heroPlayed = remember(hero, played) { hero != null && played != null && hero.channels.any { it.url == played } }
     val target = remember(rows, played) { locate(rows, played) }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = target.first)
+    // The cursor goes to the large card when it was the one watched, and also when nothing was (arriving from a menu).
+    val onHero = hero != null && (heroPlayed || played == null || rows.none { row -> row.events.any { e -> e.channels.any { it.url == played } } })
+    val offset = if (hero != null) 1 else 0
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = if (onHero) 0 else target.first + offset)
     val cardFocus = remember { FocusRequester() }
+    val heroFocus = remember { FocusRequester() }
     // A programme that has not started: OK sets or removes a reminder (a notification a few minutes before it begins).
     val toggleReminder = rememberReminderToggle()
     val reminders = dev.red74.prismplayer.reminders.ReminderStore.current
@@ -184,13 +197,14 @@ private fun EventRows(
     }
 
     LaunchedEffect(nav.resume) {
-        if (nav.resume && rows.isNotEmpty()) {
-            if (listState.layoutInfo.visibleItemsInfo.none { it.index == target.first }) listState.scrollToItem(target.first)
-            cardFocus.requestWhenReady()
+        if (nav.resume && (rows.isNotEmpty() || hero != null)) {
+            val index = if (onHero) 0 else target.first + offset
+            if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) listState.scrollToItem(index)
+            (if (onHero) heroFocus else cardFocus).requestWhenReady()
             onNav { it.copy(resume = false) }
         }
     }
-    if (rows.isEmpty()) {
+    if (rows.isEmpty() && hero == null) {
         PrismText(text = stringResource(R.string.search_none), size = 20.sp, color = PrismColors.TextSecondary)
         return
     }
@@ -199,11 +213,30 @@ private fun EventRows(
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (hero != null) item(key = "hero") {
+            val onAir = hero.isLive(nowMs)
+            val reminder = remember(hero) { reminderFor(hero.title, hero.startMs, hero.channels.first()) }
+            HeroCard(
+                event = hero,
+                live = onAir,
+                liked = pageRows.first().forYou,
+                reminder = if (onAir) null else reminders.any { it.id == reminder.id },
+                focusRequester = heroFocus,
+                onClick = {
+                    if (onAir) {
+                        onNav { it.copy(resume = true) }
+                        onPlay(hero.channels, 0, false)
+                    } else {
+                        notice = if (toggleReminder(reminder)) noticeOn else noticeOff
+                    }
+                },
+            )
+        }
         itemsIndexed(rows, key = { _, row -> "${row.forYou}-${row.live}-${row.day}" }) { rowIndex, row ->
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                PrismText(text = rowTitle(row), size = 20.sp, weight = FontWeight.SemiBold)
+                PrismText(text = rowTitle(row), size = 24.sp, weight = FontWeight.Bold)
                 val rowState = rememberLazyListState(initialFirstVisibleItemIndex = if (rowIndex == target.first) target.second else 0)
                 LazyRow(
                     Modifier.fillMaxWidth(),
@@ -219,7 +252,7 @@ private fun EventRows(
                             live = onAir,
                             liked = row.forYou,
                             reminder = if (onAir) null else reminders.any { it.id == reminder.id },
-                            focusRequester = if (rowIndex == target.first && column == target.second) cardFocus else null,
+                            focusRequester = if (!onHero && rowIndex == target.first && column == target.second) cardFocus else null,
                             onClick = {
                                 if (onAir) {
                                     onNav { it.copy(resume = true) }
@@ -242,6 +275,13 @@ private fun EventRows(
     }
 }
 
+private data class SuggestionKey(val catalog: Int, val movies: Boolean, val groups: List<String>, val day: Long)
+
+/** The last few rows worked out, kept in memory for the run. */
+private val suggestionCache = object : LinkedHashMap<SuggestionKey, List<Suggestion>>(8, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<SuggestionKey, List<Suggestion>>?): Boolean = size > 6
+}
+
 private class Suggestion(val title: String, val group: String, val logo: String?, val key: String, val open: ((LibraryNav) -> LibraryNav))
 
 /** Films or series from the categories watched most, not seen yet: "You might like". Worked out off the main thread. */
@@ -253,8 +293,12 @@ private fun SuggestionRow(
     nav: LibraryNav,
     onNav: ((LibraryNav) -> LibraryNav) -> Unit,
 ) {
-    val items by produceState<List<Suggestion>?>(null, catalog, movies, groups) {
-        value = withContext(Dispatchers.IO) { suggestionsFor(catalog, movies, groups) }
+    // Worked out once per list and day: coming back to the tab shows the same row at once.
+    val cacheKey = remember(catalog, movies, groups) { SuggestionKey(System.identityHashCode(catalog), movies, groups, System.currentTimeMillis() / 86_400_000L) }
+    val items by produceState<List<Suggestion>?>(suggestionCache[cacheKey], cacheKey) {
+        if (value == null) {
+            value = withContext(Dispatchers.IO) { suggestionsFor(catalog, movies, groups) }.also { suggestionCache[cacheKey] = it }
+        }
     }
     val focus = remember { FocusRequester() }
     val list = items
@@ -327,9 +371,19 @@ private fun suggestionsFor(catalog: Catalog, movies: Boolean, groups: List<Strin
 
 private const val PER_GROUP = 6
 
-/** Choose the sports followed and add teams or competitions to follow. */
+/** Teams, riders and competitions offered to follow with one tap (any other word can be added below). */
+internal val FOLLOW_SUGGESTIONS = listOf(
+    "Juventus", "Inter", "Milan", "Napoli", "Roma", "Lazio", "Atalanta", "Fiorentina",
+    "Real Madrid", "Barcellona", "Bayern", "Liverpool", "Ferrari", "Formula 1", "MotoGP", "Sinner",
+    "Serie A", "Champions League", "NBA", "Nazionale",
+)
+
+/**
+ * "Follow": one page, one grid. Tap a sport, a team or a competition to follow it (a filled star), tap again to stop;
+ * the "For you" row of the Sport page then shows only what is followed. Any other name can be typed at the bottom.
+ */
 @Composable
-private fun SportPrefsEditor(prefs: SportPrefs, onDone: () -> Unit) {
+private fun FollowScreen(prefs: SportPrefs, onDone: () -> Unit) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { first.requestWhenReady() }
     var word by remember { mutableStateOf("") }
@@ -337,6 +391,8 @@ private fun SportPrefsEditor(prefs: SportPrefs, onDone: () -> Unit) {
         SportPrefsStore.update { it.withKeyword(word) }
         word = ""
     }
+    val clean = remember(prefs) { prefs.keywords.toSet() }
+    val names = remember(prefs) { FOLLOW_SUGGESTIONS + prefs.keywords.filter { k -> FOLLOW_SUGGESTIONS.none { Highlights.clean(it) == k } } }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
             GlassButton(text = stringResource(R.string.sport_prefs_done), onClick = onDone, focusRequester = first, emphasized = true)
@@ -344,19 +400,25 @@ private fun SportPrefsEditor(prefs: SportPrefs, onDone: () -> Unit) {
         }
         LazyVerticalGrid(
             columns = GridCells.Fixed(4),
-            modifier = Modifier.fillMaxWidth().height(230.dp),
+            modifier = Modifier.fillMaxWidth().weight(1f),
             contentPadding = PaddingValues(6.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "h-sports") {
+                PrismText(text = stringResource(R.string.follow_sports), size = 22.sp, weight = FontWeight.Bold)
+            }
             items(SportTopic.entries.toList(), key = { it.name }) { topic ->
                 val on = topic in prefs.topics
-                GlassButton(
-                    text = (if (on) "✓ " else "") + topicLabel(topic),
-                    onClick = { SportPrefsStore.update { it.withTopic(topic, !on) } },
-                    modifier = Modifier.fillMaxWidth(),
-                    emphasized = on,
-                )
+                FollowTile(topicLabel(topic), on) { SportPrefsStore.update { it.withTopic(topic, !on) } }
+            }
+            item(span = { GridItemSpan(maxLineSpan) }, key = "h-teams") {
+                PrismText(text = stringResource(R.string.follow_teams), size = 22.sp, weight = FontWeight.Bold)
+            }
+            items(names, key = { "t-$it" }) { name ->
+                val key = Highlights.clean(name)
+                val on = key in clean
+                FollowTile(name, on) { SportPrefsStore.update { if (on) it.withoutKeyword(key) else it.withKeyword(name) } }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -370,12 +432,22 @@ private fun SportPrefsEditor(prefs: SportPrefs, onDone: () -> Unit) {
             )
             GlassButton(text = stringResource(R.string.sport_prefs_add), onClick = { add() })
         }
-        if (prefs.keywords.isNotEmpty()) {
-            LazyRow(contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(prefs.keywords, key = { it }) { keyword ->
-                    GlassButton(text = "✕ $keyword", onClick = { SportPrefsStore.update { it.withoutKeyword(keyword) } }, emphasized = true)
-                }
-            }
+    }
+}
+
+/** One thing to follow: a star (filled when followed) and its name. */
+@Composable
+private fun FollowTile(label: String, followed: Boolean, onClick: () -> Unit) {
+    GlassSurface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(68.dp),
+        selected = followed,
+        tint = if (followed) PrismColors.Accent else null,
+        focusScale = 1.05f,
+    ) {
+        Row(Modifier.align(Alignment.CenterStart), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            LineIcon(if (followed) LineIcon.STAR_ON else LineIcon.STAR, size = 26.dp, color = if (followed) PrismColors.Accent else PrismColors.TextSecondary)
+            PrismText(text = label, size = 20.sp, weight = if (followed) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
         }
     }
 }
@@ -394,40 +466,74 @@ internal fun locate(rows: List<HighlightRow>, played: String?): Pair<Int, Int> {
 
 @Composable
 private fun EventCard(event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?, onClick: () -> Unit) {
-    val channel = event.channels.first().name
-    val more = event.channels.size - 1
     GlassSurface(
         onClick = onClick,
         modifier = Modifier.width(CardWidth).height(CardHeight),
         focusRequester = focusRequester,
-        focusScale = 1.04f,
+        focusScale = 1.05f,
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                TimeBadge(text = if (live) stringResource(R.string.highlights_on_air) else clockText(event.startMs), live = live)
-                val topicText = (if (liked) "★ " else "") + (event.topic?.let { topicLabel(it) }.orEmpty())
-                if (topicText.isNotEmpty()) PrismText(text = topicText, size = 16.sp, color = PrismColors.TextSecondary, maxLines = 1)
-            }
-            PrismText(text = event.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 2)
-            PrismText(
-                text = when (reminder) {
-                    null -> "▶ " + channel + if (more > 0) "  +$more" else ""
-                    true -> stringResource(R.string.reminder_active)
-                    false -> stringResource(R.string.reminder_remind)
-                },
-                size = 16.sp,
-                color = if (reminder == true) PrismColors.Accent else PrismColors.TextSecondary,
-                maxLines = 1,
-            )
+            EventHeader(event, live, liked)
+            PrismText(text = event.title, size = 24.sp, weight = FontWeight.Bold, maxLines = 2)
+            EventAction(event, reminder, 18.sp)
         }
+    }
+}
+
+/** The big card at the top of the page, like the featured banner of a streaming app. */
+@Composable
+private fun HeroCard(event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?, onClick: () -> Unit) {
+    GlassSurface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().height(HeroHeight).testTag("hero"),
+        focusRequester = focusRequester,
+        tint = PrismColors.Accent,
+        cornerRadius = 28.dp,
+        contentPadding = PaddingValues(horizontal = 32.dp, vertical = 24.dp),
+        focusScale = 1.02f,
+    ) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+            EventHeader(event, live, liked)
+            PrismText(text = event.title, size = 44.sp, weight = FontWeight.Bold, maxLines = 2)
+            EventAction(event, reminder, 24.sp, strong = true)
+        }
+    }
+}
+
+@Composable
+private fun EventHeader(event: HighlightEvent, live: Boolean, liked: Boolean) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        TimeBadge(text = if (live) stringResource(R.string.highlights_on_air) else clockText(event.startMs), live = live)
+        if (liked) {
+            LineIcon(LineIcon.STAR_ON, size = 20.dp, color = PrismColors.Accent)
+            PrismText(text = stringResource(R.string.highlights_for_you), size = 17.sp, weight = FontWeight.SemiBold, color = PrismColors.Accent, maxLines = 1)
+        }
+        val topic = event.topic?.let { topicLabel(it) }.orEmpty()
+        if (topic.isNotEmpty()) PrismText(text = topic, size = 17.sp, color = PrismColors.TextSecondary, maxLines = 1)
+    }
+}
+
+/** What OK does on a card: watch it now (on air) or set / remove the reminder (not started yet). */
+@Composable
+private fun EventAction(event: HighlightEvent, reminder: Boolean?, size: androidx.compose.ui.unit.TextUnit, strong: Boolean = false) {
+    val more = event.channels.size - 1
+    val weight = if (strong) FontWeight.SemiBold else FontWeight.Normal
+    when (reminder) {
+        null -> IconLabel(
+            LineIcon.PLAY,
+            stringResource(R.string.highlights_watch_on, event.channels.first().name) + if (more > 0) "  +$more" else "",
+            size = size, color = if (strong) PrismColors.TextPrimary else PrismColors.TextSecondary, weight = weight,
+        )
+        true -> IconLabel(LineIcon.BELL_ON, stringResource(R.string.reminder_active), size = size, color = PrismColors.Accent, weight = FontWeight.SemiBold)
+        false -> IconLabel(LineIcon.BELL, stringResource(R.string.reminder_remind), size = size, color = if (strong) PrismColors.TextPrimary else PrismColors.TextSecondary, weight = weight)
     }
 }
 
 @Composable
 private fun TimeBadge(text: String, live: Boolean) {
     val color = if (live) PrismColors.Danger else PrismColors.Accent
-    Box(Modifier.background(color.copy(alpha = 0.35f), RoundedCornerShape(10.dp)).padding(horizontal = 10.dp, vertical = 3.dp)) {
-        PrismText(text = text, size = 15.sp, weight = FontWeight.Bold, maxLines = 1)
+    Box(Modifier.background(color.copy(alpha = 0.45f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 4.dp)) {
+        PrismText(text = text, size = 17.sp, weight = FontWeight.Bold, maxLines = 1)
     }
 }
 

@@ -69,6 +69,8 @@ class AppContainer(context: Context) {
     val catalogStore = CatalogStore(File(context.noBackupFilesDir, "lists"), keys::getOrCreateKey)
     /** What list renewals took away, kept 7 days (names and groups only). */
     val removedStore = dev.red74.prismplayer.data.RemovedStore(File(context.noBackupFilesDir, "removed.db"))
+    /** The featured events of each list, kept so "In evidenza" shows at once at the next opening. */
+    val highlightsStore = dev.red74.prismplayer.data.HighlightsStore(File(context.noBackupFilesDir, "highlights"))
     val fetcher = PlaylistFetcher()
     val pairingManager = PairingManager()
     val settings = AppSettings(context)

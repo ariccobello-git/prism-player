@@ -186,7 +186,7 @@ class HighlightsTest {
     fun sportPrefsKeywordsAreCleanedLimitedAndSurviveEncoding() {
         var prefs = SportPrefs().withKeyword("").withKeyword("   ").withKeyword("Roma").withKeyword("roma")
         assertEquals(listOf("roma"), prefs.keywords)
-        repeat(20) { prefs = prefs.withKeyword("squadra $it") }
+        repeat(40) { prefs = prefs.withKeyword("squadra $it") }
         assertEquals(SportPrefs.MAX_KEYWORDS, prefs.keywords.size)
         prefs = prefs.withTopic(SportTopic.TENNIS, true).withTopic(SportTopic.GOLF, true).withTopic(SportTopic.GOLF, false)
         val back = SportPrefs.decode(prefs.encode())
@@ -194,5 +194,28 @@ class HighlightsTest {
         assertEquals(SportPrefs(), SportPrefs.decode(null))
         assertEquals(SportPrefs(), SportPrefs.decode("garbage-not-a-topic\n"))
         assertEquals("a".repeat(SportPrefs.MAX_LENGTH), SportPrefs().withKeyword("a".repeat(100)).keywords.single())
+    }
+
+    @Test
+    fun forSportOnlyWhatIsFollowedIsForYouAndTheWatchedGroupsDoNotCount() {
+        val roma = event("Roma - Lazio", 2.0, SportTopic.FOOTBALL, 10, sky)
+        val tennis = event("Finale ATP Torino", 2.0, SportTopic.TENNIS, 10, sky)
+        // nothing followed: the Sport group being the most watched must not make every match "for you"
+        assertTrue(!Highlights.isForYou(roma, SportPrefs(), setOf("Sport")))
+        val prefs = SportPrefs().withTopic(SportTopic.TENNIS, true)
+        assertTrue(Highlights.isForYou(tennis, prefs, setOf("Sport")))
+        assertTrue(!Highlights.isForYou(roma, prefs, setOf("Sport")))
+        val rows = Highlights.pageRows(listOf(roma, tennis), now, prefs, setOf("Sport"), utc)
+        assertEquals(listOf("Finale ATP Torino"), rows.first { it.forYou }.events.map { it.title })
+    }
+
+    @Test
+    fun followingATeamAndStoppingRestoresTheOriginalRows() {
+        val events = listOf(event("Roma - Lazio", 2.0, SportTopic.FOOTBALL, 10, sky), event("Inter - Milan", 3.0, SportTopic.FOOTBALL, 9, sky))
+        val none = Highlights.pageRows(events, now, SportPrefs(), emptySet(), utc)
+        val followed = Highlights.pageRows(events, now, SportPrefs().withKeyword("Inter"), emptySet(), utc)
+        assertEquals(listOf("Inter - Milan"), followed.first().events.map { it.title })
+        val stopped = Highlights.pageRows(events, now, SportPrefs().withKeyword("Inter").withoutKeyword("inter"), emptySet(), utc)
+        assertEquals(none, stopped)
     }
 }

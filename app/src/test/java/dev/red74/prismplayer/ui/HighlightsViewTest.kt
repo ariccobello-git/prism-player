@@ -9,7 +9,9 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
 import dev.red74.prismplayer.LibraryNav
 import dev.red74.prismplayer.LibraryTab
@@ -134,14 +136,14 @@ class HighlightsViewTest {
     @Test
     fun customizeOpensTheEditorAndSavesTheChoice() {
         show()
-        rule.onNodeWithText("Customize").performClick()
+        rule.onNodeWithText("Follow teams").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Done").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithTextCount("Roma - Lazio"))
         rule.onNodeWithText("Football").performClick()
         rule.waitForIdle()
         assertTrue(SportTopic.FOOTBALL in SportPrefsStore.current.topics)
-        rule.onNodeWithText("✓ Football").performClick()
+        rule.onNodeWithText("Football").performClick()
         rule.waitForIdle()
         assertTrue(SportPrefsStore.current.topics.isEmpty())
         rule.onNodeWithText("Done").performClick()
@@ -153,9 +155,48 @@ class HighlightsViewTest {
     fun aFollowedTeamGetsAForYouRowAtTheTop() {
         SportPrefsStore.update { it.withKeyword("Inter") }
         show()
+        // the followed match is the large card on top, tagged "For you"; nothing else is picked for the viewer
         rule.onNodeWithText("For you").assertIsDisplayed()
-        assertEquals("shown in the for-you row and in its day row", 2, rule.onAllNodesWithTextCount("Inter - Juventus"))
+        assertEquals(1, rule.onAllNodesWithTextCount("Inter - Juventus"))
         assertEquals(1, rule.onAllNodesWithTextCount("Roma - Lazio"))
+        rule.onNodeWithTag("hero").assertIsDisplayed()
+    }
+
+    @Test
+    fun theFirstEventIsAHeroCardMuchLargerThanTheOthers() {
+        show()
+        val hero = rule.onNodeWithTag("hero").getBoundsInRoot()
+        assertTrue("hero width ${hero.right - hero.left}", (hero.right - hero.left).value > 700f)
+        assertTrue("hero height ${hero.bottom - hero.top}", (hero.bottom - hero.top).value >= 200f)
+        rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
+        assertEquals("the hero event is not repeated in a row", 1, rule.onAllNodesWithTextCount("Roma - Lazio"))
+    }
+
+    @Test
+    fun cardsUseDrawnSymbolsNotEmojis() {
+        show()
+        rule.onNodeWithText("Remind me").assertIsDisplayed()
+        for (emoji in listOf("🔔", "▶", "★", "✓", "🔍")) assertEquals("emoji $emoji on screen", 0, rule.onAllNodesWithTextCount(emoji))
+    }
+
+    @Test
+    fun followingATeamFiltersTheForYouRowToThatTeamOnly() {
+        show()
+        rule.onNodeWithText("Follow teams").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Inter").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("inter"), SportPrefsStore.current.keywords)
+        rule.onNodeWithText("Done").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("For you").assertIsDisplayed()
+        rule.onNodeWithTag("hero").assertIsDisplayed()
+        // following it again (from the editor) stops following
+        rule.onNodeWithText("Follow teams").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Inter").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertTrue(SportPrefsStore.current.keywords.isEmpty())
     }
 
     @Test

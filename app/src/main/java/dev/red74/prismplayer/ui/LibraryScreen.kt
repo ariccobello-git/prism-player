@@ -183,17 +183,24 @@ private fun LibraryContent(
         if ((nav.movieUrl != null || nav.showTitle != null) && nav.query.isNotEmpty()) onNav { it.copy(query = "") }
     }
 
-    // Back always goes up exactly one level: detail, then the opened category, then a search, then the list screen.
-    // Levels: tab row (tabs + search) above, content below. Back from the content goes up to the tab row; Back from
-    // the tab row clears a search first and then leaves the screen. OK on a tab goes down into the content.
+    // Back always goes up one level: detail, then the opened category, then the main (featured) page, then the list
+    // screen. Back from the tab row clears a search first. OK on a tab goes down into the content.
     var contentFocused by remember { mutableStateOf(false) }
     BackHandler(enabled = nav.query.isNotEmpty() && !contentFocused) {
         UiSounds.play(UiSounds.Kind.BACK)
         onNav { it.copy(query = "", itemIndex = 0, resume = false) }
     }
-    BackHandler(enabled = contentFocused) {
+    // The featured page is the main page of the list: Back from the top of Movies, Series, Favourites or Live lands
+    // right on it (the cursor on its first card); Up from there returns to the tab it came from. Back from the main
+    // page itself leaves the list.
+    BackHandler(enabled = contentFocused && nav.tab != LibraryTab.HIGHLIGHTS) {
         UiSounds.play(UiSounds.Kind.BACK)
-        runCatching { tabTarget().requestFocus() }
+        onNav {
+            it.copy(
+                tab = LibraryTab.HIGHLIGHTS, category = 0, level = 0, sub = 0, itemIndex = 0, season = -1, resume = true,
+                origin = null, returnKey = null, played = null,
+            )
+        }
     }
     // The featured page is the home of the library: Back from the tab row of any other tab returns to it, and one
     // more Back leaves the screen.
@@ -377,7 +384,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus, on
                 modifier = Modifier.returnItem(tabMemory, tab.ordinal),
             )
         }
-        GlassButton(text = "🔍", onClick = onSearchAll, subtitle = null, modifier = Modifier.returnItem(tabMemory, SEARCH_ALL_ID))
+        GlassIconButton(LineIcon.SEARCH, stringResource(R.string.search_all_button), onSearchAll, Modifier.returnItem(tabMemory, SEARCH_ALL_ID))
         GlassTextField(
             value = nav.query,
             onValueChange = { text ->

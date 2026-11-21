@@ -18,6 +18,7 @@ import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.EpgUrl
 import dev.red74.prismplayer.data.Highlights
+import dev.red74.prismplayer.data.HighlightsCache
 import dev.red74.prismplayer.data.HighlightsData
 import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.FavoriteList
@@ -315,6 +316,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 container.catalogStore.delete(id)
                 container.settings.setChannelPrefs(id, ChannelPrefs())
                 container.removedStore.deleteList(id)
+                container.highlightsStore.delete(id)
                 _removedCount.value = container.removedStore.count()
             }
             _notice.value = runCatching { store.remove(id) }
@@ -428,6 +430,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (stored != null) {
                     openCatalogs += stored
                     _library.update { it.copy(loading = false, error = null, catalog = stored) }
+                    showSavedHighlights(playlist.id, stored)
                     loadGuide(playlist, stored)
                     val age = container.catalogStore.ageMs(id)
                     if (stored.outdated || (age != null && age > COPY_FRESH_MS)) refreshInBackground(playlist, stored.totalEntries, swap = stored.outdated)
@@ -447,6 +450,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val catalog = buildCatalog(parsed)
             _library.update { it.copy(loading = false, error = null, catalog = catalog) }
             recordStatus(id, PlaylistStatus.OK, parsed.count, null, null)
+            showSavedHighlights(playlist.id, catalog)
             loadGuide(playlist, catalog)
             saveDatabase(playlist, catalog)
         }
@@ -508,6 +512,27 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _library.value.playlistId?.let { openPlaylist(it, force = true) }
     }
 
+    /**
+     * The featured events of the last opening, shown at once (the guide is downloaded again in the background and
+     * replaces them silently). Channels are found again by their hashed keys; what is over or gone is dropped.
+     */
+    private fun showSavedHighlights(id: String, catalog: Catalog) {
+        viewModelScope.launch {
+            val saved = withContext(Dispatchers.IO) {
+                val text = container.highlightsStore.read(id) ?: return@withContext null
+                val wanted = HashSet<String>()
+                for (line in text.lineSequence().drop(1)) line.split('\t', limit = 7).getOrNull(5)?.split(',')?.let { wanted += it }
+                val found = HashMap<String, Channel>()
+                for (channel in catalog.allLive()) {
+                    val key = FavoriteKey.of(channel)
+                    if (key in wanted) found.putIfAbsent(key, channel)
+                }
+                HighlightsCache.decode(text, System.currentTimeMillis()) { found[it] }
+            } ?: return@launch
+            if (!saved.isEmpty && _library.value.playlistId == id && _highlights.value.isEmpty) _highlights.value = saved
+        }
+    }
+
     /** Downloads the programme guide in the background; the library shows it as soon as it is ready. */
     private fun loadGuide(playlist: SavedPlaylist, catalog: Catalog) {
         val url = EpgUrl.derive(playlist.url, catalog.epgUrl) ?: return
@@ -543,7 +568,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val featured = runCatching {
                 withContext(Dispatchers.IO) { Highlights.build(guide, catalog.allLive(), System.currentTimeMillis()) }
             }.getOrNull()
-            if (featured != null && job?.isActive != false) _highlights.value = featured
+            if (featured != null && job?.isActive != false) {
+                _highlights.value = featured
+                withContext(Dispatchers.IO) { container.highlightsStore.write(playlist.id, HighlightsCache.encode(featured)) }
+            }
             readPanelClock(catalog)
         }
     }
