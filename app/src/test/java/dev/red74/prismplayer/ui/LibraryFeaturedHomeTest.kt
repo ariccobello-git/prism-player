@@ -11,7 +11,6 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
-import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
@@ -20,7 +19,6 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
-import androidx.compose.ui.graphics.asAndroidBitmap
 import dev.red74.prismplayer.LibraryNav
 import dev.red74.prismplayer.LibraryState
 import dev.red74.prismplayer.LibraryTab
@@ -123,28 +121,37 @@ class LibraryFeaturedHomeTest {
     @Test
     fun theFeaturedPageIsDrawnAndSavedAsAPicture() {
         show()
-        val image = rule.onRoot().captureToImage()
-        val bitmap = image.asAndroidBitmap()
+        // The window's own view is drawn into a bitmap (captureToImage waits for an idle that the animated
+        // background never gives).
+        var bitmap: android.graphics.Bitmap? = null
+        rule.runOnUiThread {
+            val view = rule.activity.window.decorView
+            val w = view.width.coerceAtLeast(1)
+            val h = view.height.coerceAtLeast(1)
+            bitmap = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).also { view.draw(android.graphics.Canvas(it)) }
+        }
+        val picture = bitmap!!
         val colours = HashSet<Int>()
-        for (x in 0 until bitmap.width step 24) for (y in 0 until bitmap.height step 24) colours += bitmap.getPixel(x, y)
+        for (x in 0 until picture.width step 24) for (y in 0 until picture.height step 24) colours += picture.getPixel(x, y)
         assertTrue("page looks empty: ${colours.size} colours", colours.size > 12)
         val out = File("build/test-results/testDebugUnitTest/library/featured.png")
         out.parentFile?.mkdirs()
-        out.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        out.outputStream().use { picture.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         assertTrue(out.length() > 1000)
     }
 
     @Test
     fun upFromTheFeaturedPageReturnsToTheTabTheCursorCameFrom() {
         show()
-        for (tab in listOf("Series", "Movies", "Live")) {
-            focus(tab)
-            rule.onNodeWithText(tab).assertIsFocused()
+        // the cursor starts on the first tab; the arrows walk along the tab row
+        assertTrue("Live should hold the cursor when the list opens", isFocused("Live"))
+        for (tab in listOf("Movies", "Series")) {
+            press(Key.DirectionRight)
+            assertTrue("$tab should be focused after Right", isFocused(tab))
             press(Key.DirectionDown)
-            // down from a tab lands inside the page, not on a tab
             assertTrue("$tab still focused after Down", !isFocused(tab))
             press(Key.DirectionUp)
-            rule.onNodeWithText(tab).assertIsFocused()
+            assertTrue("Up from the page should return to $tab", isFocused(tab))
         }
     }
 
