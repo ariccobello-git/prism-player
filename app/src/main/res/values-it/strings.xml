@@ -317,4 +317,5 @@
     <string name="manage_empty">Non hai nascosto nulla e non hai ancora gruppi tuoi.</string>
     <string name="manage_channels_count">%1$d canali</string>
     <string name="organize_channel">Organizza canale</string>
+    <string name="highlights_loading">Cerco gli eventi in evidenza…</string>
 </resources>

@@ -317,4 +317,5 @@
     <string name="manage_empty">Nothing is hidden and there are no groups of your own yet.</string>
     <string name="manage_channels_count">%1$d channels</string>
     <string name="organize_channel">Arrange channel</string>
+    <string name="highlights_loading">Looking for the featured events…</string>
 </resources>

@@ -128,6 +128,7 @@ fun LibraryScreen(
     onPreviewWorked: (Channel) -> Unit = {},
     favoriteList: dev.red74.prismplayer.data.FavoriteList? = null,
     highlights: dev.red74.prismplayer.data.HighlightsData = dev.red74.prismplayer.data.HighlightsData.Empty,
+    highlightsLoading: Boolean = false,
     channelPrefs: dev.red74.prismplayer.data.ChannelPrefs = dev.red74.prismplayer.data.ChannelPrefs(),
     onPrefs: PrefsChange = {},
     onManage: () -> Unit = {},
@@ -138,6 +139,7 @@ fun LibraryScreen(
         LocalReachability provides reachability,
         LocalFavoriteList provides favoriteList,
         LocalHighlights provides highlights,
+        LocalHighlightsLoading provides highlightsLoading,
     ) {
         LibraryContent(state, nav, epg, favorites, onNav, onPlay, onToggleFavorite, onRetry, onBack, channelPrefs, onPrefs, onManage, onSearchAll)
     }
