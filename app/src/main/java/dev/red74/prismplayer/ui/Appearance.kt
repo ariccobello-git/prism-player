@@ -222,7 +222,7 @@ fun AppearanceScreen(onDone: () -> Unit) {
             Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 PrismText(text = stringResource(R.string.appearance_title), size = 30.sp, weight = FontWeight.Bold)
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
-                    Column(Modifier.weight(0.42f).fillMaxHeight().returnSection(colours), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(Modifier.weight(0.42f).fillMaxHeight().returnSection(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         PrismText(text = stringResource(R.string.appearance_pick), size = 18.sp, color = PrismColors.TextSecondary)
                         for (rowStart in 0 until Appearance.palettes.size step 6) {
                             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(vertical = 2.dp)) {
@@ -268,7 +268,7 @@ fun AppearanceScreen(onDone: () -> Unit) {
                     }
                     PalettePreview(preview, Modifier.weight(0.58f).fillMaxHeight())
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                Row(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Up to colours), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     GlassButton(
                         text = stringResource(R.string.appearance_confirm),
                         emphasized = true,

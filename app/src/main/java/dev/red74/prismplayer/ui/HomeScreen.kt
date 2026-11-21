@@ -112,7 +112,7 @@ fun HomeScreen(
                     Modifier
                         .verticalScroll(menuScroll)
                         .padding(36.dp)
-                        .returnSection(menuMemory),
+                        .returnSection(androidx.compose.ui.focus.FocusDirection.Right to listMemory),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     PrismText(
@@ -244,7 +244,7 @@ fun HomeScreen(
                         .fillMaxSize()
                         .focusRequester(listFocus)
                         .onFocusChanged { listFocused = it.hasFocus }
-                        .returnSection(listMemory)
+                        .returnSection(androidx.compose.ui.focus.FocusDirection.Left to menuMemory)
                         .padding(28.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {

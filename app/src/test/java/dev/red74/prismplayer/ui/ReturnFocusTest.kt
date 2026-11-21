@@ -10,6 +10,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.platform.testTag
@@ -45,7 +46,7 @@ class ReturnFocusTest {
         val episodes = ReturnFocus()
         rule.setContent {
             Column(Modifier.width(900.dp).height(500.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                LazyRow(Modifier.returnSection(seasons), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                LazyRow(Modifier.returnSection(FocusDirection.Down to episodes), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     itemsIndexed(List(3) { it }) { index, _ ->
                         GlassButton(
                             text = "Stagione ${index + 1}",
@@ -55,7 +56,7 @@ class ReturnFocusTest {
                         )
                     }
                 }
-                LazyColumn(Modifier.returnSection(episodes), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(Modifier.returnSection(FocusDirection.Up to seasons), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     itemsIndexed(List(10) { it }) { index, _ ->
                         GlassSurface(
                             onClick = {},
@@ -85,6 +86,16 @@ class ReturnFocusTest {
         press(Key.DirectionUp)
         press(Key.DirectionUp)
         rule.onNodeWithTag("s1").assertIsFocused()
+    }
+
+    @Test
+    fun seasonOneIsRememberedToo() {
+        setUpPage()
+        rule.runOnUiThread { seasonRequesters[0].requestFocus() }
+        rule.waitForIdle()
+        press(Key.DirectionDown)
+        press(Key.DirectionUp)
+        rule.onNodeWithTag("s0").assertIsFocused()
     }
 
     @Test

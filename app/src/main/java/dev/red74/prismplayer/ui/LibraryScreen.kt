@@ -822,12 +822,12 @@ private fun LiveView(
 
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SortBar(nav, onNav)
+        Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rowMemory)) { SortBar(nav, onNav) }
         LazyColumn(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .returnSection(rowMemory),
+                .returnSection(),
             state = listState,
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -1125,11 +1125,11 @@ private fun ItemGrid(
     }
 
     Column(Modifier.fillMaxSize().depthFocus().confineFocus(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SortBar(nav, onNav)
+        Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to itemMemory)) { SortBar(nav, onNav) }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(150.dp),
             state = gridState,
-            modifier = Modifier.weight(1f).fillMaxWidth().returnSection(itemMemory),
+            modifier = Modifier.weight(1f).fillMaxWidth().returnSection(),
             horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             contentPadding = PaddingValues(8.dp),
@@ -1373,7 +1373,7 @@ private fun ShowDetail(
             Badges(tags.badges)
             Description(show, maxLines = 4) { ContentInfo.seriesPlot(show.episodes.firstOrNull()?.url, show.title) }
             LazyRow(
-                Modifier.depthFocus().returnSection(seasonMemory),
+                Modifier.depthFocus().returnSection(androidx.compose.ui.focus.FocusDirection.Down to episodeMemory),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(vertical = 6.dp),
             ) {
@@ -1403,7 +1403,7 @@ private fun ShowDetail(
                 }
             }
             LazyColumn(
-                Modifier.fillMaxSize().onFocusChanged { episodesFocused = it.hasFocus }.depthFocus().returnSection(episodeMemory),
+                Modifier.fillMaxSize().onFocusChanged { episodesFocused = it.hasFocus }.depthFocus().returnSection(androidx.compose.ui.focus.FocusDirection.Up to seasonMemory),
                 state = episodeState,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -1492,7 +1492,7 @@ private fun FavoritesView(
     val rowMemory = remember(listState) { ReturnFocus(visible = { id -> listState.layoutInfo.visibleItemsInfo.any { it.index == id } }) }
     LaunchedEffect(entries.size) { rowMemory.requester(target).requestWhenReady() }
     val unavailable = LocalReachability.current.unavailable
-    LazyColumn(Modifier.fillMaxSize().returnSection(rowMemory), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize().returnSection(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(entries) { index, entry ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             GlassSurface(

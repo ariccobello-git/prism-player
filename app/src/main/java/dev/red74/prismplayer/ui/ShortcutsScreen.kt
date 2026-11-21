@@ -74,7 +74,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
 
     PrismBackground {
         Column(Modifier.fillMaxSize().padding(40.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to pinnedMemory), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 GlassButton(
                     text = stringResource(R.string.action_back),
                     onClick = onBack,
@@ -86,7 +86,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 GlassPanel(Modifier.weight(1f).fillMaxHeight().depthFocus()) {
                     LazyColumn(
-                        Modifier.fillMaxSize().returnSection(pinnedMemory).padding(24.dp),
+                        Modifier.fillMaxSize().returnSection(androidx.compose.ui.focus.FocusDirection.Right to availableMemory).padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         item { PrismText(text = stringResource(R.string.shortcuts_mine), size = 24.sp, weight = FontWeight.SemiBold) }
@@ -134,7 +134,7 @@ fun ShortcutsScreen(onBack: () -> Unit) {
                 GlassPanel(Modifier.weight(1f).fillMaxHeight().depthFocus()) {
                     val available = installed?.filter { it.packageName !in pinned }
                     LazyColumn(
-                        Modifier.fillMaxSize().returnSection(availableMemory).padding(24.dp),
+                        Modifier.fillMaxSize().returnSection(androidx.compose.ui.focus.FocusDirection.Left to pinnedMemory).padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         item { PrismText(text = stringResource(R.string.shortcuts_add), size = 24.sp, weight = FontWeight.SemiBold) }

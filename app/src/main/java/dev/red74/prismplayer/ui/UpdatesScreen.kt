@@ -48,12 +48,12 @@ fun UpdatesScreen(onBack: () -> Unit) {
     PrismBackground {
         GlassPanel(Modifier.fillMaxSize().padding(32.dp)) {
             Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rows), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
                     GlassButton(text = stringResource(R.string.action_back), onClick = onBack)
                     PrismText(text = stringResource(R.string.updates_title), size = 30.sp, weight = FontWeight.Bold)
                 }
                 LazyColumn(
-                    Modifier.fillMaxSize().depthFocus().returnSection(rows),
+                    Modifier.fillMaxSize().depthFocus().returnSection(),
                     // Room around the rows so the focus lift never pushes one past the panel's edge.
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),

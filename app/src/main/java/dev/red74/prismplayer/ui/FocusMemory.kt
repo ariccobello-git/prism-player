@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
@@ -99,10 +100,18 @@ class ReturnFocus(initial: Int = NONE, private val visible: (Int) -> Boolean = {
     }
 }
 
-/** A section (row, column, grid) that gives the cursor back to the item it was on, see [ReturnFocus]. */
+/**
+ * A section (row, column, grid). When the cursor leaves it in one of the [exits] directions, it goes to the item that
+ * the section on that side remembers (see [ReturnFocus]) instead of the geometrically nearest one; where nothing is
+ * remembered the usual D-pad choice applies.
+ */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-fun Modifier.returnSection(memory: ReturnFocus): Modifier = this
-    .focusProperties { enter = { memory.target() ?: FocusRequester.Default } }
+fun Modifier.returnSection(vararg exits: Pair<FocusDirection, ReturnFocus>): Modifier = this
+    .focusProperties {
+        exit = { direction ->
+            exits.firstOrNull { it.first == direction }?.second?.target() ?: FocusRequester.Default
+        }
+    }
     .focusGroup()
 
 /** Marks a focusable item of a [returnSection] under [id]. */
