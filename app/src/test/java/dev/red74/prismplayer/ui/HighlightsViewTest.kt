@@ -72,7 +72,8 @@ class HighlightsViewTest {
         rule.onNodeWithText("Roma - Lazio").performClick()
         rule.waitForIdle()
         assertEquals(listOf(sky), played)
-        assertTrue(nav.resume)
+        // The test keeps the page on screen, so it takes the cursor back at once, as it does when coming back from the player.
+        rule.onNodeWithText("Roma - Lazio").assertIsFocused()
     }
 
     @Test
@@ -92,15 +93,20 @@ class HighlightsViewTest {
     @Test
     fun comingBackPutsTheCursorOnTheCardWatchedAndNothingMoves() {
         show()
-        val first = rule.onNodeWithText("Roma - Lazio").getBoundsInRoot()
-        val second = rule.onNodeWithText("Inter - Juventus").getBoundsInRoot()
+        // The focused card is drawn a little larger around the same centre: compare centres, not edges.
+        fun centre(title: String): Pair<Float, Float> =
+            rule.onNodeWithText(title).getBoundsInRoot().let { (it.left.value + it.right.value) / 2 to (it.top.value + it.bottom.value) / 2 }
+        val first = centre("Roma - Lazio")
+        val second = centre("Inter - Juventus")
         for (url in listOf("http://x/2", "http://x/1", "http://x/2")) {
             nav = nav.copy(played = url, resume = true)
             rule.mainClock.advanceTimeBy(1000)
             rule.waitForIdle()
             rule.onNodeWithText(if (url.endsWith("2")) "Inter - Juventus" else "Roma - Lazio").assertIsFocused()
-            assertEquals("card moved", first, rule.onNodeWithText("Roma - Lazio").getBoundsInRoot())
-            assertEquals("card moved", second, rule.onNodeWithText("Inter - Juventus").getBoundsInRoot())
+            assertEquals("card moved", first.first, centre("Roma - Lazio").first, 0.5f)
+            assertEquals("card moved", first.second, centre("Roma - Lazio").second, 0.5f)
+            assertEquals("card moved", second.first, centre("Inter - Juventus").first, 0.5f)
+            assertEquals("card moved", second.second, centre("Inter - Juventus").second, 0.5f)
         }
     }
 
