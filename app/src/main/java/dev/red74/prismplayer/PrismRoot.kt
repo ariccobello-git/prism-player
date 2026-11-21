@@ -55,6 +55,7 @@ private sealed interface Screen {
     data object AppUpdate : Screen
     data object Shortcuts : Screen
     data object Removed : Screen
+    data object VerifyLists : Screen
     data object Appearance : Screen
     data object Exit : Screen
     data class Library(val playlistId: String) : Screen
@@ -152,7 +153,7 @@ private fun PrismNavigation(
             else -> UiSounds.play(UiSounds.Kind.SELECT)
         }
     }
-    // The automatic update check (once every 3 days) starts a few seconds after the home page is on screen, so the
+    // The automatic update check (at every start) starts a few seconds after the home page is on screen, so the
     // opening stays as quick as before. When it finds a newer version, the "Update?" card opens over the home page.
     val onHome = current is Screen.Home
     LaunchedEffect(onHome) {
@@ -230,7 +231,7 @@ private fun PrismNavigation(
                 notice = notice,
                 onOpen = { id -> push(Screen.Library(id)) },
                 onVerify = viewModel::verifyPlaylist,
-                onVerifyAll = viewModel::verifyAll,
+                onVerifyLists = { push(Screen.VerifyLists) },
                 onDelete = viewModel::removePlaylist,
                 onAddUrl = { push(Screen.Import) },
                 onPair = { push(Screen.Pair) },
@@ -278,6 +279,11 @@ private fun PrismNavigation(
             )
 
             Screen.Shortcuts -> ShortcutsScreen(onBack = ::pop)
+            Screen.VerifyLists -> dev.red74.prismplayer.ui.VerifyListsScreen(
+                playlists = playlists,
+                onStart = { ids -> viewModel.verifyPlaylists(ids); pop() },
+                onBack = ::pop,
+            )
             Screen.Removed -> dev.red74.prismplayer.ui.RemovedScreen(load = viewModel::removedContents, onBack = ::pop)
 
             Screen.Pair -> {
@@ -358,6 +364,7 @@ private fun screenKey(screen: Screen): String = when (screen) {
     Screen.AppUpdate -> "app_update"
     Screen.Shortcuts -> "shortcuts"
     Screen.Removed -> "removed"
+    Screen.VerifyLists -> "verify_lists"
     Screen.Appearance -> "appearance"
     Screen.Exit -> "exit"
     is Screen.Library -> "library"

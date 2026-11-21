@@ -20,12 +20,21 @@ internal class SwallowMesh(val cols: Int, val rows: Int, val width: Int, val hei
     val count: Int get() = cell.size
     private val start = FloatArray(cells.size)
     private val duration = FloatArray(cells.size)
+    private val turn = FloatArray(cells.size)
+    private val scatterX = FloatArray(cells.size)
+    private val scatterY = FloatArray(cells.size)
+    private val streak = FloatArray(cells.size)
 
     init {
         val random = java.util.Random(seed)
         for (i in cells.indices) {
             start[i] = BlackHoleTimeline.SWALLOW_START + random.nextFloat() * BlackHoleTimeline.SWALLOW_SPREAD
             duration[i] = BlackHoleTimeline.PIECE_MIN + random.nextFloat() * (BlackHoleTimeline.PIECE_MAX - BlackHoleTimeline.PIECE_MIN)
+            // every cell has its own spiral: how far it winds (and which way), how it first drifts off, how long its streak is
+            turn[i] = (0.8f + random.nextFloat() * 3.4f) * (if (random.nextInt(4) == 0) -1f else 1f)
+            scatterX[i] = (random.nextFloat() - 0.5f) * 2f * width * SCATTER
+            scatterY[i] = (random.nextFloat() - 0.5f) * 2f * height * SCATTER
+            streak[i] = 2f + random.nextFloat() * 6f
         }
     }
 
@@ -64,19 +73,21 @@ internal class SwallowMesh(val cols: Int, val rows: Int, val width: Int, val hei
                 val hy = (y0 + y1) / 2f
                 val r0 = hypot(hx - holeX, hy - holeY)
                 val a0 = atan2(hy - holeY, hx - holeX)
-                val turn = SPIRAL * f.pow(1.3f)
+                val wind = turn[i] * f.pow(1.3f)
                 val r = r0 * (1f - f)
-                val a = a0 + turn
-                val cx = holeX + cos(a) * r
-                val cy = holeY + sin(a) * r
+                val a = a0 + wind
+                // first the cell comes loose and drifts off, then the hole takes it
+                val loose = sin(Math.PI.toFloat() * f.coerceAtMost(0.7f) / 0.7f).coerceAtLeast(0f) * (1f - f)
+                val cx = holeX + cos(a) * r + scatterX[i] * loose
+                val cy = holeY + sin(a) * r + scatterY[i] * loose
                 // direction of travel: inwards plus the sideways swing of the spiral
-                val swing = SPIRAL * 1.3f * f.pow(0.3f)
+                val swing = turn[i] * 1.3f * f.pow(0.3f)
                 val dx = -cos(a) - sin(a) * swing * (1f - f)
                 val dy = -sin(a) + cos(a) * swing * (1f - f)
                 val len = hypot(dx, dy).coerceAtLeast(1e-6f)
                 val ux = dx / len
                 val uy = dy / len
-                val halfLong = (x1 - x0) / 2f * (1f + STREAK * f.pow(0.9f)) * (1f - f * 0.35f)
+                val halfLong = (x1 - x0) / 2f * (1f + streak[i] * f.pow(0.9f)) * (1f - f * 0.35f)
                 val halfWide = (y1 - y0) / 2f * (1f - f).pow(0.9f)
                 val lx = ux * halfLong
                 val ly = uy * halfLong
@@ -97,8 +108,7 @@ internal class SwallowMesh(val cols: Int, val rows: Int, val width: Int, val hei
     companion object {
         const val FLOATS_PER_QUAD = 8
         const val WHITE = -1
-        private const val SPIRAL = 2.4f
-        private const val STREAK = 5f
+        private const val SCATTER = 0.05f
 
         /** Indices of [quads] quads: two triangles each, over 4 corners per quad. */
         fun indices(quads: Int): ShortArray = ShortArray(quads * 6).also { out ->

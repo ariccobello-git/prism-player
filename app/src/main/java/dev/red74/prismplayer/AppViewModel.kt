@@ -51,7 +51,7 @@ import org.xmlpull.v1.XmlPullParser
 enum class Notice {
     ADDED, REMOVED, PAIRED, SAVE_FAILED, DUPLICATE,
     VERIFY_OK, VERIFY_FAILED, VERIFY_ALL_OK, VERIFY_SOME_FAILED,
-    UPDATE_UP_TO_DATE,
+    UPDATE_ENGINE,
 }
 
 /**
@@ -524,8 +524,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun verifyAll() {
-        val targets = store.items.value.filter { it.id !in _verifying.value }
+    /** Checks the chosen lists, one after the other (one connection at a time). */
+    fun verifyPlaylists(ids: Set<String>) {
+        val targets = store.items.value.filter { it.id in ids && it.id !in _verifying.value }
         if (targets.isEmpty()) return
         _verifying.update { it + targets.map { target -> target.id } }
         viewModelScope.launch {
@@ -624,25 +625,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * The automatic check, once every 3 days: called a few seconds after the home page shows, so it never slows the
-     * start. It reads only GitHub's list of releases. A newer release opens the update page (see PrismRoot); no news
-     * shows a short "Prism is up to date" so the user knows the check happened; no connection stays silent and is
-     * tried again at the next start.
+     * The automatic check, at every start: called a few seconds after the home page shows, so it never slows the
+     * start. It reads GitHub's list of releases and the engine's (audio and video codecs) latest version. A newer
+     * release opens the update page (see PrismRoot), with the engine's news in it; a newer engine alone is said in a
+     * short notice (it arrives with the next release); no news and no connection stay silent.
      */
     fun autoCheckForUpdate() {
         if (autoCheckTried || updateJob?.isActive == true || _update.value != UpdateState.Idle) return
         autoCheckTried = true
-        if (!UpdateCheck.autoCheckDue(container.settings.lastUpdateCheck, System.currentTimeMillis())) return
         updateJob = viewModelScope.launch {
             withContext(Dispatchers.IO) { runCatching { updater.cleanUp() } }
+            val engineLatest = async { UpdateCheck.fetchLatestEngine() }
             val json = UpdateCheck.fetchReleases() ?: return@launch
             container.settings.lastUpdateCheck = System.currentTimeMillis()
+            val engine = EngineInfo(androidx.media3.common.MediaLibraryInfo.VERSION, engineLatest.await())
             val installed = BuildConfig.BUILD_LABEL
             val latest = UpdateCheck.latestAppRelease(json)
             if (latest != null && UpdateCheck.isNewer(latest.tag, installed)) {
-                if (_update.value == UpdateState.Idle) _update.value = UpdateState.Available(latest, installed)
-            } else if (_notice.value == null) {
-                _notice.value = Notice.UPDATE_UP_TO_DATE
+                if (_update.value == UpdateState.Idle) _update.value = UpdateState.Available(latest, installed, engine)
+            } else if (engine.newer && _notice.value == null) {
+                _notice.value = Notice.UPDATE_ENGINE
             }
         }
     }

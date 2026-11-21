@@ -118,12 +118,6 @@ object UpdateCheck {
     fun isNewer(latest: String, installedLabel: String): Boolean =
         parts(installedLabel).isNotEmpty() && compare(latest, installedLabel) > 0
 
-    /** The automatic check runs at most once every [AUTO_CHECK_INTERVAL_MS]; a clock moved backwards counts as due. */
-    fun autoCheckDue(lastCheckMs: Long, nowMs: Long): Boolean =
-        lastCheckMs <= 0L || nowMs < lastCheckMs || nowMs - lastCheckMs >= AUTO_CHECK_INTERVAL_MS
-
-    const val AUTO_CHECK_INTERVAL_MS = 3L * 24 * 60 * 60 * 1000
-
     /** The SHA-256 written in a ".sha256" file ("<hex>  name"), lower case, or null when there is none. */
     fun shaFromFile(text: String): String? =
         Regex("""\b[0-9a-fA-F]{64}\b""").find(text)?.value?.lowercase()

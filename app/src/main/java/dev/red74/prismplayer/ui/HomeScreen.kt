@@ -61,7 +61,7 @@ fun HomeScreen(
     notice: Notice?,
     onOpen: (String) -> Unit,
     onVerify: (String) -> Unit,
-    onVerifyAll: () -> Unit,
+    onVerifyLists: () -> Unit,
     onDelete: (String) -> Unit,
     onAddUrl: () -> Unit,
     onPair: () -> Unit,
@@ -201,8 +201,8 @@ fun HomeScreen(
                     )
                     if (playlists.isNotEmpty()) {
                         GlassButton(
-                            text = stringResource(R.string.action_verify_all),
-                            onClick = onVerifyAll,
+                            text = stringResource(R.string.action_verify_lists),
+                            onClick = onVerifyLists,
                             modifier = Modifier.fillMaxWidth().focusMemory("verify_all").returnItem(menuMemory, 7),
                         )
                     }
@@ -318,7 +318,7 @@ private fun noticeText(notice: Notice): String = when (notice) {
     Notice.VERIFY_FAILED -> stringResource(R.string.notice_verify_failed)
     Notice.VERIFY_ALL_OK -> stringResource(R.string.notice_verify_all_ok)
     Notice.VERIFY_SOME_FAILED -> stringResource(R.string.notice_verify_some_failed)
-    Notice.UPDATE_UP_TO_DATE -> stringResource(R.string.notice_update_ok)
+    Notice.UPDATE_ENGINE -> stringResource(R.string.notice_update_engine)
 }
 
 @Composable

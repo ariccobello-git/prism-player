@@ -77,7 +77,12 @@
     <string name="status_checking">Verifica in corso…</string>
     <string name="action_verify">Verifica</string>
     <string name="action_retry">Riprova</string>
-    <string name="action_verify_all">Verifica tutte le liste</string>
+    <string name="action_verify_lists">Verifica liste…</string>
+    <string name="verify_pick_title">Scegli le liste da verificare</string>
+    <string name="verify_select_all">Seleziona tutte</string>
+    <string name="verify_select_none">Nessuna</string>
+    <string name="verify_start">Verifica %1$d</string>
+    <string name="verify_pick_hint">Scegli una o più liste, poi avvia la verifica.</string>
     <string name="notice_verify_ok">Lista verificata</string>
     <string name="notice_verify_failed">Verifica non riuscita. Se la lista richiede la VPN, attivala e riprova.</string>
     <string name="notice_verify_all_ok">Tutte le liste verificate</string>
@@ -168,7 +173,7 @@
     <string name="updates_engine_ok">Aggiornato (%1$s).</string>
     <string name="action_close">Chiudi</string>
     <string name="action_ok">OK</string>
-    <string name="notice_update_ok">Prism è aggiornata</string>
+    <string name="notice_update_engine">Ci sono codec audio e video più recenti: arrivano con il prossimo aggiornamento</string>
     <string name="update_title">Verifica aggiornamenti</string>
     <string name="update_checking">Cerco su GitHub una nuova versione di Prism…</string>
     <string name="update_offline">Non riesco a raggiungere GitHub. Controlla la connessione e riprova.</string>

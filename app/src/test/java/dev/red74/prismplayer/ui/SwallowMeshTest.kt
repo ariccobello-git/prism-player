@@ -100,4 +100,29 @@ class SwallowMeshTest {
         val (v, t, c) = arrays(m)
         assertEquals(3, m.fill(0f, 0f, 0f, v, t, c))
     }
+
+    @Test
+    fun cellsWindInBothDirectionsAndAtDifferentPaces() {
+        val m = mesh()
+        val (v, t, c) = arrays(m)
+        val quads = m.fill(3.2f, w / 2f, h / 2f, v, t, c)
+        assertTrue(quads > 0)
+        val turned = HashSet<Int>()
+        var clockwise = 0
+        var counter = 0
+        for (q in 0 until quads) {
+            val o = q * SwallowMesh.FLOATS_PER_QUAD
+            // tex corner 0 and 2 give the home cell centre; verts the current one
+            val hx = (t[o] + t[o + 4]) / 2f - w / 2f
+            val hy = (t[o + 1] + t[o + 5]) / 2f - h / 2f
+            val cx = (v[o] + v[o + 4]) / 2f - w / 2f
+            val cy = (v[o + 1] + v[o + 5]) / 2f - h / 2f
+            if (hx == cx && hy == cy) continue
+            val cross = hx * cy - hy * cx
+            if (cross > 0) clockwise++ else if (cross < 0) counter++
+            turned.add((kotlin.math.hypot(cx, cy) / kotlin.math.hypot(hx, hy).coerceAtLeast(1f) * 10).toInt())
+        }
+        assertTrue("both ways: $clockwise / $counter", clockwise > 0 && counter > 0)
+        assertTrue("different paces: $turned", turned.size >= 4)
+    }
 }
