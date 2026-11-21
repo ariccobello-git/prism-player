@@ -17,7 +17,6 @@ class LiveSpeedTest {
         val control = steadyLiveSpeed()
         // A stream that declares its own range and target offset (the worst case) is still held at 1x by the item.
         control.setLiveConfiguration(MediaItem.LiveConfiguration.Builder().setMinPlaybackSpeed(1f).setMaxPlaybackSpeed(1f).build())
-        control.setTargetLiveOffsetOverrideUs(5_000_000L)
         for ((offsetUs, bufferedUs) in listOf(
             0L to 0L, 1_000_000L to 500_000L, 2_000_000L to 10_000_000L, 5_000_000L to 5_000_000L,
             9_000_000L to 30_000_000L, 60_000_000L to 60_000_000L,
