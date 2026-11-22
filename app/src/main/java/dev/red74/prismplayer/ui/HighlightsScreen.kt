@@ -112,6 +112,7 @@ fun HighlightsView(
     val prefsFocus = remember { FocusRequester() }
     val prefs = SportPrefsStore.current
     val sport = tab is HighlightTab.Events && tab.kind == HighlightKind.SPORT
+    val showFollow = tabs.any { it is HighlightTab.Events }
 
     BackHandler(enabled = editing) { editing = false }
     var wasEditing by remember { mutableStateOf(false) }
@@ -143,12 +144,15 @@ fun HighlightsView(
                     onClick = { onNav { it.copy(highlightKind = index) } },
                 )
             }
-            MenuItem(
-                text = stringResource(R.string.sport_prefs_button),
-                selected = false,
-                focusRequester = prefsFocus,
-                onClick = { editing = true },
-            )
+            // Following teams only makes sense for live events: a list with just films and series (On Demand) has no such button.
+            if (showFollow) {
+                MenuItem(
+                    text = stringResource(R.string.sport_prefs_button),
+                    selected = false,
+                    focusRequester = prefsFocus,
+                    onClick = { editing = true },
+                )
+            }
         }
         Column(Modifier.weight(1f).fillMaxSize()) {
             when {
