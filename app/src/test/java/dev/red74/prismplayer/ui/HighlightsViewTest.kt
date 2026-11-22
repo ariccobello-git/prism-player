@@ -196,11 +196,11 @@ class HighlightsViewTest {
     fun aFollowedTeamGetsAForYouRowAtTheTop() {
         SportPrefsStore.update { it.withKeyword("Inter") }
         show()
-        // the followed match is the large card on top, tagged "For you"; nothing else is picked for the viewer
+        // the large card is what is on air (Roma - Lazio); the followed match has its own "For you" row
         rule.onNodeWithText("For you").assertIsDisplayed()
-        assertEquals(1, rule.onAllNodesWithTextCount("Inter - Juventus"))
+        assertTrue(rule.onAllNodesWithTextCount("Inter - Juventus") >= 1)
         assertEquals(1, rule.onAllNodesWithTextCount("Roma - Lazio"))
-        rule.onNodeWithTag("hero").assertIsDisplayed()
+        rule.onNodeWithTag("hero").assertTextContains("Roma - Lazio", substring = true)
     }
 
     @Test
