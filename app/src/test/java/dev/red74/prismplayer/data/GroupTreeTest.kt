@@ -49,4 +49,32 @@ class GroupTreeTest {
         assertEquals(0, GroupTree.levelUp(1, hasSubLevel = true))
         assertEquals(-1, GroupTree.levelUp(0, hasSubLevel = true))
     }
+
+    private val names = listOf("SKY [S]", "SKY [S+]", "SKY [HD]", "VUOTO [A]", "VUOTO [B]")
+
+    @Test
+    fun emptySubGroupsAreHiddenAndKeepTheirCategoryIndex() {
+        val main = GroupTree.build(names, listOf(5, 0, 3, 0, 0)).first()
+        assertEquals(listOf("[S]", "[HD]"), main.subs.map { it.name })
+        assertEquals(listOf(0, 2), main.categories)
+    }
+
+    @Test
+    fun aSingleFilledSubGroupGoesStraightToTheContents() {
+        val main = GroupTree.build(names, listOf(5, 0, 0, 0, 0)).first()
+        assertFalse(main.hasSubLevel)
+        assertEquals(listOf(0), main.categories)
+    }
+
+    @Test
+    fun aGroupWhoseSubGroupsAreAllEmptyKeepsThem() {
+        val tree = GroupTree.build(names, listOf(5, 0, 3, 0, 0))
+        val vuoto = tree.first { it.name == "VUOTO" }
+        assertEquals(2, vuoto.subs.size)
+    }
+
+    @Test
+    fun withoutCountsNothingIsHidden() {
+        assertEquals(3, GroupTree.build(names).first().subs.size)
+    }
 }

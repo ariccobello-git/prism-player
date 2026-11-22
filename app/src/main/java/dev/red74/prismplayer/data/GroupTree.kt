@@ -62,12 +62,19 @@ object GroupTree {
         return main.ifEmpty { name.trim() } to sub
     }
 
-    fun build(names: List<String>): List<Main> {
+    /**
+     * [counts] (items per category, same order as [names]) hides the sub-groups with nothing in them; a group whose
+     * sub-groups are all empty keeps them, so it never disappears or breaks.
+     */
+    fun build(names: List<String>, counts: List<Int>? = null): List<Main> {
         val order = LinkedHashMap<String, MutableList<Sub>>()
         names.forEachIndexed { index, name ->
             val (main, sub) = split(name)
             order.getOrPut(main) { ArrayList() } += Sub(sub ?: name.trim().ifEmpty { main }, index)
         }
-        return order.map { (main, subs) -> Main(main, subs) }
+        return order.map { (main, subs) ->
+            val filled = if (counts == null) subs else subs.filter { (counts.getOrNull(it.category) ?: 0) > 0 }
+            Main(main, if (filled.isEmpty()) subs else filled)
+        }
     }
 }

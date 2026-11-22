@@ -236,7 +236,15 @@ private fun LibraryContent(
             LibraryTab.FAVORITES -> emptyList()
         }
     }
-    val groupTree = remember(groupNames) { GroupTree.build(groupNames) }
+    val groupCounts = remember(state.catalog, nav.tab) {
+        when (nav.tab) {
+            LibraryTab.LIVE -> state.catalog.live.map { it.items.size }
+            LibraryTab.MOVIES -> state.catalog.movies.map { it.items.size }
+            LibraryTab.SERIES -> state.catalog.series.map { it.shows.size }
+            else -> emptyList()
+        }
+    }
+    val groupTree = remember(groupNames, groupCounts) { GroupTree.build(groupNames, groupCounts) }
     val currentMain = groupTree.getOrNull(nav.category)
     val levelUp = GroupTree.levelUp(nav.level, currentMain?.hasSubLevel == true)
     BackHandler(enabled = contentFocused && levelUp >= 0 && nav.query.isEmpty() && nav.tab != LibraryTab.FAVORITES &&
@@ -674,7 +682,7 @@ private fun GroupBrowser(
     onNav: NavChange,
     content: @Composable (cats: List<Int>) -> Unit,
 ) {
-    val tree = remember(names) { GroupTree.build(names) }
+    val tree = remember(names, counts) { GroupTree.build(names, counts) }
     if (tree.isEmpty()) return
     val other = stringResource(R.string.category_other)
     val all = stringResource(R.string.group_all)
