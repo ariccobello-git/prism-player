@@ -300,7 +300,7 @@ private fun LibraryContent(
                         size = 30.sp, weight = FontWeight.Bold, maxLines = 1,
                     )
                 }
-                if (!state.loading && state.error == null && organizing == null) TopBar(nav, onNav, tabMemory, onSearchAll)
+                if (!state.loading && state.error == null && organizing == null) TopBar(nav, onNav, tabMemory, onSearchAll, hasMovies = state.catalog.movies.isNotEmpty(), hasSeries = state.catalog.series.isNotEmpty())
                 }
 
                 when {
@@ -365,19 +365,13 @@ private fun LibraryContent(
 }
 
 @Composable
-private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus, onSearchAll: () -> Unit) {
+private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus, onSearchAll: () -> Unit, hasMovies: Boolean, hasSeries: Boolean) {
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
-        val tabs = listOf(
-            LibraryTab.LIVE to R.string.tab_live,
-            LibraryTab.MOVIES to R.string.tab_movies,
-            LibraryTab.SERIES to R.string.tab_series,
-            LibraryTab.FAVORITES to R.string.tab_favorites,
-        )
-        for ((tab, label) in tabs) {
+        for ((tab, label) in visibleTabs(hasMovies, hasSeries)) {
             GlassButton(
                 text = stringResource(label),
                 onClick = {
@@ -410,6 +404,14 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus, on
         )
     }
 }
+
+/** The tabs of the top row: Film and Serie are left out when the list has none of them. */
+internal fun visibleTabs(hasMovies: Boolean, hasSeries: Boolean): List<Pair<LibraryTab, Int>> = listOfNotNull(
+    LibraryTab.LIVE to R.string.tab_live,
+    (LibraryTab.MOVIES to R.string.tab_movies).takeIf { hasMovies },
+    (LibraryTab.SERIES to R.string.tab_series).takeIf { hasSeries },
+    LibraryTab.FAVORITES to R.string.tab_favorites,
+)
 
 /** Id of the "search everywhere" button in the tab row's cursor memory (the tabs use their own numbers). */
 private const val SEARCH_ALL_ID = 100
@@ -1145,7 +1147,7 @@ private fun PreviewPane(
 internal fun HeroPreview(channel: Channel, active: Boolean, modifier: Modifier = Modifier) {
     // The player (and its connection) exists only while the preview plays; until then the channel's logo holds the place.
     if (active) {
-        PreviewPlayer(channel, true, modifier, silent = true, startDelayMs = 0L)
+        PreviewPlayer(channel, true, modifier, startDelayMs = 0L)
     } else {
         Box(
             modifier
