@@ -1140,6 +1140,25 @@ private fun PreviewPane(
     }
 }
 
+/** The channel preview inside the large card of In evidenza: the same player, same single connection. */
+@Composable
+internal fun HeroPreview(channel: Channel, active: Boolean, modifier: Modifier = Modifier) {
+    // The player (and its connection) exists only while the preview plays; until then the channel's logo holds the place.
+    if (active) {
+        PreviewPlayer(channel, true, modifier)
+    } else {
+        Box(
+            modifier
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.Black.copy(alpha = 0.55f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Poster(channel.logo, Modifier.size(72.dp), fit = true)
+        }
+    }
+}
+
 /**
  * Small live preview. It starts shortly after the cursor settles on a channel, so zapping through the list does
  * not open a stream per row, and it is stopped before the full-screen player opens (panels often allow a single
