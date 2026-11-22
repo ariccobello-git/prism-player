@@ -69,6 +69,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
@@ -120,8 +121,15 @@ val PrismFont: FontFamily = FontFamily(
 
 /**
  * Edge of a glass element: a faint light line at rest, a clean white ring with the focus. The focused element is
- * the only bright thing on the screen, so the ring stays white whatever the colour set.
+ * the only bright thing on the screen, so the ring stays (almost) white, with a faint tint of the colour set.
  */
+/** The focus ring: white with a breath of the chosen colour, still the brightest thing on screen. */
+internal fun ringColor(accent: Color): Color = androidx.compose.ui.graphics.lerp(Color.White, accent, RING_TINT)
+
+internal const val RING_TINT = 0.18f
+
+private fun focusRing(): Color = ringColor(PrismColors.Accent)
+
 fun Modifier.glassEdge(
     focused: Boolean,
     rest: Color,
@@ -130,7 +138,7 @@ fun Modifier.glassEdge(
     restWidth: androidx.compose.ui.unit.Dp = 1.dp,
 ): Modifier = border(
     width = if (focused) focusedWidth else restWidth,
-    brush = SolidColor(if (focused) Color.White else rest),
+    brush = SolidColor(if (focused) focusRing() else rest),
     shape = shape,
 )
 
@@ -244,11 +252,40 @@ private val SymbolFonts: List<FontFamily> = listOf(
     FontFamily(Font(dev.red74.prismplayer.R.font.symbols_noto_math)),
 )
 
+internal const val GRAIN_ALPHA = 0.015f
+internal const val GRAIN_SIZE = 128
+
+/** Tile of random grey pixels, the same on every launch. */
+internal fun grainPixels(size: Int = GRAIN_SIZE, seed: Long = 7L): IntArray {
+    val random = java.util.Random(seed)
+    return IntArray(size * size) {
+        val v = random.nextInt(256)
+        (0xFF shl 24) or (v shl 16) or (v shl 8) or v
+    }
+}
+
+private fun grainBrush(): Brush {
+    val bitmap = android.graphics.Bitmap.createBitmap(
+        grainPixels(), GRAIN_SIZE, GRAIN_SIZE, android.graphics.Bitmap.Config.ARGB_8888,
+    ).asImageBitmap()
+    return ShaderBrush(
+        androidx.compose.ui.graphics.ImageShader(
+            bitmap,
+            androidx.compose.ui.graphics.TileMode.Repeated,
+            androidx.compose.ui.graphics.TileMode.Repeated,
+        ),
+    )
+}
+
+/** Many TVs crop the picture edge: the build label stays inside the ~2.5% safe margin. */
+internal val VERSION_SAFE_BOTTOM = 20.dp
+
 @Composable
 fun PrismBackground(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
+    val grain = remember { grainBrush() }
     val crest = if (Appearance.palette.arches) androidx.compose.ui.graphics.ImageBitmap.imageResource(dev.red74.prismplayer.R.drawable.roma_crest) else null
     Box(
         modifier
@@ -278,6 +315,8 @@ fun PrismBackground(
                 center = second,
             )
             if (Appearance.palette.arches) drawRome(PrismColors.Accent, crest)
+            // A whisper of grain over the wide dark gradients: 8-bit panels otherwise show visible steps.
+            drawRect(brush = grain, alpha = GRAIN_ALPHA)
         }
         content()
         // The installed build, always readable at the bottom of the page.
@@ -290,7 +329,7 @@ fun PrismBackground(
             color = PrismColors.TextSecondary,
             modifier = Modifier
                 .align(androidx.compose.ui.Alignment.BottomCenter)
-                .padding(bottom = 8.dp),
+                .padding(bottom = VERSION_SAFE_BOTTOM),
         )
     }
 }
@@ -349,7 +388,9 @@ fun GlassButton(
         label = "glassButtonScale",
     )
     val shape = RoundedCornerShape(20.dp)
-    val fill = when {
+    // Built once per state (not on every recomposition): long lists would otherwise rebuild hundreds of brushes.
+    val fill = remember(tint, focused, danger, emphasized, PrismColors.Accent, PrismColors.AccentAlt) {
+    when {
         tint != null && focused -> Brush.linearGradient(listOf(tint.copy(alpha = 0.42f), tint.copy(alpha = 0.24f)))
         tint != null -> Brush.linearGradient(listOf(tint.copy(alpha = 0.20f), tint.copy(alpha = 0.08f)))
         focused && danger -> Brush.linearGradient(
@@ -364,6 +405,7 @@ fun GlassButton(
         else -> Brush.linearGradient(
             listOf(Color.White.copy(alpha = 0.09f), Color.White.copy(alpha = 0.03f)),
         )
+    }
     }
 
     Column(
@@ -540,11 +582,13 @@ fun GlassSurface(
     )
     val shape = RoundedCornerShape(cornerRadius)
     val base = tint ?: PrismColors.Accent
-    val fill = when {
+    val fill = remember(base, focused, tint, selected, PrismColors.AccentAlt) {
+    when {
         focused -> Brush.linearGradient(listOf(base.copy(alpha = 0.38f), PrismColors.AccentAlt.copy(alpha = 0.24f)))
         tint != null -> Brush.linearGradient(listOf(tint.copy(alpha = 0.20f), tint.copy(alpha = 0.08f)))
         selected -> Brush.linearGradient(listOf(base.copy(alpha = 0.22f), PrismColors.AccentAlt.copy(alpha = 0.12f)))
         else -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.03f)))
+    }
     }
     Box(
         modifier
@@ -679,5 +723,7 @@ fun Modifier.depthFocus(): Modifier = composed {
             scaleX = s
             scaleY = s
             alpha = 0.55f + 0.45f * depth
+            // Opacity applied per element, with no off-screen buffer for the whole section (lighter on the stick).
+            compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
         }
 }
