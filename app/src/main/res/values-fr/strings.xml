@@ -10,6 +10,7 @@
     <string name="playlists_empty">Aucune liste pour l’instant. Ajoutez une URL avec la télécommande ou associez votre téléphone.</string>
     <string name="action_delete">Supprimer</string>
     <string name="action_delete_confirm">Confirmer ?</string>
+    <string name="action_keep">Ne pas supprimer</string>
     <string name="notice_added">Liste enregistrée</string>
     <string name="notice_removed">Liste supprimée</string>
     <string name="notice_paired">Liste reçue. Si elle nécessite un VPN, activez-le et appuyez sur Vérifier.</string>
@@ -199,9 +200,9 @@
     <string name="codec_hw">Oui, matériel</string>
     <string name="codec_sw">Oui, logiciel</string>
     <string name="updates_note">Le son Dolby et DTS peut quand même arriver directement à une barre de son, même si cet appareil ne le décode pas. L’application n’installe une mise à jour qu’après votre accord.</string>
-    <string name="action_shortcuts">Raccourcis</string>
-    <string name="shortcuts_title">Raccourcis</string>
-    <string name="shortcuts_mine">Mes raccourcis</string>
+    <string name="action_shortcuts">VPN/AUTRE</string>
+    <string name="shortcuts_title">VPN/AUTRE</string>
+    <string name="shortcuts_mine">Mes apps VPN/AUTRE</string>
     <string name="shortcuts_add">Applications installées : OK pour ajouter</string>
     <string name="shortcuts_empty">Aucun raccourci pour l’instant. Choisissez une application à droite pour l’ajouter ici.</string>
     <string name="shortcuts_remove">Retirer</string>

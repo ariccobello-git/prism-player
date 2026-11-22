@@ -236,7 +236,15 @@ private fun LibraryContent(
             LibraryTab.FAVORITES -> emptyList()
         }
     }
-    val groupTree = remember(groupNames) { GroupTree.build(groupNames) }
+    val groupCounts = remember(state.catalog, nav.tab) {
+        when (nav.tab) {
+            LibraryTab.LIVE -> state.catalog.live.map { it.items.size }
+            LibraryTab.MOVIES -> state.catalog.movies.map { it.items.size }
+            LibraryTab.SERIES -> state.catalog.series.map { it.shows.size }
+            else -> emptyList()
+        }
+    }
+    val groupTree = remember(groupNames, groupCounts) { GroupTree.build(groupNames, groupCounts) }
     val currentMain = groupTree.getOrNull(nav.category)
     val levelUp = GroupTree.levelUp(nav.level, currentMain?.hasSubLevel == true)
     BackHandler(enabled = contentFocused && levelUp >= 0 && nav.query.isEmpty() && nav.tab != LibraryTab.FAVORITES &&
@@ -674,7 +682,7 @@ private fun GroupBrowser(
     onNav: NavChange,
     content: @Composable (cats: List<Int>) -> Unit,
 ) {
-    val tree = remember(names) { GroupTree.build(names) }
+    val tree = remember(names, counts) { GroupTree.build(names, counts) }
     if (tree.isEmpty()) return
     val other = stringResource(R.string.category_other)
     val all = stringResource(R.string.group_all)
@@ -1132,6 +1140,25 @@ private fun PreviewPane(
     }
 }
 
+/** The channel preview inside the large card of In evidenza: the same player, same single connection. */
+@Composable
+internal fun HeroPreview(channel: Channel, active: Boolean, modifier: Modifier = Modifier) {
+    // The player (and its connection) exists only while the preview plays; until then the channel's logo holds the place.
+    if (active) {
+        PreviewPlayer(channel, true, modifier, silent = true, startDelayMs = 0L)
+    } else {
+        Box(
+            modifier
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color.Black.copy(alpha = 0.55f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Poster(channel.logo, Modifier.size(72.dp), fit = true)
+        }
+    }
+}
+
 /**
  * Small live preview. It starts shortly after the cursor settles on a channel, so zapping through the list does
  * not open a stream per row, and it is stopped before the full-screen player opens (panels often allow a single
@@ -1142,9 +1169,17 @@ private fun PreviewPane(
  * connects. Until the first picture arrives the channel's logo is shown instead of a black or frozen frame.
  */
 @Composable
-private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier = Modifier) {
+private fun PreviewPlayer(
+    channel: Channel?,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    /** No sound: the audio is not even opened, so the picture comes sooner and the stick does less. */
+    silent: Boolean = false,
+    /** Waiting time before connecting; null is the usual one (the caller may have waited already). */
+    startDelayMs: Long? = null,
+) {
     val context = LocalContext.current
-    val exo = remember { createPlayer(context, preview = true) }
+    val exo = remember { createPlayer(context, preview = true, silent = silent) }
     val hold = remember { StreamHold() }
     var failed by remember { mutableStateOf(false) }
     /** True once the current channel has shown its first picture. */
@@ -1193,7 +1228,7 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
             hold.release()
             return@LaunchedEffect
         }
-        delay(if (firstStart) PREVIEW_DELAY_MS * 2 else PREVIEW_DELAY_MS)
+        delay(startDelayMs ?: if (firstStart) PREVIEW_DELAY_MS * 2 else PREVIEW_DELAY_MS)
         firstStart = false
         // Any list, guide or plot request still talking to the panel is closed before the preview connects.
         hold.acquire()

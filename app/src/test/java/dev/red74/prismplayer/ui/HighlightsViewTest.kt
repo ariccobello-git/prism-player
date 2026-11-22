@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -296,5 +297,45 @@ class HighlightsViewTest {
         rule.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
         rule.waitForIdle()
         rule.onNodeWithText("Films").assertIsFocused()
+    }
+
+    @Test
+    fun longTitlesGetSmallerType() {
+        assertTrue(titleSp(10, large = true) > titleSp(40, large = true))
+        assertTrue(titleSp(40, large = true) > titleSp(90, large = true))
+        assertTrue(titleSp(10, large = false) > titleSp(60, large = false))
+        // the large card never shouts: at most 30 sp, and never below 20 sp
+        for (n in 0..200) assertTrue(titleSp(n, large = true) in 20..30)
+        for (n in 0..200) assertTrue(titleSp(n, large = false) in 13..18)
+        // with the preview taking room, the same title is never bigger
+        for (n in 0..120) assertTrue(titleSp(n, large = true, narrow = true) <= titleSp(n, large = true))
+    }
+
+    @Test
+    fun theLiveHeroReservesRoomForThePreviewAndStartsNothingYet() {
+        show()
+        rule.onNodeWithTag("heroPreview", useUnmergedTree = true).assertIsDisplayed()
+        assertTrue(dev.red74.prismplayer.player.PreviewPlayers.anyPlaying().not())
+    }
+
+    @Test
+    fun aLiveCardTheCursorRestsOnTakesTheLargeCardAndTheCursorFollows() {
+        val second = listOf(
+            HighlightEvent(HighlightKind.SPORT, "Roma - Lazio", null, onAirStart, onAirStart + 7_200_000L, 50, listOf(sky)),
+            HighlightEvent(HighlightKind.SPORT, "Inter - Juventus", null, onAirStart, onAirStart + 7_200_000L, 40, listOf(dazn)),
+        )
+        show(HighlightsData(mapOf(HighlightKind.SPORT to second)))
+        rule.waitForIdle()
+        rule.onNodeWithText("Inter - Juventus").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(1000)
+        rule.waitForIdle()
+        // not yet: a quick pass over a card changes nothing
+        rule.onNodeWithTag("hero").assertTextContains("Roma - Lazio", substring = true)
+        rule.mainClock.advanceTimeBy(PREVIEW_DWELL_MS + 1000)
+        rule.waitForIdle()
+        rule.onNodeWithTag("hero").assertTextContains("Inter - Juventus", substring = true)
+        rule.onNodeWithText("Inter - Juventus").assertIsFocused()
+        // the old large card goes down into the rows
+        rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
     }
 }

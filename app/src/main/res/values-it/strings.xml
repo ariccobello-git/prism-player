@@ -10,6 +10,7 @@
     <string name="playlists_empty">Nessuna playlist. Aggiungi un URL con il telecomando o abbina il telefono.</string>
     <string name="action_delete">Elimina</string>
     <string name="action_delete_confirm">Confermi?</string>
+    <string name="action_keep">Non eliminare</string>
     <string name="notice_added">Playlist salvata</string>
     <string name="notice_removed">Playlist rimossa</string>
     <string name="notice_paired">Lista ricevuta. Se serve la VPN, attivala e premi Verifica.</string>
@@ -199,9 +200,9 @@
     <string name="codec_hw">Sì, hardware</string>
     <string name="codec_sw">Sì, software</string>
     <string name="updates_note">L\'audio Dolby e DTS può comunque arrivare direttamente a una soundbar anche se questo dispositivo non lo decodifica. L\'app installa un aggiornamento solo dopo il tuo sì.</string>
-    <string name="action_shortcuts">Scorciatoie</string>
-    <string name="shortcuts_title">Scorciatoie</string>
-    <string name="shortcuts_mine">Le mie scorciatoie</string>
+    <string name="action_shortcuts">VPN/ALTRO</string>
+    <string name="shortcuts_title">VPN/ALTRO</string>
+    <string name="shortcuts_mine">Le mie app VPN/ALTRO</string>
     <string name="shortcuts_add">App installate: premi OK per aggiungere</string>
     <string name="shortcuts_empty">Nessuna scorciatoia. Scegli un\'app a destra per aggiungerla qui.</string>
     <string name="shortcuts_remove">Rimuovi</string>

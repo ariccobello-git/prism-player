@@ -217,7 +217,7 @@ object StreamIdentity {
 private const val PREVIEW_MAX_BITRATE = 2_500_000
 
 /** One player setup for the full-screen view and (with [preview]) the small preview next to the channel list. */
-fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
+fun createPlayer(context: Context, preview: Boolean = false, silent: Boolean = false): ExoPlayer {
     AudioSafety.load(context)
     // A fresh source for every connection, so a change of identity applies to the next try (and to each HLS segment).
     // Every connection is counted (see StreamConnections), so the next stream can wait for this one to close.
@@ -269,7 +269,8 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
     val builder = ExoPlayer.Builder(context, renderers)
         .setMediaSourceFactory(sources)
         .setLoadControl(loadControl)
-        .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
+        // A silent preview opens no audio at all: faster to start, lighter on the stick, and it never takes the sound focus.
+        .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ !silent)
     // Live never changes speed to catch up with or build a cushion against the live edge: Media3's default
     // (0.97x to 1.03x) made live look smooth but in slight slow motion, out of step with real time. Real time wins.
     builder.setLivePlaybackSpeedControl(steadyLiveSpeed())
@@ -281,7 +282,8 @@ fun createPlayer(context: Context, preview: Boolean = false): ExoPlayer {
         selector.setParameters(
             selector.buildUponParameters()
                 .setMaxVideoSizeSd()
-                .setMaxVideoBitrate(PREVIEW_MAX_BITRATE),
+                .setMaxVideoBitrate(PREVIEW_MAX_BITRATE)
+                .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, silent),
         )
         builder.setTrackSelector(selector)
     }

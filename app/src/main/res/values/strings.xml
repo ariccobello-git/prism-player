@@ -10,6 +10,7 @@
     <string name="playlists_empty">No playlists yet. Add a URL with the remote or pair your phone.</string>
     <string name="action_delete">Delete</string>
     <string name="action_delete_confirm">Confirm?</string>
+    <string name="action_keep">Don\'t delete</string>
     <string name="notice_added">Playlist saved</string>
     <string name="notice_removed">Playlist removed</string>
     <string name="notice_paired">Playlist received. If it needs a VPN, turn it on and press Verify.</string>
@@ -199,9 +200,9 @@
     <string name="codec_hw">Yes, hardware</string>
     <string name="codec_sw">Yes, software</string>
     <string name="updates_note">Dolby and DTS sound can still reach a soundbar directly even when this device cannot decode it. The app installs an update only after you say yes.</string>
-    <string name="action_shortcuts">Shortcuts</string>
-    <string name="shortcuts_title">Shortcuts</string>
-    <string name="shortcuts_mine">My shortcuts</string>
+    <string name="action_shortcuts">VPN/OTHER</string>
+    <string name="shortcuts_title">VPN/OTHER</string>
+    <string name="shortcuts_mine">My VPN/other apps</string>
     <string name="shortcuts_add">Installed apps: press OK to add</string>
     <string name="shortcuts_empty">No shortcuts yet. Pick an app on the right to add it here.</string>
     <string name="shortcuts_remove">Remove</string>

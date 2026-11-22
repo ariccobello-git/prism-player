@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -77,6 +79,28 @@ private val CardWidth = 240.dp
 private val CardHeight = 138.dp
 private val HeroHeight = 226.dp
 private val MenuWidth = 210.dp
+
+/** How long the cursor rests on a card before its preview starts (Netflix, Disney+ and Apple TV wait about two seconds). */
+internal const val PREVIEW_DWELL_MS = 2_000L
+
+/**
+ * Title size in sp for a text of [length] characters: long titles get smaller type instead of being cut or shouting.
+ * [narrow] is for the large card while its preview takes part of the width.
+ */
+internal fun titleSp(length: Int, large: Boolean, narrow: Boolean = false): Int {
+    val n = if (narrow) length * 3 / 2 else length
+    return if (large) when {
+        n <= 28 -> 30
+        n <= 44 -> 26
+        n <= 64 -> 22
+        else -> 20
+    } else when {
+        n <= 22 -> 18
+        n <= 36 -> 16
+        n <= 52 -> 14
+        else -> 13
+    }
+}
 
 /**
  * "In evidenza": the most awaited events of the next hours, by kind (Sport, Film, Entertainment), each with its time
@@ -209,10 +233,16 @@ private fun EventRows(
     }
     val pageRows = remember(events, minute, prefs, likedGroups) { Highlights.pageRows(events, nowMs, prefs, likedGroups) }
     // The first event of the page (the one the viewer is most likely after) is shown large on top, once.
-    val hero = pageRows.firstOrNull()?.events?.firstOrNull()
+    val defaultHero = pageRows.firstOrNull()?.events?.firstOrNull()
+    // A card the cursor rested on for a while takes the place of the large one (with its preview).
+    var promoted by remember { mutableStateOf<HighlightEvent?>(null) }
+    val hero = promoted?.takeIf { p -> pageRows.any { row -> p in row.events } } ?: defaultHero
     val rows = remember(pageRows, hero) {
-        if (hero == null) pageRows else pageRows.map { row -> row.copy(events = row.events.filter { it !== hero }) }.filter { it.events.isNotEmpty() }
+        if (hero == null) pageRows else pageRows.map { row -> row.copy(events = row.events.filter { it != hero }) }.filter { it.events.isNotEmpty() }
     }
+    // The event the cursor is on (null when it is elsewhere) and whether the large card is playing its preview.
+    var focusedEvent by remember { mutableStateOf<HighlightEvent?>(null) }
+    var previewing by remember { mutableStateOf(false) }
     val played = nav.played
     val heroPlayed = remember(hero, played) { hero != null && played != null && hero.channels.any { it.url == played } }
     val target = remember(rows, played) { locate(rows, played) }
@@ -232,6 +262,29 @@ private fun EventRows(
         if (notice != null) {
             delay(2_500)
             notice = null
+        }
+    }
+
+    LaunchedEffect(focusedEvent, hero, nowMs / 60_000L) {
+        val f = focusedEvent
+        val live = f != null && f.isLive(nowMs)
+        if (f == null || !live) {
+            previewing = false
+            return@LaunchedEffect
+        }
+        if (f == hero) {
+            if (!previewing) {
+                delay(PREVIEW_DWELL_MS)
+                previewing = true
+            }
+        } else {
+            previewing = false
+            delay(PREVIEW_DWELL_MS)
+            // The card goes up into the large one and the cursor follows it, so the next move starts from there.
+            promoted = f
+            previewing = true
+            listState.scrollToItem(0)
+            heroFocus.requestWhenReady()
         }
     }
 
@@ -263,6 +316,8 @@ private fun EventRows(
                 liked = pageRows.first().forYou,
                 reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                 focusRequester = heroFocus,
+                previewing = previewing,
+                onFocusChange = { has -> focusedEvent = if (has) hero else if (focusedEvent == hero) null else focusedEvent },
                 onClick = {
                     if (onAir) {
                         onNav { it.copy(resume = true) }
@@ -292,6 +347,7 @@ private fun EventRows(
                             liked = row.forYou,
                             reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                             focusRequester = if (!onHero && rowIndex == target.first && column == target.second) cardFocus else null,
+                            onFocusChange = { has -> focusedEvent = if (has) event else if (focusedEvent == event) null else focusedEvent },
                             onClick = {
                                 if (onAir) {
                                     onNav { it.copy(resume = true) }
@@ -500,38 +556,58 @@ internal fun locate(rows: List<HighlightRow>, played: String?): Pair<Int, Int> {
 }
 
 @Composable
-private fun EventCard(event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?, onClick: () -> Unit) {
+private fun EventCard(
+    event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?,
+    onFocusChange: (Boolean) -> Unit, onClick: () -> Unit,
+) {
     GlassSurface(
         onClick = onClick,
-        modifier = Modifier.width(CardWidth).height(CardHeight),
+        modifier = Modifier.width(CardWidth).height(CardHeight).onFocusChanged { onFocusChange(it.hasFocus) },
         focusRequester = focusRequester,
         tint = if (live) PrismColors.Danger else PrismColors.Accent,
         focusScale = 1.06f,
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             EventHeader(event, live, liked, compact = true)
-            PrismText(text = event.title, size = 20.sp, weight = FontWeight.Bold, maxLines = 2)
-            EventAction(event, reminder, 15.sp)
+            PrismText(text = event.title, size = titleSp(event.title.length, large = false).sp, weight = FontWeight.Bold, maxLines = 2)
+            EventAction(event, reminder, 14.sp)
         }
     }
 }
 
-/** The big card at the top of the page, like the featured banner of a streaming app. */
+/**
+ * The big card at the top of the page, like the featured banner of a streaming app. For an event on air the right side
+ * is kept for the channel's preview, which starts after the cursor has rested here for a moment ([previewing]); the
+ * space is there from the start, so nothing moves when the picture arrives. The title adapts to its length.
+ */
 @Composable
-private fun HeroCard(event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?, onClick: () -> Unit) {
+private fun HeroCard(
+    event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?,
+    previewing: Boolean, onFocusChange: (Boolean) -> Unit, onClick: () -> Unit,
+) {
     GlassSurface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(HeroHeight).testTag("hero"),
+        modifier = Modifier.fillMaxWidth().height(HeroHeight).testTag("hero").onFocusChanged { onFocusChange(it.hasFocus) },
         focusRequester = focusRequester,
         tint = PrismColors.Accent,
         cornerRadius = 28.dp,
-        contentPadding = PaddingValues(horizontal = 32.dp, vertical = 24.dp),
+        contentPadding = PaddingValues(horizontal = 28.dp, vertical = 20.dp),
         focusScale = 1.02f,
     ) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            EventHeader(event, live, liked)
-            PrismText(text = event.title, size = 40.sp, weight = FontWeight.Bold, maxLines = 2)
-            EventAction(event, reminder, 24.sp, strong = true)
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                EventHeader(event, live, liked)
+                PrismText(
+                    text = event.title,
+                    size = titleSp(event.title.length, large = true, narrow = live).sp,
+                    weight = FontWeight.Bold,
+                    maxLines = 3,
+                )
+                EventAction(event, reminder, 18.sp, strong = true)
+            }
+            if (live) {
+                HeroPreview(event.channels.first(), active = previewing, Modifier.fillMaxHeight().testTag("heroPreview"))
+            }
         }
     }
 }
