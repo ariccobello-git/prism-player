@@ -338,4 +338,23 @@ class HighlightsViewTest {
         // the old large card goes down into the rows
         rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
     }
+
+    @Test
+    fun theLargeCardIsAlwaysSomethingOnAirNow() {
+        val mixed = listOf(
+            HighlightEvent(HighlightKind.SPORT, "Atalanta - Torino", null, soon, soon + 7_200_000L, 90, listOf(dazn)),
+            HighlightEvent(HighlightKind.SPORT, "Roma - Lazio", null, onAirStart, onAirStart + 7_200_000L, 40, listOf(sky)),
+        )
+        show(HighlightsData(mapOf(HighlightKind.SPORT to mixed)))
+        rule.waitForIdle()
+        rule.onNodeWithTag("hero").assertTextContains("Roma - Lazio", substring = true)
+    }
+
+    @Test
+    fun withNothingOnAirTheLargeCardIsTheFirstEvent() {
+        show(HighlightsData(mapOf(HighlightKind.FILM to film)))
+        nav = nav.copy(highlightKind = 0)
+        rule.waitForIdle()
+        rule.onNodeWithTag("hero").assertTextContains("Heat", substring = true)
+    }
 }

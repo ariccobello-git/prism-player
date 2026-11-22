@@ -233,7 +233,10 @@ private fun EventRows(
     }
     val pageRows = remember(events, minute, prefs, likedGroups) { Highlights.pageRows(events, nowMs, prefs, likedGroups) }
     // The first event of the page (the one the viewer is most likely after) is shown large on top, once.
-    val defaultHero = pageRows.firstOrNull()?.events?.firstOrNull()
+    // The large card is always something on air right now (the most awaited of them, in page order); only when nothing
+    // is on air does it fall back to the first event of the page.
+    val defaultHero = pageRows.firstNotNullOfOrNull { row -> row.events.firstOrNull { it.isLive(nowMs) } }
+        ?: pageRows.firstOrNull()?.events?.firstOrNull()
     // A card the cursor rested on for a while takes the place of the large one (with its preview).
     var promoted by remember { mutableStateOf<HighlightEvent?>(null) }
     val hero = promoted?.takeIf { p -> pageRows.any { row -> p in row.events } } ?: defaultHero
@@ -313,7 +316,7 @@ private fun EventRows(
             HeroCard(
                 event = hero,
                 live = onAir,
-                liked = pageRows.first().forYou,
+                liked = pageRows.firstOrNull { hero in it.events }?.forYou == true,
                 reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                 focusRequester = heroFocus,
                 previewing = previewing,
