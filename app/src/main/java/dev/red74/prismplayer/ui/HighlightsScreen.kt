@@ -35,6 +35,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -75,6 +77,23 @@ private val CardWidth = 240.dp
 private val CardHeight = 138.dp
 private val HeroHeight = 226.dp
 private val MenuWidth = 210.dp
+
+/**
+ * The "poster" of an event card: one colour per kind (green sport, violet film, magenta entertainment) fading to a dark
+ * base, so the title at the bottom always sits on a calm, dark area. Shared constants: nothing is created per frame.
+ */
+private fun poster(color: Color): Brush =
+    Brush.verticalGradient(listOf(color.copy(alpha = 0.78f), color.copy(alpha = 0.34f), Color(0xFF070B14).copy(alpha = 0.90f)))
+
+private val PosterSport = poster(Color(0xFF1FA463))
+private val PosterFilm = poster(Color(0xFF7C4DDB))
+private val PosterShow = poster(Color(0xFFD1488A))
+
+private fun posterFor(kind: HighlightKind): Brush = when (kind) {
+    HighlightKind.SPORT -> PosterSport
+    HighlightKind.FILM -> PosterFilm
+    HighlightKind.ENTERTAINMENT -> PosterShow
+}
 
 /**
  * "In evidenza": the most awaited events of the next hours, by kind (Sport, Film, Entertainment), each with its time
@@ -508,6 +527,7 @@ private fun EventCard(event: HighlightEvent, live: Boolean, liked: Boolean, remi
         focusRequester = focusRequester,
         tint = if (live) PrismColors.Danger else PrismColors.Accent,
         focusScale = 1.06f,
+        art = posterFor(event.kind),
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             EventHeader(event, live, liked, compact = true)
@@ -528,6 +548,7 @@ private fun HeroCard(event: HighlightEvent, live: Boolean, liked: Boolean, remin
         cornerRadius = 28.dp,
         contentPadding = PaddingValues(horizontal = 32.dp, vertical = 24.dp),
         focusScale = 1.02f,
+        art = posterFor(event.kind),
     ) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             EventHeader(event, live, liked)

@@ -518,6 +518,7 @@ fun GlassSurface(
     contentPadding: androidx.compose.foundation.layout.PaddingValues =
         androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 10.dp),
     focusScale: Float = 1.03f,
+    art: Brush? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -553,6 +554,7 @@ fun GlassSurface(
             }
             .clip(shape)
             .background(fill)
+            .then(if (art != null) Modifier.background(art) else Modifier)
             .topSheen(cornerRadius)
             .glassEdge(
                 focused = focused,
