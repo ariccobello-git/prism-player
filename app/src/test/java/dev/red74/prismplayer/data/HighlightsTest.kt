@@ -218,4 +218,32 @@ class HighlightsTest {
         val stopped = Highlights.pageRows(events, now, SportPrefs().withKeyword("Inter").withoutKeyword("inter"), emptySet(), utc)
         assertEquals(none, stopped)
     }
+
+    private val euro = Channel("Eurosport 1", "http://x/9", "Sport", tvgId = "e1")
+
+    @Test
+    fun liveSportOnDaznOrSkyComesBeforeOtherLiveSportEvenWithLowerScore() {
+        val other = event("Tennis: Final", -0.5, SportTopic.TENNIS, 90, euro)
+        val onDazn = event("Lecce - Genoa", -0.5, SportTopic.FOOTBALL, 10, dazn)
+        val onSky = event("Roma - Lazio", -0.5, SportTopic.FOOTBALL, 20, sky)
+        val rows = Highlights.pageRows(listOf(other, onDazn, onSky), now, SportPrefs(), emptySet(), utc)
+        assertEquals(listOf("Roma - Lazio", "Lecce - Genoa", "Tennis: Final"), rows.first().events.map { it.title })
+    }
+
+    @Test
+    fun aPriorityLiveEventIsNotCutByTheShownLimit() {
+        val others = (0 until 40).map { event("Squadra $it - Team $it", -0.5, SportTopic.TENNIS, 100 - it, euro) }
+        val onDazn = event("Lecce - Genoa", -0.5, SportTopic.FOOTBALL, 1, dazn)
+        val rows = Highlights.pageRows(others + onDazn, now, SportPrefs(), emptySet(), utc)
+        assertEquals("Lecce - Genoa", rows.first().events.first().title)
+    }
+
+    @Test
+    fun priorityIsOnlyForLiveSportAndThePriorityChannelComesFirstInTheCard() {
+        assertTrue(Highlights.isPriority(event("A - B", 1.0, null, 1, dazn)))
+        assertTrue(!Highlights.isPriority(event("A - B", 1.0, null, 1, euro)))
+        assertTrue(!Highlights.isPriority(HighlightEvent(HighlightKind.FILM, "Heat", null, at(1.0), at(3.0), 1, listOf(dazn))))
+        val data = build(mapOf("e1" to listOf(programme("Inter - Milan", -0.5, 120)), "d1" to listOf(programme("Inter - Milan", -0.5, 120))), euro, dazn)
+        assertEquals("DAZN 1", data.events(HighlightKind.SPORT).single().channels.first().name)
+    }
 }

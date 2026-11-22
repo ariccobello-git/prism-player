@@ -105,7 +105,7 @@ object Highlights {
         val offset = zone.getOffset(nowMs).toLong()
         val today = Math.floorDiv(nowMs + offset, DAY_MS)
         val upcoming = events.filter { it.endMs > nowMs }
-        val live = upcoming.filter { it.isLive(nowMs) }.sortedByDescending { it.score }
+        val live = upcoming.filter { it.isLive(nowMs) }.sortedWith(compareByDescending<HighlightEvent> { isPriority(it) }.thenByDescending { it.score })
         val later = upcoming.filter { !it.isLive(nowMs) }.groupBy {
             (Math.floorDiv(it.startMs + zone.getOffset(it.startMs).toLong(), DAY_MS) - today).toInt().coerceAtLeast(0)
         }
@@ -127,9 +127,11 @@ object Highlights {
         zone: TimeZone = TimeZone.getDefault(),
     ): List<HighlightRow> {
         val forYou = all.filter { it.endMs > nowMs && isForYou(it, prefs, likedGroups) }
-            .sortedWith(compareBy<HighlightEvent> { !it.isLive(nowMs) }.thenBy { it.startMs })
+            .sortedWith(compareBy<HighlightEvent> { !it.isLive(nowMs) }.thenBy { !(it.isLive(nowMs) && isPriority(it)) }.thenBy { it.startMs })
             .take(FOR_YOU_MAX)
-        val main = rows(all.take(SHOWN), nowMs, zone)
+        // What is on air on DAZN or Sky Sport is never cut by the limit, even when other events score higher.
+        val ranked = all.sortedBy { !(it.isLive(nowMs) && isPriority(it)) }
+        val main = rows(ranked.take(SHOWN), nowMs, zone)
         return if (forYou.isEmpty()) main else listOf(HighlightRow(forYou.any { it.isLive(nowMs) }, 0, forYou, forYou = true)) + main
     }
 
@@ -148,11 +150,21 @@ object Highlights {
     private class Candidate(val found: Found, val programme: Programme, val channels: MutableList<Channel>) {
         fun toEvent(): HighlightEvent {
             val unique = channels.distinctBy { it.url }
-            val best = unique.sortedBy { if (isLowQuality(it.name)) 1 else 0 }.take(HighlightEvent.MAX_CHANNELS)
+            val best = unique.sortedWith(
+                compareBy<Channel> { !(found.kind == HighlightKind.SPORT && isPriorityChannel(it)) }.thenBy { if (isLowQuality(it.name)) 1 else 0 },
+            ).take(HighlightEvent.MAX_CHANNELS)
             val extra = ((unique.size.coerceAtMost(4)) - 1) * 4
             return HighlightEvent(found.kind, programme.title, found.topic, programme.startMs, programme.endMs, found.score + extra, best)
         }
     }
+
+    /** Channels the viewer wants first for live sport: DAZN, Sky Sport and Sky Calcio. */
+    internal fun isPriorityChannel(channel: Channel): Boolean = clean(channel.name).let { name ->
+        "dazn" in name || "sky sport" in name || "sky calcio" in name
+    }
+
+    /** A sport event carried by one of the priority channels; it goes first among those on air. */
+    fun isPriority(event: HighlightEvent): Boolean = event.kind == HighlightKind.SPORT && event.channels.any { isPriorityChannel(it) }
 
     private fun isLowQuality(name: String): Boolean = clean(name).let { it.endsWith(" sd") || " sd " in it }
 
