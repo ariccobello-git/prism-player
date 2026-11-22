@@ -1,5 +1,6 @@
 package dev.red74.prismplayer.ui
 
+import dev.red74.prismplayer.LibraryTab
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
