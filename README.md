@@ -31,7 +31,7 @@
 - **Aggiornamenti e codec**: controlla se c'è una release più recente dell'app e di Media3 ed elenca i decoder del dispositivo.
 - **Interfaccia per telecomando**: movimento naturale del cursore tra le sezioni, la sezione attiva in primo piano e le altre arretrate, cursore ripristinato al rientro, riconoscimento del telecomando Xiaomi. Suoni d'interfaccia leggeri e disattivabili (mai nel player). Schermo sempre acceso con l'app in primo piano.
 - **Apertura e uscita**: splash di 12 s con una foto reale della Via Lattea, un prisma di vetro che ruota in 3D con la musica e un raggio bianco scomposto con rifrazione reale, i cui colori escono dallo schermo verso chi guarda; musica originale sintetizzata. Il piccolo pulsante **Salta** in basso a sinistra (già selezionato: basta OK) la interrompe e apre l'app appena le liste sono pronte e il controllo aggiornamenti ha risposto. L'ultimo Indietro dalla Home chiede conferma, poi un buco nero tira dentro tutta la scena come un unico telo continuo (nessun frammento): la luna si allunga e si avvolge in un arco sottile attorno al buco, poi tutto precipita sfumando e arrossendo; si chiude in un punto di luce che resta 2 s e lascia 1,5 s di nero (9 s di musica, 10,5 s in tutto).
-- **Italiano, inglese e francese** (bandiere nella Home; anche la pagina del telefono per l'abbinamento). Carattere Figtree, fuoco con anello bianco. Compatibile Android TV / Google TV (`leanback`, banner e launcher TV).
+- **Italiano, inglese e francese** (selettore IT · EN · FR nella Home; anche la pagina del telefono per l'abbinamento). Carattere Figtree, fuoco con anello bianco. Compatibile Android TV / Google TV (`leanback`, banner e launcher TV).
 
 ### Telecomando
 
