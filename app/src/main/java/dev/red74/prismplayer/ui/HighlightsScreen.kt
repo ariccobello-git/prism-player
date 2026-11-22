@@ -28,11 +28,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -246,6 +248,7 @@ private fun EventRows(
     // The event the cursor is on (null when it is elsewhere) and whether the large card is playing its preview.
     var focusedEvent by remember { mutableStateOf<HighlightEvent?>(null) }
     var previewing by remember { mutableStateOf(false) }
+    var refocus by remember { mutableIntStateOf(0) }
     val played = nav.played
     val heroPlayed = remember(hero, played) { hero != null && played != null && hero.channels.any { it.url == played } }
     val target = remember(rows, played) { locate(rows, played) }
@@ -286,8 +289,20 @@ private fun EventRows(
             // The card goes up into the large one and the cursor follows it, so the next move starts from there.
             promoted = f
             previewing = true
-            listState.scrollToItem(0)
-            heroFocus.requestWhenReady()
+            refocus++
+        }
+    }
+
+    // The cursor follows the promoted card. It runs in its own effect: the promotion changes `hero`, which restarts the
+    // effect above, and a focus move made there was cancelled half way (the cursor ended on "Indietro").
+    var heroHasFocus by remember { mutableStateOf(false) }
+    LaunchedEffect(refocus) {
+        if (refocus == 0) return@LaunchedEffect
+        listState.scrollToItem(0)
+        repeat(60) {
+            withFrameNanos { }
+            if (heroHasFocus) return@LaunchedEffect
+            runCatching { heroFocus.requestFocus() }
         }
     }
 
@@ -320,7 +335,10 @@ private fun EventRows(
                 reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                 focusRequester = heroFocus,
                 previewing = previewing,
-                onFocusChange = { has -> focusedEvent = if (has) hero else if (focusedEvent == hero) null else focusedEvent },
+                onFocusChange = { has ->
+                    heroHasFocus = has
+                    focusedEvent = if (has) hero else if (focusedEvent == hero) null else focusedEvent
+                },
                 onClick = {
                     if (onAir) {
                         onNav { it.copy(resume = true) }

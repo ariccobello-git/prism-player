@@ -337,6 +337,11 @@ class HighlightsViewTest {
         rule.onNodeWithText("Inter - Juventus").assertIsFocused()
         // the old large card goes down into the rows
         rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
+        // the cursor stays on the promoted card, and so does the preview, also some seconds later
+        rule.mainClock.advanceTimeBy(5_000)
+        rule.waitForIdle()
+        rule.onNodeWithText("Inter - Juventus").assertIsFocused()
+        rule.onNodeWithTag("heroPreview", useUnmergedTree = true).assertIsDisplayed()
     }
 
     @Test
