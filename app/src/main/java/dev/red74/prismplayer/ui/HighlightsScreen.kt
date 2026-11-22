@@ -58,7 +58,6 @@ import dev.red74.prismplayer.data.HighlightsData
 import dev.red74.prismplayer.data.SportPrefs
 import dev.red74.prismplayer.data.SportPrefsStore
 import dev.red74.prismplayer.data.SportTopic
-import dev.red74.prismplayer.data.Suggestions
 import dev.red74.prismplayer.data.Taste
 import dev.red74.prismplayer.data.VariantTags
 import java.text.SimpleDateFormat
@@ -67,6 +66,9 @@ import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.layout.widthIn
+import dev.red74.prismplayer.data.Novelty
 
 /** The featured events found in the guide; filled in the background by the view model. */
 val LocalHighlights = compositionLocalOf { HighlightsData.Empty }
@@ -92,13 +94,11 @@ fun HighlightsView(
     val data = LocalHighlights.current
     val kinds = remember(data) { data.kinds() }
     val tasteVersion = Taste.version
-    val movieGroups = remember(tasteVersion) { Taste.top(ContentType.MOVIE, SUGGESTION_GROUPS) }
-    val seriesGroups = remember(tasteVersion) { Taste.top(ContentType.SERIES, SUGGESTION_GROUPS) }
     val likedGroups = remember(tasteVersion) { Taste.top(ContentType.LIVE, 3).toSet() }
-    val tabs = remember(kinds, movieGroups, seriesGroups) {
+    val tabs = remember(kinds, catalog) {
         kinds.map { HighlightTab.Events(it) } +
-            (if (movieGroups.isNotEmpty()) listOf(HighlightTab.Movies) else emptyList()) +
-            (if (seriesGroups.isNotEmpty()) listOf(HighlightTab.Series) else emptyList())
+            (if (catalog.movies.isNotEmpty()) listOf(HighlightTab.Movies) else emptyList()) +
+            (if (catalog.series.isNotEmpty()) listOf(HighlightTab.Series) else emptyList())
     }
     if (tabs.isEmpty()) {
         // Still looking for the events (the guide is being read): placeholders, not an "empty" message.
@@ -153,7 +153,7 @@ fun HighlightsView(
         Column(Modifier.weight(1f).fillMaxSize()) {
             when {
                 tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups)
-                else -> SuggestionRow(catalog, tab == HighlightTab.Movies, if (tab == HighlightTab.Movies) movieGroups else seriesGroups, nav, onNav)
+                else -> NewArrivals(catalog, tab == HighlightTab.Movies, nav, onNav)
             }
         }
     }
@@ -179,7 +179,6 @@ private fun MenuItem(text: String, selected: Boolean, focusRequester: FocusReque
     }
 }
 
-private const val SUGGESTION_GROUPS = 2
 
 private sealed interface HighlightTab {
     data class Events(val kind: HighlightKind) : HighlightTab
@@ -311,29 +310,31 @@ private fun EventRows(
     }
 }
 
-private data class SuggestionKey(val catalog: Int, val movies: Boolean, val groups: List<String>, val day: Long)
+private data class NewArrivalsKey(val catalog: Int, val movies: Boolean, val hour: Long)
 
 /** The last few rows worked out, kept in memory for the run. */
-private val suggestionCache = object : LinkedHashMap<SuggestionKey, List<Suggestion>>(8, 0.75f, true) {
-    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<SuggestionKey, List<Suggestion>>?): Boolean = size > 6
+private val arrivalsCache = object : LinkedHashMap<NewArrivalsKey, List<Arrival>>(8, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<NewArrivalsKey, List<Arrival>>?): Boolean = size > 6
 }
 
-private class Suggestion(val title: String, val group: String, val logo: String?, val key: String, val open: ((LibraryNav) -> LibraryNav))
+private class Arrival(val title: String, val group: String, val logo: String?, val key: String, val open: ((LibraryNav) -> LibraryNav))
 
-/** Films or series from the categories watched most, not seen yet: "You might like". Worked out off the main thread. */
+/**
+ * Films or series that came into the list in the last 7 days, newest first (see [dev.red74.prismplayer.data.Novelty]),
+ * never from groups whose name has "XXX". Read from the list database off the main thread.
+ */
 @Composable
-private fun SuggestionRow(
+private fun NewArrivals(
     catalog: Catalog,
     movies: Boolean,
-    groups: List<String>,
     nav: LibraryNav,
     onNav: ((LibraryNav) -> LibraryNav) -> Unit,
 ) {
-    // Worked out once per list and day: coming back to the tab shows the same row at once.
-    val cacheKey = remember(catalog, movies, groups) { SuggestionKey(System.identityHashCode(catalog), movies, groups, System.currentTimeMillis() / 86_400_000L) }
-    val items by produceState<List<Suggestion>?>(suggestionCache[cacheKey], cacheKey) {
+    // Worked out once per list and hour: coming back to the tab shows the same cards at once.
+    val cacheKey = remember(catalog, movies) { NewArrivalsKey(System.identityHashCode(catalog), movies, System.currentTimeMillis() / 3_600_000L) }
+    val items by produceState(arrivalsCache[cacheKey], cacheKey) {
         if (value == null) {
-            value = withContext(Dispatchers.IO) { suggestionsFor(catalog, movies, groups) }.also { suggestionCache[cacheKey] = it }
+            value = withContext(Dispatchers.IO) { arrivalsFor(catalog, movies) }.also { arrivalsCache[cacheKey] = it }
         }
     }
     val focus = remember { FocusRequester() }
@@ -346,26 +347,33 @@ private fun SuggestionRow(
     }
     when {
         list == null -> PrismText(text = stringResource(R.string.favorites_loading), size = 20.sp, color = PrismColors.TextSecondary)
-        list.isEmpty() -> PrismText(text = stringResource(R.string.suggestions_none), size = 20.sp, color = PrismColors.TextSecondary)
-        else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            PrismText(text = stringResource(R.string.suggestions_title), size = 20.sp, weight = FontWeight.SemiBold)
-            LazyRow(
-                Modifier.fillMaxWidth(),
+        list.isEmpty() -> PrismText(
+            text = stringResource(if (movies) R.string.new_none_movies else R.string.new_none_series),
+            size = 20.sp,
+            color = PrismColors.TextSecondary,
+            modifier = Modifier.widthIn(max = 640.dp),
+        )
+        else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            PrismText(text = stringResource(R.string.new_title, list.size), size = 20.sp, weight = FontWeight.SemiBold)
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(CardWidth),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                itemsIndexed(list, key = { _, s -> s.key }) { index, s ->
+                itemsIndexed(list, key = { _, a -> a.key }) { index, a ->
                     GlassSurface(
-                        onClick = { onNav(s.open) },
-                        modifier = Modifier.width(CardWidth).height(CardHeight),
+                        onClick = { onNav(a.open) },
+                        modifier = Modifier.height(CardHeight),
                         focusRequester = if (index == 0) focus else null,
                         focusScale = 1.04f,
                     ) {
                         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Poster(s.logo, Modifier.width(72.dp).height(104.dp))
+                            Poster(a.logo, Modifier.width(72.dp).height(104.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                PrismText(text = s.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 3)
-                                PrismText(text = s.group, size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                                PrismText(text = a.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 3)
+                                PrismText(text = a.group, size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
                             }
                         }
                     }
@@ -375,37 +383,24 @@ private fun SuggestionRow(
     }
 }
 
-private fun suggestionsFor(catalog: Catalog, movies: Boolean, groups: List<String>): List<Suggestion> {
-    val seen = Taste.seen()
-    val day = System.currentTimeMillis() / 86_400_000L
-    val out = ArrayList<Suggestion>()
-    if (movies) {
-        for (group in groups) {
-            val index = catalog.movies.indexOfFirst { it.name == group }
-            if (index < 0) continue
-            val pool = catalog.channels(ContentType.MOVIE, listOf(index))
-            for (film in Suggestions.pick(pool, { FavoriteKey.of(it) }, seen, day, PER_GROUP)) {
-                out += Suggestion(VariantTags.of(film.name).title, group, film.logo, film.url) { nav ->
-                    nav.copy(tab = LibraryTab.MOVIES, movieUrl = film.url, itemIndex = 0, resume = true, origin = nav.copy(resume = true, origin = null))
-                }
+private fun arrivalsFor(catalog: Catalog, movies: Boolean): List<Arrival> {
+    val since = System.currentTimeMillis() - Novelty.WINDOW_MS
+    return if (movies) {
+        catalog.recentMovies(since, ARRIVALS_LIMIT).filter { it.url.isNotEmpty() }.distinctBy { it.url }.map { film ->
+            Arrival(VariantTags.of(film.name).title, film.group.orEmpty(), film.logo, film.url) { nav ->
+                nav.copy(tab = LibraryTab.MOVIES, movieUrl = film.url, itemIndex = 0, resume = true, origin = nav.copy(resume = true, origin = null))
             }
         }
     } else {
-        for (group in groups) {
-            val index = catalog.series.indexOfFirst { it.name == group }
-            if (index < 0) continue
-            val pool = catalog.shows(listOf(index))
-            for (show in Suggestions.pick(pool, { FavoriteKey.ofShow(it) }, seen, day, PER_GROUP)) {
-                out += Suggestion(VariantTags.of(show.title).title, group, show.logo, FavoriteKey.ofShow(show)) { nav ->
-                    nav.copy(tab = LibraryTab.SERIES, showTitle = show.title, showGroup = show.group, season = -1, query = "", origin = nav.copy(resume = true, origin = null))
-                }
+        catalog.recentShows(since, ARRIVALS_LIMIT).distinctBy { FavoriteKey.ofShow(it) }.map { show ->
+            Arrival(VariantTags.of(show.title).title, show.group, show.logo, FavoriteKey.ofShow(show)) { nav ->
+                nav.copy(tab = LibraryTab.SERIES, showTitle = show.title, showGroup = show.group, season = -1, query = "", origin = nav.copy(resume = true, origin = null))
             }
         }
     }
-    return out.distinctBy { it.key }
 }
 
-private const val PER_GROUP = 6
+private const val ARRIVALS_LIMIT = 60
 
 /** Teams, riders and competitions offered to follow with one tap (any other word can be added below). */
 internal val FOLLOW_SUGGESTIONS = listOf(
@@ -600,8 +595,8 @@ private fun tabLabel(tab: HighlightTab): String = stringResource(
             HighlightKind.FILM -> R.string.highlights_film
             HighlightKind.ENTERTAINMENT -> R.string.highlights_entertainment
         }
-        HighlightTab.Movies -> R.string.suggestions_movies
-        HighlightTab.Series -> R.string.suggestions_series
+        HighlightTab.Movies -> R.string.new_movies
+        HighlightTab.Series -> R.string.new_series
     },
 )
 

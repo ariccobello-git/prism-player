@@ -272,10 +272,6 @@
     <string name="sport_prefs_hint">Choisissez un sport ou une équipe pour le suivre (étoile pleine). La rangée Pour vous ne montre que ce que vous suivez.</string>
     <string name="sport_prefs_team">Équipe ou compétition</string>
     <string name="sport_prefs_add">Ajouter</string>
-    <string name="suggestions_movies">Films pour vous</string>
-    <string name="suggestions_series">Séries pour vous</string>
-    <string name="suggestions_title">Vous aimerez peut-être</string>
-    <string name="suggestions_none">Rien à suggérer pour l’instant : regardez quelques films ou séries et ils apparaîtront ici.</string>
     <string name="frame_rate_title">La fréquence de l’écran suit la vidéo</string>
     <string name="frame_rate_on">Activé : mouvement plus fluide. L’écran peut devenir noir une seconde quand la fréquence change. OK pour désactiver.</string>
     <string name="frame_rate_off">Désactivé. OK pour adapter la fréquence de l’écran à la vidéo (mouvement plus fluide pour les films et le sport en direct).</string>
@@ -318,4 +314,9 @@
     <string name="manage_channels_count">%1$d chaînes</string>
     <string name="organize_channel">Organiser la chaîne</string>
     <string name="highlights_loading">Recherche des événements à la une…</string>
+    <string name="new_movies">Nouveaux films</string>
+    <string name="new_series">Nouvelles séries</string>
+    <string name="new_title">Ajoutés ces 7 derniers jours · %1$d</string>
+    <string name="new_none_movies">Aucun nouveau film ces 7 derniers jours. Les nouveautés apparaissent ici quand la liste se met à jour.</string>
+    <string name="new_none_series">Aucune nouvelle série ces 7 derniers jours. Les nouveautés apparaissent ici quand la liste se met à jour.</string>
 </resources>
