@@ -196,11 +196,11 @@ class HighlightsViewTest {
     fun aFollowedTeamGetsAForYouRowAtTheTop() {
         SportPrefsStore.update { it.withKeyword("Inter") }
         show()
-        // the followed match is the large card on top, tagged "For you"; nothing else is picked for the viewer
+        // the large card is what is on air (Roma - Lazio); the followed match has its own "For you" row
         rule.onNodeWithText("For you").assertIsDisplayed()
-        assertEquals(1, rule.onAllNodesWithTextCount("Inter - Juventus"))
+        assertTrue(rule.onAllNodesWithTextCount("Inter - Juventus") >= 1)
         assertEquals(1, rule.onAllNodesWithTextCount("Roma - Lazio"))
-        rule.onNodeWithTag("hero").assertIsDisplayed()
+        rule.onNodeWithTag("hero").assertTextContains("Roma - Lazio", substring = true)
     }
 
     @Test
@@ -337,5 +337,24 @@ class HighlightsViewTest {
         rule.onNodeWithText("Inter - Juventus").assertIsFocused()
         // the old large card goes down into the rows
         rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
+    }
+
+    @Test
+    fun theLargeCardIsAlwaysSomethingOnAirNow() {
+        val mixed = listOf(
+            HighlightEvent(HighlightKind.SPORT, "Atalanta - Torino", null, soon, soon + 7_200_000L, 90, listOf(dazn)),
+            HighlightEvent(HighlightKind.SPORT, "Roma - Lazio", null, onAirStart, onAirStart + 7_200_000L, 40, listOf(sky)),
+        )
+        show(HighlightsData(mapOf(HighlightKind.SPORT to mixed)))
+        rule.waitForIdle()
+        rule.onNodeWithTag("hero").assertTextContains("Roma - Lazio", substring = true)
+    }
+
+    @Test
+    fun withNothingOnAirTheLargeCardIsTheFirstEvent() {
+        show(HighlightsData(mapOf(HighlightKind.FILM to film)))
+        nav = nav.copy(highlightKind = 0)
+        rule.waitForIdle()
+        rule.onNodeWithTag("hero").assertTextContains("Heat", substring = true)
     }
 }

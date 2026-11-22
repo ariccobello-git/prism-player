@@ -158,29 +158,20 @@ internal fun DrawScope.drawPrismScene(
 
     // inside the glass: the bent white thread, and after the hit each colour on its own way
     val innerGrow = fraction(tm, 4.25f, 0.9f)
-    // The light does not cut through the moon in straight chords: it follows the curve of its rim ([rimPoint]).
-    val rim = radius * RIM_FRACTION
     if (mid != null && entry != null && innerGrow > 0f) {
         var prev: Offset = entry
         var total = 0f
-        for (v in mid.inside) {
-            val p = screen(v)
-            arcSteps(prev, p, center, rim) { a, b -> total += hypot(b.x - a.x, b.y - a.y) }
-            prev = p
-        }
+        for (v in mid.inside) { val p = screen(v); total += hypot(p.x - prev.x, p.y - prev.y); prev = p }
         var left = total * innerGrow
         prev = entry
         for (v in mid.inside) {
+            if (left <= 0f) break
             val next = screen(v)
-            arcSteps(prev, next, center, rim) { a, b ->
-                if (left > 0f) {
-                    val seg = hypot(b.x - a.x, b.y - a.y)
-                    val end = lerp(a, b, (left / seg.coerceAtLeast(1e-3f)).coerceAtMost(1f))
-                    drawLine(Color.White.copy(alpha = 0.18f), a, end, 3.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-                    drawLine(Color.White.copy(alpha = 0.85f), a, end, 1.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-                    left -= seg
-                }
-            }
+            val seg = hypot(next.x - prev.x, next.y - prev.y)
+            val b = lerp(prev, next, (left / seg.coerceAtLeast(1e-3f)).coerceAtMost(1f))
+            drawLine(Color.White.copy(alpha = 0.18f), prev, b, 3.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+            drawLine(Color.White.copy(alpha = 0.85f), prev, b, 1.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+            left -= seg
             prev = next
         }
     }
@@ -188,10 +179,9 @@ internal fun DrawScope.drawPrismScene(
         paths.forEachIndexed { i, p ->
             if (p != null && p.exits) {
                 var prev = screen(p.entry)
-                val color = Spectrum[i].copy(alpha = 0.26f * power * p.transmission.toFloat())
                 for (v in p.inside) {
                     val next = screen(v)
-                    arcSteps(prev, next, center, rim) { a, b -> drawLine(color, a, b, 1.2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus) }
+                    drawLine(Spectrum[i].copy(alpha = 0.26f * power * p.transmission.toFloat()), prev, next, 1.2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
                     prev = next
                 }
             }
@@ -269,41 +259,6 @@ internal fun DrawScope.drawPrismScene(
         Brush.radialGradient(listOf(Color.White.copy(alpha = 0.85f * power), Color(0xFFFFF0D0).copy(alpha = 0.28f * power), Color.Transparent), center = avg, radius = bloom),
         radius = bloom, center = avg, blendMode = BlendMode.Plus,
     )
-}
-
-/** How far out (share of the moon's radius) the light travels along the rim. */
-internal const val RIM_FRACTION = 0.94f
-
-/** Pieces each curved stretch of light is drawn in. */
-private const val ARC_STEPS = 10
-
-/**
- * The point at [t] (0..1) of the light's way from [a] to [b], both on the moon around [c]: it turns around the centre
- * the short way and bulges out to [rim], so the thread follows the circumference instead of cutting a straight chord.
- * It never dips inside the straight chord's own radius, and the ends stay exactly where they were.
- */
-internal fun rimPoint(a: Offset, b: Offset, t: Float, c: Offset, rim: Float): Offset {
-    val a0 = kotlin.math.atan2(a.y - c.y, a.x - c.x)
-    val a1 = kotlin.math.atan2(b.y - c.y, b.x - c.x)
-    var d = a1 - a0
-    val pi = Math.PI.toFloat()
-    while (d > pi) d -= 2 * pi
-    while (d < -pi) d += 2 * pi
-    val r0 = hypot(a.x - c.x, a.y - c.y)
-    val r1 = hypot(b.x - c.x, b.y - c.y)
-    val base = r0 + (r1 - r0) * t
-    val r = base + (rim - base).coerceAtLeast(0f) * sin(pi * t)
-    val angle = a0 + d * t
-    return Offset(c.x + cos(angle) * r, c.y + sin(angle) * r)
-}
-
-private inline fun arcSteps(a: Offset, b: Offset, c: Offset, rim: Float, step: (Offset, Offset) -> Unit) {
-    var prev = a
-    for (k in 1..ARC_STEPS) {
-        val p = if (k == ARC_STEPS) b else rimPoint(a, b, k / ARC_STEPS.toFloat(), c, rim)
-        step(prev, p)
-        prev = p
-    }
 }
 
 /** Steps along each colour band: enough for its curve, few enough to stay light on the stick. */
