@@ -89,6 +89,7 @@ import dev.red74.prismplayer.data.StreamHold
 import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.createPlayer
 import dev.red74.prismplayer.player.previewItem
+import dev.red74.prismplayer.data.WithoutMarked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -527,7 +528,12 @@ private fun MovieGrid(
     nav: LibraryNav,
     onNav: NavChange,
 ) {
-    val unavailable = LocalReachability.current.unavailable
+    // Films marked unavailable are not shown; the grid appears once they are left out (a moment for a big group).
+    val items = withoutUnavailable(items) ?: return
+    if (items.isEmpty()) {
+        EmptyNote(R.string.library_empty)
+        return
+    }
     // Copies of the same film: in a search all of them (at most a few hundred results), in a group the ones next to
     // each other (a group can hold tens of thousands of films, read page by page, so it is never scanned whole).
     val searchTwins = remember(items, restorable) {
@@ -549,7 +555,7 @@ private fun MovieGrid(
             if (group != null && twins.any { it.group != item.group }) badges = badges + shortLabel(group)
         }
         GridEntry(
-            tags.title, item.logo, key in favorites, unavailable = key in unavailable, badges = badges,
+            tags.title, item.logo, key in favorites, badges = badges,
             facts = { ask -> if (ask) ContentInfo.filmBadges(item.url) else ContentInfo.savedFilmBadges(item.url) },
             factsKey = item.url,
         ) {
@@ -582,6 +588,24 @@ private fun ShowGrid(
             }
         }
     }
+}
+
+/**
+ * [items] without the films marked unavailable, worked out off the main thread; null while that is being done.
+ * The answer is used only for the very list and marks it was built from, so a grid never shows a stale count.
+ */
+@Composable
+private fun withoutUnavailable(items: List<Channel>): List<Channel>? {
+    val marked = LocalReachability.current.unavailable
+    val built = remember { mutableStateOf<Triple<List<Channel>, Set<String>, List<Channel>>?>(null) }
+    LaunchedEffect(items, marked) {
+        if (marked.isNotEmpty()) {
+            val shown = withContext(Dispatchers.IO) { WithoutMarked.of(items, marked, FavoriteKey::of) }
+            built.value = Triple(items, marked, shown)
+        }
+    }
+    if (marked.isEmpty()) return items
+    return built.value?.takeIf { it.first === items && it.second === marked }?.third
 }
 
 /** Two entries with this same key are copies of one content: same title once the tags are set aside. */
@@ -1193,7 +1217,6 @@ private class GridEntry(
     val title: String,
     val logo: String?,
     val favorite: Boolean,
-    val unavailable: Boolean = false,
     /** Language and quality tags (see [VariantTags]), drawn on the poster; the [title] no longer carries them. */
     val badges: List<String> = emptyList(),
     /**
@@ -1265,14 +1288,10 @@ private fun ItemGrid(
                     tint = if (item.favorite) PrismColors.Favorite else null,
                     contentPadding = PaddingValues(6.dp),
                 ) {
-                    Column(
-                        Modifier.alpha(if (item.unavailable) UNAVAILABLE_ALPHA else 1f),
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box {
                             Poster(item.logo, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
                             Badges(badges, Modifier.align(Alignment.BottomStart).padding(4.dp), compact = true, max = 4)
-                            if (item.unavailable) UnavailableSign(Modifier.align(Alignment.TopEnd).padding(6.dp), size = 26)
                         }
                         PrismText(text = item.title, size = 15.sp, maxLines = 2)
                     }
@@ -1436,7 +1455,9 @@ private fun ShowDetail(
 ) {
     val seasons = show.seasons.ifEmpty { listOf(0) }
     val season = if (nav.season in seasons) nav.season else seasons.first()
-    val episodes = remember(show, season) { show.episodesOf(season) }
+    val marked = LocalReachability.current.unavailable
+    // Episodes marked unavailable are not listed.
+    val episodes = remember(show, season, marked) { WithoutMarked.of(show.episodesOf(season), marked, FavoriteKey::of) }
     // The cursor comes back to the season it left (and to the episode it left) when it moves between the two rows.
     val seasonMemory = remember { ReturnFocus(initial = seasons.indexOf(season)) }
     val episodeMemory = remember(show, season) { ReturnFocus() }
@@ -1449,7 +1470,6 @@ private fun ShowDetail(
     LaunchedEffect(Unit) {
         if (playedIndex >= 0) episodeFocus.requestWhenReady() else seasonFocus.requestWhenReady()
     }
-    val unavailable = LocalReachability.current.unavailable
     val progressVersion = WatchProgress.version
     // "Continua a guardare" for the series: the episode left most recently, played from where it was left.
     val lastWatched = remember(show, progressVersion) {
@@ -1516,18 +1536,15 @@ private fun ShowDetail(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 itemsIndexed(episodes, key = { index, _ -> index }) { index, episode ->
-                    val missing = FavoriteKey.of(episode) in unavailable
                     GlassSurface(
                         onClick = { onNav { it.copy(episodeUrl = episode.url, season = season, resume = false) } },
                         modifier = Modifier.fillMaxWidth().returnItem(episodeMemory, index),
                         focusScale = 1.02f,
                     ) {
                         Row(
-                            Modifier.alpha(if (missing) UNAVAILABLE_ALPHA else 1f),
                             horizontalArrangement = Arrangement.spacedBy(14.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            if (missing) UnavailableSign()
                             PrismText(
                                 text = if (episode.episode > 0) "%02d".format(episode.episode) else "-",
                                 size = 20.sp,
