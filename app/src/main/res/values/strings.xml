@@ -272,10 +272,6 @@
     <string name="sport_prefs_hint">Tap a sport or a team to follow it (filled star). The For you row shows only what you follow.</string>
     <string name="sport_prefs_team">Team or competition</string>
     <string name="sport_prefs_add">Add</string>
-    <string name="suggestions_movies">Films for you</string>
-    <string name="suggestions_series">Series for you</string>
-    <string name="suggestions_title">You might like</string>
-    <string name="suggestions_none">Nothing to suggest yet: watch a few films or series and they will show up here.</string>
     <string name="frame_rate_title">Screen rate follows the video</string>
     <string name="frame_rate_on">On: smoother motion. The screen may go dark for a second when the rate changes. Press OK to turn off.</string>
     <string name="frame_rate_off">Off. Press OK to match the screen refresh rate to the video (smoother motion on films and live sport).</string>
@@ -318,4 +314,9 @@
     <string name="manage_channels_count">%1$d channels</string>
     <string name="organize_channel">Arrange channel</string>
     <string name="highlights_loading">Looking for the featured events…</string>
+    <string name="new_movies">New films</string>
+    <string name="new_series">New series</string>
+    <string name="new_title">Added in the last 7 days · %1$d</string>
+    <string name="new_none_movies">No new films in the last 7 days. New arrivals show up here after the list renews.</string>
+    <string name="new_none_series">No new series in the last 7 days. New arrivals show up here after the list renews.</string>
 </resources>

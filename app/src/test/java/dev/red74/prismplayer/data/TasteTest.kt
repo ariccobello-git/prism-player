@@ -54,17 +54,4 @@ class TasteTest {
         assertEquals(setOf("abc"), back.seenKeys())
         assertTrue(TasteModel.decode(null, null).seenKeys().isEmpty())
     }
-
-    @Test
-    fun suggestionsSkipSeenAreStableForADayAndChangeTheNext() {
-        val pool = (1..50).map { "film$it" }
-        val seen = setOf("film1", "film2")
-        val today = Suggestions.pick(pool, { it }, seen, 100L, 6)
-        assertEquals(6, today.size)
-        assertTrue(today.none { it in seen })
-        assertEquals(today, Suggestions.pick(pool, { it }, seen, 100L, 6))
-        assertTrue(today != Suggestions.pick(pool, { it }, seen, 101L, 6))
-        assertTrue(Suggestions.pick(emptyList<String>(), { it }, seen, 1L, 6).isEmpty())
-        assertEquals(1, Suggestions.pick(listOf("a", "b"), { it }, setOf("a"), 1L, 6).size)
-    }
 }

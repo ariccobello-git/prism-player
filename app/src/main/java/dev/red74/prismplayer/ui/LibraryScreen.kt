@@ -90,6 +90,8 @@ import dev.red74.prismplayer.player.PreviewPlayers
 import dev.red74.prismplayer.player.createPlayer
 import dev.red74.prismplayer.player.previewItem
 import dev.red74.prismplayer.data.WithoutMarked
+import dev.red74.prismplayer.data.displayOrder
+import dev.red74.prismplayer.data.sortedBy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -695,6 +697,12 @@ private fun GroupBrowser(
         else listOf(GroupRow(all, main.categories.sumOf { c -> counts[c] })) +
             main.subs.map { GroupRow(it.name.ifBlank { other }, counts[it.category]) }
     }
+    // The order the groups are shown in (the sort button of each column); "All" always stays at the top.
+    val mainOrder = remember(mainRows, nav.groupSort) { displayOrder(mainRows.map { it.label }, nav.groupSort) }
+    val subOrder = remember(subRows, nav.subSort) {
+        if (subRows.isEmpty()) IntArray(0)
+        else intArrayOf(0) + displayOrder(subRows.drop(1).map { it.label }, nav.subSort).map { it + 1 }
+    }
     val mainWeight by animateFloatAsState(
         targetValue = when (level) { 0 -> 1f; 1 -> 0.32f; else -> if (main.hasSubLevel) 0.2f else 0.27f },
         animationSpec = tween(320), label = "mainWeight",
@@ -723,14 +731,17 @@ private fun GroupBrowser(
     )
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         GroupColumn(
-            rows = mainRows,
-            selected = mainIndex,
+            rows = remember(mainRows, mainOrder) { mainOrder.map { mainRows[it] } },
+            selected = mainOrder.indexOf(mainIndex),
             active = level == 0,
+            sort = nav.groupSort,
+            onSort = { mode -> onNav { it.copy(groupSort = mode) } },
             resume = nav.resume,
             onResumed = { onNav { it.copy(resume = false) } },
             modifier = Modifier.weight(mainWeight).fillMaxHeight(),
             onLeft = null,
-            onPick = { i ->
+            onPick = { position ->
+                val i = mainOrder[position]
                 onNav {
                     it.copy(category = i, sub = 0, itemIndex = 0, level = if (tree[i].hasSubLevel) 1 else 2, resume = true)
                 }
@@ -738,15 +749,17 @@ private fun GroupBrowser(
         )
         if (level >= 1 && main.hasSubLevel) {
             GroupColumn(
-                rows = subRows,
-                selected = subIndex,
+                rows = remember(subRows, subOrder) { subOrder.map { subRows[it] } },
+                selected = subOrder.indexOf(subIndex),
                 active = level == 1,
+                sort = nav.subSort,
+                onSort = { mode -> onNav { it.copy(subSort = mode) } },
                 resume = nav.resume,
                 onResumed = { onNav { it.copy(resume = false) } },
                 modifier = Modifier.weight(subWeight).fillMaxHeight(),
                 compact = level >= 2,
                 onLeft = { onNav { it.copy(level = 0, resume = true) } },
-                onPick = { i -> onNav { it.copy(sub = i, itemIndex = 0, level = 2, resume = true) } },
+                onPick = { position -> onNav { it.copy(sub = subOrder[position], itemIndex = 0, level = 2, resume = true) } },
             )
         }
         if (level >= 2) {
@@ -780,6 +793,8 @@ private fun GroupColumn(
     onLeft: (() -> Unit)?,
     onPick: (Int) -> Unit,
     compact: Boolean = false,
+    sort: SortMode? = null,
+    onSort: (SortMode) -> Unit = {},
 ) {
     val focus = remember { FocusRequester() }
     var focusedIndex by remember { mutableIntStateOf(selected) }
@@ -792,11 +807,14 @@ private fun GroupColumn(
             onResumed()
         }
     }
+    // The sort button sits above the groups while the column is the one in use (the same one as above the contents).
     // Right opens the highlighted group (like OK); Left goes back up a level.
+    Column(modifier.depthFocus().confineFocus(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (sort != null && active && !compact) SortButton(sort) { mode -> onSort(mode) }
     LazyColumn(
-        modifier
-            .depthFocus()
-            .confineFocus()
+        Modifier
+            .weight(1f)
+            .fillMaxWidth()
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
@@ -837,6 +855,7 @@ private fun GroupColumn(
             }
         }
     }
+    }
 }
 
 /** The orderings offered by [SortBar], in the order the button cycles through them. */
@@ -856,13 +875,19 @@ private val SORT_OPTIONS = listOf(
  */
 @Composable
 private fun SortBar(nav: LibraryNav, onNav: NavChange, sortFocus: FocusRequester) {
-    val index = SORT_OPTIONS.indexOfFirst { it.first == nav.sort }.coerceAtLeast(0)
+    SortButton(nav.sort, sortFocus) { mode -> onNav { it.copy(sort = mode, itemIndex = 0) } }
+}
+
+/** The sort button itself, shared by the contents, the group columns and Favourites. */
+@Composable
+private fun SortButton(current: SortMode, focusRequester: FocusRequester? = null, onChange: (SortMode) -> Unit) {
+    val index = SORT_OPTIONS.indexOfFirst { it.first == current }.coerceAtLeast(0)
     val next = SORT_OPTIONS[(index + 1) % SORT_OPTIONS.size]
     GlassButton(
         text = stringResource(R.string.sort_button, stringResource(SORT_OPTIONS[index].second)),
         subtitle = stringResource(R.string.sort_next, stringResource(next.second)),
-        onClick = { onNav { it.copy(sort = next.first, itemIndex = 0) } },
-        focusRequester = sortFocus,
+        onClick = { onChange(next.first) },
+        focusRequester = focusRequester,
     )
 }
 
@@ -1589,9 +1614,10 @@ private fun FavoritesView(
         EmptyNote(R.string.favorites_loading)
         return
     }
-    val entries = remember(found, query) {
+    val entries = remember(found, query, nav.sort) {
         found.entries.map { Entry(it.channel, it.show) }
             .let { all -> if (query.isEmpty()) all else all.filter { it.title.contains(query, ignoreCase = true) } }
+            .sortedBy(nav.sort) { it.title }
     }
     if (entries.isEmpty()) {
         EmptyNote(R.string.search_none)
@@ -1616,8 +1642,15 @@ private fun FavoritesView(
     // Up to the tabs and down again lands on the favourite it left.
     val rowMemory = remember(listState) { ReturnFocus(visible = { id -> listState.layoutInfo.visibleItemsInfo.any { it.index == id } }) }
     LaunchedEffect(entries.size) { rowMemory.requester(target).requestWhenReady() }
+    val sortAtStart = remember { nav.sort }
+    LaunchedEffect(nav.sort) { if (nav.sort != sortAtStart) listState.scrollToItem(0) }
     val unavailable = LocalReachability.current.unavailable
-    LazyColumn(Modifier.fillMaxSize().returnSection(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // The same sort button as above the contents of the other tabs.
+    Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rowMemory)) {
+        SortButton(nav.sort) { mode -> onNav { it.copy(sort = mode) } }
+    }
+    LazyColumn(Modifier.weight(1f).fillMaxWidth().returnSection(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(entries) { index, entry ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             GlassSurface(
@@ -1669,6 +1702,7 @@ private fun FavoritesView(
             )
             }
         }
+    }
     }
 }
 

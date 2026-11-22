@@ -91,6 +91,12 @@ open class Catalog(
     /** Every live channel, for matching the programme guide. */
     open fun allLive(): List<Channel> = live.flatMap { it.items }
 
+    /** Films that came into the list since [sinceMs], newest first (only the stored copy knows: see [Novelty]). */
+    open fun recentMovies(sinceMs: Long, limit: Int): List<Channel> = emptyList()
+
+    /** Series that came into the list since [sinceMs], newest first. */
+    open fun recentShows(sinceMs: Long, limit: Int): List<Show> = emptyList()
+
     /** Releases what the catalog holds open (nothing for the in-memory one). */
     open fun close() = Unit
 

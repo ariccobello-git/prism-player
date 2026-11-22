@@ -78,7 +78,7 @@ import androidx.tv.material3.darkColorScheme
 /**
  * Prism Player's glass look, tuned for a 10-foot UI:
  * translucent gradient panels with a light edge over a soft gradient backdrop, large type,
- * and an unmistakable focus state (scale + spectrum ring + accent fill) for D-pad navigation.
+ * and an unmistakable focus state (scale + white ring + accent fill) for D-pad navigation.
  *
  * Real backdrop blur is deliberately not used: it is unavailable below Android 12 and too heavy for
  * entry-level sticks, so the depth comes from layered translucency instead.
@@ -94,10 +94,10 @@ object PrismColors {
     val Danger = Color(0xFFFF7C8A)
     val Ok = Color(0xFF6FE3B0)
     val Warn = Color(0xFFFFC857)
-    /** Gold of the spectrum, used for the favourites star. */
-    val Favorite = Color(0xFFFFE14D)
+    /** Soft gold of the favourites star. */
+    val Favorite = Color(0xFFE6C36A)
 
-    /** The seven colours the prism splits white light into (splash, focus ring). */
+    /** The seven colours the prism splits white light into (opening and closing scenes only). */
     val Spectrum: List<Color> = listOf(
         Color(0xFFFF3B4E), // red
         Color(0xFFFF9A3D), // orange
@@ -107,9 +107,6 @@ object PrismColors {
         Color(0xFF5F7BFF), // blue
         Color(0xFFB765FF), // violet
     )
-
-    /** The focus ring: white light split into the spectrum all around the focused element. */
-    val FocusRing: Brush = Brush.sweepGradient(Spectrum + Spectrum.first())
 }
 
 /** The app's typeface (Figtree, OFL, bundled): same width as the TV's Roboto, so no layout loses room. */
@@ -122,18 +119,18 @@ val PrismFont: FontFamily = FontFamily(
 )
 
 /**
- * Edge of a glass element: a thin light line at rest, the spectrum ring with the focus.
- * Brushes are shared constants, so nothing is created per frame.
+ * Edge of a glass element: a faint light line at rest, a clean white ring with the focus. The focused element is
+ * the only bright thing on the screen, so the ring stays white whatever the colour set.
  */
 fun Modifier.glassEdge(
     focused: Boolean,
     rest: Color,
     shape: androidx.compose.ui.graphics.Shape,
-    focusedWidth: androidx.compose.ui.unit.Dp = 3.dp,
+    focusedWidth: androidx.compose.ui.unit.Dp = 2.5.dp,
     restWidth: androidx.compose.ui.unit.Dp = 1.dp,
 ): Modifier = border(
     width = if (focused) focusedWidth else restWidth,
-    brush = if (focused) PrismColors.FocusRing else SolidColor(rest),
+    brush = SolidColor(if (focused) Color.White else rest),
     shape = shape,
 )
 
@@ -149,6 +146,15 @@ fun Modifier.topSheen(cornerRadius: androidx.compose.ui.unit.Dp): Modifier = dra
     onDrawBehind {
         if (size.width > inset * 2) drawLine(brush, Offset(inset, y), Offset(size.width - inset, y), strokeWidth = y)
     }
+}
+
+/** Strength of the two coloured halos behind every page: a tint of the colour set, not a glow. */
+const val HALO_ALPHA = 0.20f
+const val HALO_ALT_ALPHA = 0.16f
+
+/** One rhythm for the whole app: every focus lift uses the same spring (a hint of overshoot, never a wobble). */
+object PrismSprings {
+    val Focus = androidx.compose.animation.core.spring<Float>(dampingRatio = 0.72f, stiffness = Spring.StiffnessMedium)
 }
 
 @Composable
@@ -254,7 +260,7 @@ fun PrismBackground(
             val first = Offset(size.width * 0.15f, size.height * 0.2f)
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(PrismColors.Accent.copy(alpha = 0.32f), Color.Transparent),
+                    colors = listOf(PrismColors.Accent.copy(alpha = HALO_ALPHA), Color.Transparent),
                     center = first,
                     radius = radius,
                 ),
@@ -264,7 +270,7 @@ fun PrismBackground(
             val second = Offset(size.width * 0.9f, size.height * 0.85f)
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(PrismColors.AccentAlt.copy(alpha = 0.28f), Color.Transparent),
+                    colors = listOf(PrismColors.AccentAlt.copy(alpha = HALO_ALT_ALPHA), Color.Transparent),
                     center = second,
                     radius = radius,
                 ),
@@ -336,27 +342,27 @@ fun GlassButton(
     val scale by animateFloatAsState(
         targetValue = when {
             pressed -> 0.96f
-            focused -> 1.06f
+            focused -> 1.05f
             else -> 1f
         },
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = PrismSprings.Focus,
         label = "glassButtonScale",
     )
     val shape = RoundedCornerShape(20.dp)
     val fill = when {
-        tint != null && focused -> Brush.linearGradient(listOf(tint.copy(alpha = 0.55f), tint.copy(alpha = 0.30f)))
-        tint != null -> Brush.linearGradient(listOf(tint.copy(alpha = 0.26f), tint.copy(alpha = 0.10f)))
+        tint != null && focused -> Brush.linearGradient(listOf(tint.copy(alpha = 0.42f), tint.copy(alpha = 0.24f)))
+        tint != null -> Brush.linearGradient(listOf(tint.copy(alpha = 0.20f), tint.copy(alpha = 0.08f)))
         focused && danger -> Brush.linearGradient(
             listOf(PrismColors.Danger.copy(alpha = 0.6f), PrismColors.Danger.copy(alpha = 0.35f)),
         )
         focused -> Brush.linearGradient(
-            listOf(PrismColors.Accent.copy(alpha = 0.55f), PrismColors.AccentAlt.copy(alpha = 0.45f)),
+            listOf(PrismColors.Accent.copy(alpha = 0.40f), PrismColors.AccentAlt.copy(alpha = 0.26f)),
         )
         emphasized -> Brush.linearGradient(
-            listOf(PrismColors.Accent.copy(alpha = 0.28f), PrismColors.AccentAlt.copy(alpha = 0.18f)),
+            listOf(PrismColors.Accent.copy(alpha = 0.22f), PrismColors.AccentAlt.copy(alpha = 0.12f)),
         )
         else -> Brush.linearGradient(
-            listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f)),
+            listOf(Color.White.copy(alpha = 0.09f), Color.White.copy(alpha = 0.03f)),
         )
     }
 
@@ -376,7 +382,7 @@ fun GlassButton(
             .topSheen(20.dp)
             .glassEdge(
                 focused = focused,
-                rest = tint?.copy(alpha = 0.85f) ?: Color.White.copy(alpha = 0.22f),
+                rest = tint?.copy(alpha = 0.70f) ?: Color.White.copy(alpha = 0.16f),
                 shape = shape,
             )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
@@ -504,7 +510,7 @@ fun RequestFocusOnEnter(requester: FocusRequester, key: Any? = Unit) {
 
 /**
  * A focusable glass tile that can hold anything (a channel row, a poster card). It behaves like [GlassButton]:
- * spring lift when focused, a squeeze when pressed, the spectrum ring for the focus, a tint for warnings.
+ * spring lift when focused, a squeeze when pressed, a white ring for the focus, a tint for warnings.
  */
 @Composable
 fun GlassSurface(
@@ -529,16 +535,16 @@ fun GlassSurface(
             focused -> focusScale
             else -> 1f
         },
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMediumLow),
+        animationSpec = PrismSprings.Focus,
         label = "glassSurfaceScale",
     )
     val shape = RoundedCornerShape(cornerRadius)
     val base = tint ?: PrismColors.Accent
     val fill = when {
-        focused -> Brush.linearGradient(listOf(base.copy(alpha = 0.50f), PrismColors.AccentAlt.copy(alpha = 0.34f)))
-        tint != null -> Brush.linearGradient(listOf(tint.copy(alpha = 0.26f), tint.copy(alpha = 0.10f)))
-        selected -> Brush.linearGradient(listOf(base.copy(alpha = 0.28f), PrismColors.AccentAlt.copy(alpha = 0.18f)))
-        else -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f)))
+        focused -> Brush.linearGradient(listOf(base.copy(alpha = 0.38f), PrismColors.AccentAlt.copy(alpha = 0.24f)))
+        tint != null -> Brush.linearGradient(listOf(tint.copy(alpha = 0.20f), tint.copy(alpha = 0.08f)))
+        selected -> Brush.linearGradient(listOf(base.copy(alpha = 0.22f), PrismColors.AccentAlt.copy(alpha = 0.12f)))
+        else -> Brush.linearGradient(listOf(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.03f)))
     }
     Box(
         modifier
@@ -556,7 +562,7 @@ fun GlassSurface(
             .topSheen(cornerRadius)
             .glassEdge(
                 focused = focused,
-                rest = tint?.copy(alpha = 0.85f) ?: Color.White.copy(alpha = 0.20f),
+                rest = tint?.copy(alpha = 0.70f) ?: Color.White.copy(alpha = 0.14f),
                 shape = shape,
             )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)

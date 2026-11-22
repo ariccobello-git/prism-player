@@ -23,22 +23,24 @@ Il contesto vincola tutto: si guarda da 3 metri, si usa solo il telecomando, e l
 | `Accent` / `AccentAlt` | `#7C9CFF` / `#B57CFF` | Fuoco, elementi scelti, aloni |
 | `TextPrimary` / `TextSecondary` | `#F4F6FF` / `#B4BBD6` | Testo / testo secondario e versione |
 | `Ok` / `Warn` / `Danger` | `#6FE3B0` / `#FFC857` / `#FF7C8A` | Stato liste, errori, eliminazione |
-| `Favorite` | `#FFE14D` | Stella dei preferiti (oro dello spettro) |
-| `Spectrum` | 7 colori dello splash | Anello del fuoco (`FocusRing`, gradiente circolare) |
+| `Favorite` | `#E6C36A` | Stella dei preferiti (oro tenue) |
+| `Spectrum` | 7 colori | Solo apertura e chiusura, mai nell'interfaccia |
 
 | Elemento | Riempimento | Bordo | Raggio |
 |---|---|---|---|
 | `GlassPanel` | bianco 14% → 5% (gradiente lineare) | 1 dp, bianco 38% → 6% | 28 dp |
 | `GlassButton` a riposo | bianco 12% → 4% | 1 dp, bianco 22% | 20 dp |
 | `GlassButton` scelto (`emphasized`) | `Accent` 28% → `AccentAlt` 18% | 1 dp | 20 dp |
-| `GlassButton` con fuoco | `Accent` 55% → `AccentAlt` 45% | **3 dp anello a spettro**, scala **1,06** | 20 dp |
+| `GlassButton` con fuoco | `Accent` 40% → `AccentAlt` 26% | **2,5 dp bianco**, scala **1,05** | 20 dp |
 | `GlassTextField` | come i pulsanti | come i pulsanti | 16 dp |
 
 Carattere: **Figtree** (OFL, `res/font/figtree_*.ttf`, istanze statiche 400–800), applicato da `PrismText` e dai campi di testo (`PrismFont`). Ha la stessa larghezza del Roboto di sistema (misurata sui testi dell'app: 1,00×), quindi nessuna impaginazione perde spazio; Lexend era stato valutato ma è più largo del 10–14% e avrebbe troncato i testi. I simboli che Figtree non ha passano ai caratteri di sistema o ai Noto Symbols.
 
 Testo: 22 sp semibold nei pulsanti, 20 sp corpo, 16 sp sottotitoli, 14 sp la versione in basso.
 
-Vetro: pannelli, pulsanti e superfici hanno una linea di luce di 1 dp sul bordo alto (`topSheen`, bianco 24% sfumato verso gli angoli). Il bordo con il fuoco è `glassEdge`: anello a spettro con il fuoco, linea sottile a riposo; usarlo per ogni nuovo elemento che riceve il fuoco.
+Vetro: pannelli, pulsanti e superfici hanno una linea di luce di 1 dp sul bordo alto (`topSheen`, bianco 24% sfumato verso gli angoli). Il bordo con il fuoco è `glassEdge`: anello bianco con il fuoco, linea sottile a riposo; usarlo per ogni nuovo elemento che riceve il fuoco.
+
+Direzione artistica «vetro notturno»: scuro e quieto, il colore della palette è una tinta e non un bagliore (aloni dello sfondo `HALO_ALPHA` 0,20 e `HALO_ALT_ALPHA` 0,16), riempimenti a riposo appena percettibili (bianco 8–9%), e l'unica cosa luminosa dello schermo è l'elemento con il fuoco. Niente multicolore nell'interfaccia. Una sola molla per il fuoco (`PrismSprings.Focus`, smorzamento 0,72).
 
 ### Come usarli
 

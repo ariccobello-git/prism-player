@@ -54,6 +54,7 @@ class CatalogStore(private val dir: File, private val keyProvider: () -> SecretK
                 CatalogDb.fill(db, catalog, keyProvider)
                 val old = fileFor(id)
                 if (compare != null && old.isFile && old.length() > 0) runCatching { compare(db, old) }
+                if (old.isFile && old.length() > 0) runCatching { Novelty.carry(db, old, System.currentTimeMillis()) }
             } finally {
                 db.close()
             }
@@ -172,6 +173,12 @@ class CatalogDb private constructor(
 
     override fun allLive(): List<Channel> = channels(ContentType.LIVE, live.indices.toList())
 
+    override fun recentMovies(sinceMs: Long, limit: Int): List<Channel> =
+        rows.entries(rows.recentIds("entries e", "e.kind = ${ContentType.MOVIE.ordinal}", sinceMs, limit))
+
+    override fun recentShows(sinceMs: Long, limit: Int): List<Show> =
+        rows.shows(rows.recentIds("shows e", "1", sinceMs, limit))
+
     override fun close() = rows.close()
 
     /** Reads rows by number; safe to use from any thread. */
@@ -240,6 +247,17 @@ class CatalogDb private constructor(
             val where = runs.ranges.joinToString(" OR ") { "(id BETWEEN ${it.first} AND ${it.second})" }.ifEmpty { "0" }
             val order = if (descending) "DESC" else "ASC"
             return longs("SELECT id FROM $table WHERE $where ORDER BY $column COLLATE NOCASE $order, id", null, runs.size)
+        }
+
+        /** Rows first seen since [sinceMs] (see [Novelty]), newest first, never from a group whose name has "XXX". */
+        fun recentIds(table: String, where: String, sinceMs: Long, limit: Int): LongArray = try {
+            longs(
+                "SELECT e.id FROM seen s JOIN $table ON e.fkey = s.fkey WHERE $where AND s.at >= ? " +
+                    "AND (e.grp IS NULL OR e.grp NOT LIKE '%xxx%') ORDER BY s.at DESC, e.id LIMIT $limit",
+                arrayOf(sinceMs.toString()), limit,
+            )
+        } catch (e: Exception) {
+            LongArray(0) // a copy written before novelties were tracked has no "seen" table
         }
 
         fun idsWhere(table: String, where: String, args: Array<String>, limit: Int = 1000): LongArray =
@@ -367,6 +385,7 @@ class CatalogDb private constructor(
                         "tvg_id TEXT, tvg_name TEXT, title TEXT, season INTEGER, episode INTEGER, fkey TEXT)",
                 )
                 db.execSQL("CREATE TABLE shows(id INTEGER PRIMARY KEY, title TEXT, logo TEXT, grp TEXT, first INTEGER, count INTEGER, fkey TEXT)")
+                db.execSQL(Novelty.CREATE)
                 val fts = try {
                     db.execSQL("CREATE VIRTUAL TABLE entry_words USING fts4(name)")
                     db.execSQL("CREATE VIRTUAL TABLE show_words USING fts4(title)")
