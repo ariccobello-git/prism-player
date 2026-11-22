@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.testTag
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -355,13 +356,17 @@ private fun PlaylistRow(
         }
     }
 
+    // Deleting asks first, on the same row: "Don't delete" has the cursor, so a double OK press never deletes by mistake.
     var confirming by remember { mutableStateOf(false) }
+    val keepFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val deleteFocus = remember { androidx.compose.ui.focus.FocusRequester() }
+    var wasConfirming by remember { mutableStateOf(false) }
     LaunchedEffect(confirming) {
-        if (confirming) {
-            delay(3_000)
-            confirming = false
-        }
+        if (confirming) keepFocus.requestWhenReady()
+        else if (wasConfirming) deleteFocus.requestWhenReady()
+        wasConfirming = confirming
     }
+    androidx.activity.compose.BackHandler(enabled = confirming) { confirming = false }
 
     Row(
         modifier.fillMaxWidth(),
@@ -386,16 +391,26 @@ private fun PlaylistRow(
                 modifier = Modifier.focusMemory("verify:" + playlist.id).returnItem(memory, index * 3 + 1),
             )
         }
-        Box {
+        if (confirming) {
             GlassButton(
-                text = stringResource(
-                    if (confirming) R.string.action_delete_confirm else R.string.action_delete,
-                ),
-                onClick = {
-                    if (confirming) onDelete() else confirming = true
-                },
-                danger = confirming,
-                modifier = Modifier.returnItem(memory, index * 3 + 2),
+                text = stringResource(R.string.action_keep),
+                onClick = { confirming = false },
+                emphasized = true,
+                focusRequester = keepFocus,
+                modifier = Modifier.testTag("keep:" + playlist.id),
+            )
+            GlassButton(
+                text = stringResource(R.string.action_delete),
+                onClick = onDelete,
+                danger = true,
+                modifier = Modifier.testTag("confirmDelete:" + playlist.id),
+            )
+        } else {
+            GlassButton(
+                text = stringResource(R.string.action_delete),
+                onClick = { confirming = true },
+                focusRequester = deleteFocus,
+                modifier = Modifier.testTag("delete:" + playlist.id).returnItem(memory, index * 3 + 2),
             )
         }
     }
