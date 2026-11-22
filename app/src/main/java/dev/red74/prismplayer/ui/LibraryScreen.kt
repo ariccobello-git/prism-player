@@ -1145,7 +1145,7 @@ private fun PreviewPane(
 internal fun HeroPreview(channel: Channel, active: Boolean, modifier: Modifier = Modifier) {
     // The player (and its connection) exists only while the preview plays; until then the channel's logo holds the place.
     if (active) {
-        PreviewPlayer(channel, true, modifier)
+        PreviewPlayer(channel, true, modifier, silent = true, startDelayMs = 0L)
     } else {
         Box(
             modifier
@@ -1169,9 +1169,17 @@ internal fun HeroPreview(channel: Channel, active: Boolean, modifier: Modifier =
  * connects. Until the first picture arrives the channel's logo is shown instead of a black or frozen frame.
  */
 @Composable
-private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier = Modifier) {
+private fun PreviewPlayer(
+    channel: Channel?,
+    active: Boolean,
+    modifier: Modifier = Modifier,
+    /** No sound: the audio is not even opened, so the picture comes sooner and the stick does less. */
+    silent: Boolean = false,
+    /** Waiting time before connecting; null is the usual one (the caller may have waited already). */
+    startDelayMs: Long? = null,
+) {
     val context = LocalContext.current
-    val exo = remember { createPlayer(context, preview = true) }
+    val exo = remember { createPlayer(context, preview = true, silent = silent) }
     val hold = remember { StreamHold() }
     var failed by remember { mutableStateOf(false) }
     /** True once the current channel has shown its first picture. */
@@ -1220,7 +1228,7 @@ private fun PreviewPlayer(channel: Channel?, active: Boolean, modifier: Modifier
             hold.release()
             return@LaunchedEffect
         }
-        delay(if (firstStart) PREVIEW_DELAY_MS * 2 else PREVIEW_DELAY_MS)
+        delay(startDelayMs ?: if (firstStart) PREVIEW_DELAY_MS * 2 else PREVIEW_DELAY_MS)
         firstStart = false
         // Any list, guide or plot request still talking to the panel is closed before the preview connects.
         hold.acquire()
