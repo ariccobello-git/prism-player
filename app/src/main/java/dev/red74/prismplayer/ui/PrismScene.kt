@@ -159,7 +159,7 @@ internal fun DrawScope.drawPrismScene(
     // inside the glass: the bent white thread, and after the hit each colour on its own way
     val innerGrow = fraction(tm, 4.25f, 0.9f)
     if (mid != null && entry != null && innerGrow > 0f) {
-        var prev = entry
+        var prev: Offset = entry
         var total = 0f
         for (v in mid.inside) { val p = screen(v); total += hypot(p.x - prev.x, p.y - prev.y); prev = p }
         var left = total * innerGrow
