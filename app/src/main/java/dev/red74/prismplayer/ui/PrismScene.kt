@@ -46,15 +46,14 @@ private fun smooth(edge0: Float, edge1: Float, x: Float): Float {
 
 /**
  * The opening scene at [tm] seconds of the opening music's own timeline (10.6 s, see [PrismMotion]): a real
- * photograph of the Milky Way ([sky]; ESO/S. Brunier, CC BY 4.0, see the README), a solid glass prism turning in 3D
- * ([PrismView], [drawCrystalMoon]), a white beam from the lower left and the spectrum, traced with real refraction
- * ([PrismOptics]). Once out of the glass the colours fly out of the screen towards the viewer and down past its
- * bottom edge. [glassView] is a small soft copy of the sky for what the glass shows.
+ * photograph of the Milky Way ([sky]; ESO/S. Brunier, CC BY 4.0, see the README), a crystal moon turning in 3D
+ * ([PrismView], [drawCrystalMoon]), a fine white thread of light from the lower left that touches it in one bright
+ * point, and the spectrum, traced with real refraction ([PrismOptics]). Once out of the crystal the soft colours fly
+ * out of the screen towards the viewer and down past its bottom edge.
  */
 internal fun DrawScope.drawPrismScene(
     tm: Float,
     sky: ImageBitmap?,
-    glassView: ImageBitmap?,
     layers: SceneLayers = SceneLayers.ALL,
     moon: ImageBitmap? = null,
 ) {
@@ -100,7 +99,7 @@ internal fun DrawScope.drawPrismScene(
     // glow cast by the light, behind the glass
     drawCircle(
         Brush.radialGradient(
-            listOf(Color(0xFF9FC4FF).copy(alpha = 0.14f * appear + 0.22f * flash.coerceAtMost(1f)), Color.Transparent),
+            listOf(Color(0xFF9FC4FF).copy(alpha = 0.14f * appear + 0.06f * flash.coerceAtMost(1f)), Color.Transparent),
             center = center, radius = radius * 2.4f,
         ),
         radius = radius * 2.4f, center = center, blendMode = BlendMode.Plus,
@@ -111,13 +110,12 @@ internal fun DrawScope.drawPrismScene(
         center = center,
         radius = radius,
         appear = appear,
-        flash = flash,
         power = power,
         sparkle = PrismMotion.sparkle(tm.toDouble()).toFloat(),
         moon = moon,
     )
 
-    // --- the white beam: it comes from far away on the lower left to wherever it meets the glass ---------------------
+    // --- the white beam: a fine thread of light from the lower left, just softened at its edges --------------------
     val entry = mid?.let { screen(it.entry) }
     if (mid != null && entry != null && beamIn > 0f) {
         val dx = cos(PrismOptics.BEAM_ANGLE)
@@ -125,72 +123,86 @@ internal fun DrawScope.drawPrismScene(
         var back = 1.0
         var start = entry
         while (back < 60.0) {
-            val x = mid.entry.x - dx * back
-            val y = mid.entry.y - dy * back
-            start = project(x, y)
+            start = project(mid.entry.x - dx * back, mid.entry.y - dy * back)
             if (start.x < -60f || start.y < -60f || start.y > h + 60f) break
             back += 0.5
         }
         val end = lerp(start, entry, beamIn)
-        drawLine(Color(0xFFBFD8FF).copy(alpha = 0.10f), start, end, 38.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-        drawLine(Color(0xFFDDEBFF).copy(alpha = 0.22f), start, end, 18.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-        drawLine(Color.White.copy(alpha = 0.55f), start, end, 8.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-        drawLine(Color.White, start, end, 3.5.dp.toPx(), StrokeCap.Round)
-        drawCircle(
-            Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f), Color.Transparent), center = end, radius = 22.dp.toPx()),
-            radius = 22.dp.toPx(), center = end, blendMode = BlendMode.Plus,
-        )
+        drawLine(Color(0xFFDDEBFF).copy(alpha = 0.07f), start, end, 6.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+        drawLine(Color.White.copy(alpha = 0.22f), start, end, 2.5.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+        drawLine(Color.White.copy(alpha = 0.95f), start, end, 1.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+        // the tip of the light while it travels
+        if (beamIn < 1f) {
+            val tip = 7.dp.toPx()
+            drawCircle(
+                Brush.radialGradient(listOf(Color.White.copy(alpha = 0.8f), Color.Transparent), center = end, radius = tip),
+                radius = tip, center = end, blendMode = BlendMode.Plus,
+            )
+        }
     }
+    // the hit: one bright point where the thread touches the moon, with a soft glow around it
     if (entry != null && flash > 0f) {
-        val flare = 70.dp.toPx() * flash
+        val f = flash.coerceAtMost(1f)
+        val glow = 46.dp.toPx() * (0.55f + 0.45f * flash)
         drawCircle(
-            Brush.radialGradient(listOf(Color.White.copy(alpha = 0.8f * flash.coerceAtMost(1f)), Color(0xFF9FC4FF).copy(alpha = 0.25f * flash.coerceAtMost(1f)), Color.Transparent), center = entry, radius = flare),
-            radius = flare, center = entry, blendMode = BlendMode.Plus,
+            Brush.radialGradient(
+                0f to Color.White.copy(alpha = 0.85f * f),
+                0.12f to Color.White.copy(alpha = 0.55f * f),
+                0.45f to Color(0xFFBFD8FF).copy(alpha = 0.16f * f),
+                1f to Color.Transparent,
+                center = entry, radius = glow,
+            ),
+            radius = glow, center = entry, blendMode = BlendMode.Plus,
         )
-        drawLine(Color.White.copy(alpha = 0.5f * flash.coerceAtMost(1f)), Offset(entry.x - flare * 1.6f, entry.y), Offset(entry.x + flare * 1.6f, entry.y), 1.5.dp.toPx(), blendMode = BlendMode.Plus)
     }
 
-    // inside the glass: the bent white beam, and after the hit each colour on its own way
+    // inside the glass: the bent white thread, and after the hit each colour on its own way
     val innerGrow = fraction(tm, 4.25f, 0.9f)
     if (mid != null && entry != null && innerGrow > 0f) {
-        val route = listOf(entry) + mid.inside.map { screen(it) }
+        var prev = entry
         var total = 0f
-        for (k in 0 until route.size - 1) total += hypot(route[k + 1].x - route[k].x, route[k + 1].y - route[k].y)
+        for (v in mid.inside) { val p = screen(v); total += hypot(p.x - prev.x, p.y - prev.y); prev = p }
         var left = total * innerGrow
-        for (k in 0 until route.size - 1) {
-            val seg = hypot(route[k + 1].x - route[k].x, route[k + 1].y - route[k].y)
+        prev = entry
+        for (v in mid.inside) {
             if (left <= 0f) break
-            val part = (left / seg.coerceAtLeast(1e-3f)).coerceAtMost(1f)
-            val a = route[k]
-            val b = lerp(route[k], route[k + 1], part)
-            drawLine(Color.White.copy(alpha = 0.30f), a, b, 12.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
-            drawLine(Color.White.copy(alpha = 0.90f), a, b, 3.dp.toPx(), StrokeCap.Round)
+            val next = screen(v)
+            val seg = hypot(next.x - prev.x, next.y - prev.y)
+            val b = lerp(prev, next, (left / seg.coerceAtLeast(1e-3f)).coerceAtMost(1f))
+            drawLine(Color.White.copy(alpha = 0.18f), prev, b, 3.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+            drawLine(Color.White.copy(alpha = 0.85f), prev, b, 1.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
             left -= seg
+            prev = next
         }
     }
     if (power > 0f) {
         paths.forEachIndexed { i, p ->
             if (p != null && p.exits) {
-                val route = listOf(screen(p.entry)) + p.inside.map { screen(it) }
-                for (k in 0 until route.size - 1) {
-                    drawLine(Spectrum[i].copy(alpha = 0.30f * power * p.transmission.toFloat()), route[k], route[k + 1], 2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+                var prev = screen(p.entry)
+                for (v in p.inside) {
+                    val next = screen(v)
+                    drawLine(Spectrum[i].copy(alpha = 0.26f * power * p.transmission.toFloat()), prev, next, 1.2.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Plus)
+                    prev = next
                 }
             }
         }
     }
 
-    // --- the spectrum: bands that leave the glass, fly out of the screen towards the viewer and fall past its bottom ---
+    // --- the spectrum: soft bands that leave the glass, fly towards the viewer and fall past the bottom edge ---------
     if (power <= 0.002f) return
     // Only colours that leave in the same general direction count (a ray that bounced around inside is dropped).
     val reference = paths.firstOrNull { it?.exits == true }?.exitAngle ?: return
-    val available = paths.indices.filter { paths[it]?.exits == true && kotlin.math.abs(paths[it]!!.exitAngle - reference) < 0.35 }
-    if (available.isEmpty()) return
+    var count = 0
+    for (i in paths.indices) {
+        val p = paths[i]
+        if (p != null && p.exits && kotlin.math.abs(p.exitAngle - reference) < 0.35) Fan.colours[count++] = i
+    }
+    if (count == 0) return
     val grow = easeOut(fraction(tm, 5.3f, 2.0f))
     val spread = 1f + 4.0f * grow                       // the colours open up from a narrow beam to a wide fan
     val length = RAY_LENGTH * (0.2f + 0.8f * grow)
-    val firstAngle = paths[available.first()]!!.exitAngle
-    val angles = available.map { i -> firstAngle + (paths[i]!!.exitAngle - firstAngle).coerceIn(-0.2, 0.2) * spread }
-    val origins = available.map { paths[it]!!.inside.last() }
+    val firstAngle = paths[Fan.colours[0]]!!.exitAngle
+    for (n in 0 until count) Fan.angles[n] = firstAngle + (paths[Fan.colours[n]]!!.exitAngle - firstAngle).coerceIn(-0.2, 0.2) * spread
 
     /** A point of a colour's way: [s] from 0 (where it leaves the glass) to 1, at direction [angle]. */
     fun along(origin: PrismOptics.Vec, angle: Double, s: Double): Offset = project(
@@ -200,53 +212,62 @@ internal fun DrawScope.drawPrismScene(
         extraZ = -RAY_PULL * s,
     )
 
-    /** A band between two directions, which widens as it comes closer, as a strip of [steps] pieces. */
-    fun band(origin: PrismOptics.Vec, from: Double, to: Double, steps: Int = 16): Path {
-        val near = (0..steps).map { along(origin, from, length * it / steps.toDouble()) }
-        val far = (0..steps).map { along(origin, to, length * it / steps.toDouble()) }
-        return Path().apply {
-            moveTo(near[0].x, near[0].y)
-            for (p in near.drop(1)) lineTo(p.x, p.y)
-            for (p in far.asReversed()) lineTo(p.x, p.y)
-            close()
-        }
+    /** Fills [path] with the band between two directions, widening as it comes closer. No list is made per frame. */
+    fun band(path: Path, origin: PrismOptics.Vec, from: Double, to: Double): Path {
+        path.reset()
+        var p = along(origin, from, 0.0)
+        path.moveTo(p.x, p.y)
+        for (k in 1..BAND_STEPS) { p = along(origin, from, length * k / BAND_STEPS); path.lineTo(p.x, p.y) }
+        for (k in BAND_STEPS downTo 0) { p = along(origin, to, length * k / BAND_STEPS); path.lineTo(p.x, p.y) }
+        path.close()
+        return path
     }
 
-    available.forEachIndexed { n, i ->
-        val origin = origins[n]
-        val centre = angles[n]
-        val prev = if (n > 0) (centre - angles[n - 1]) / 2 else null
-        val next = if (n < available.size - 1) (angles[n + 1] - centre) / 2 else null
-        val lo = prev ?: next ?: 0.02
-        val hi = next ?: prev ?: 0.02
+    var sumX = 0f
+    var sumY = 0f
+    for (n in 0 until count) {
+        val i = Fan.colours[n]
+        val origin = paths[i]!!.inside.last()
+        val centre = Fan.angles[n]
+        // half the gap to each neighbour; the outer colours mirror their only neighbour
+        val lo = if (n > 0) (centre - Fan.angles[n - 1]) / 2 else if (count > 1) (Fan.angles[1] - centre) / 2 else 0.02
+        val hi = if (n < count - 1) (Fan.angles[n + 1] - centre) / 2 else lo
         val strength = power * (paths[i]!!.transmission.toFloat() / 0.85f).coerceIn(0.2f, 1.1f)
         val color = Spectrum[i]
         val start = screen(origin)
-        val tip = along(origin, centre, length * 0.75)
+        sumX += start.x
+        sumY += start.y
+        val tip = along(origin, centre, length * 0.8)
+        // wide and faint, overlapping the neighbours so the colours melt into each other with no hard edge
         drawPath(
-            band(origin, centre - lo, centre + hi),
-            Brush.linearGradient(listOf(color.copy(alpha = 0.58f * strength), color.copy(alpha = 0.34f * strength), color.copy(alpha = 0.10f * strength)), start = start, end = tip),
+            band(Fan.wide, origin, centre - lo * 2.2, centre + hi * 2.2),
+            Brush.linearGradient(listOf(color.copy(alpha = 0.24f * strength), color.copy(alpha = 0.12f * strength), Color.Transparent), start = start, end = tip),
             blendMode = BlendMode.Plus,
         )
-        // a soft halo and a bright core along the middle of each colour, widening as they come closer too
+        // the body of the colour, still soft at its sides thanks to the layer above
         drawPath(
-            band(origin, centre - lo * 0.45, centre + hi * 0.45),
-            Brush.linearGradient(listOf(color.copy(alpha = 0.22f * strength * grow), color.copy(alpha = 0.06f * strength)), start = start, end = tip),
-            blendMode = BlendMode.Plus,
-        )
-        drawPath(
-            band(origin, centre - 0.004, centre + 0.004),
-            Brush.linearGradient(listOf(Color.White.copy(alpha = 0.9f * strength), color.copy(alpha = 0.95f * strength), color.copy(alpha = 0.25f * strength)), start = start, end = tip),
+            band(Fan.body, origin, centre - lo * 0.8, centre + hi * 0.8),
+            Brush.linearGradient(listOf(color.copy(alpha = 0.42f * strength), color.copy(alpha = 0.22f * strength), Color.Transparent), start = start, end = tip),
             blendMode = BlendMode.Plus,
         )
     }
-    // bloom where the light leaves the glass; it breathes a little once the prism is at rest
-    val exits = origins.map { screen(it) }
-    val avg = Offset(exits.map { it.x }.average().toFloat(), exits.map { it.y }.average().toFloat())
+    // bloom where the light leaves the glass; it breathes a little once the moon is at rest
+    val avg = Offset(sumX / count, sumY / count)
     val breathe = if (tm > PrismMotion.STOP_AT) 0.94f + 0.06f * sin((tm - PrismMotion.STOP_AT.toFloat()) * 2.6f) else 1f
-    val bloom = 90.dp.toPx() * (0.6f + 0.4f * grow) * breathe
+    val bloom = 70.dp.toPx() * (0.6f + 0.4f * grow) * breathe
     drawCircle(
-        Brush.radialGradient(listOf(Color.White.copy(alpha = 0.95f * power), Color(0xFFFFF0D0).copy(alpha = 0.35f * power), Color.Transparent), center = avg, radius = bloom),
+        Brush.radialGradient(listOf(Color.White.copy(alpha = 0.85f * power), Color(0xFFFFF0D0).copy(alpha = 0.28f * power), Color.Transparent), center = avg, radius = bloom),
         radius = bloom, center = avg, blendMode = BlendMode.Plus,
     )
+}
+
+/** Steps along each colour band: enough for its curve, few enough to stay light on the stick. */
+private const val BAND_STEPS = 12
+
+/** Reused every frame by the spectrum, so drawing it makes no garbage (garbage collections are what stutter). */
+private object Fan {
+    val colours = IntArray(PrismOptics.INDICES.size)
+    val angles = DoubleArray(PrismOptics.INDICES.size)
+    val wide = Path()
+    val body = Path()
 }

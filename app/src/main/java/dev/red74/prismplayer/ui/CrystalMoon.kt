@@ -25,7 +25,6 @@ internal fun DrawScope.drawCrystalMoon(
     center: Offset,
     radius: Float,
     appear: Float,
-    flash: Float,
     power: Float,
     sparkle: Float,
     moon: ImageBitmap?,
@@ -68,13 +67,10 @@ internal fun DrawScope.drawCrystalMoon(
             radius = radius, center = center, blendMode = BlendMode.Plus,
         )
     }
-    if (flash > 0f) {
-        drawCircle(Color(0xFFBFD8FF).copy(alpha = 0.10f * flash.coerceAtMost(1f)), radius, center, blendMode = BlendMode.Plus)
-    }
 
     // a glint on the rim facing the light, brighter on every beat
     val corner = center + lightDir * radius * 0.93f
-    val glow = appear * 0.8f * (0.30f + 0.70f * maxOf(sparkle, flash.coerceAtMost(1f)))
+    val glow = appear * 0.8f * (0.30f + 0.70f * sparkle)
     val ray = 26.dp.toPx() * (0.6f + 0.8f * glow)
     drawCircle(
         Brush.radialGradient(listOf(Color.White.copy(alpha = 0.85f * glow), Color(0xFFBFD8FF).copy(alpha = 0.25f * glow), Color.Transparent), center = corner, radius = ray * 0.6f),

@@ -1,6 +1,5 @@
 package dev.red74.prismplayer.ui
 
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.media.MediaPlayer
 import androidx.activity.compose.BackHandler
@@ -45,7 +44,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.red74.prismplayer.R
-import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -63,6 +61,10 @@ private const val TIME_SCALE = SPLASH_SECONDS / 10.6f
 /** The app fades in over the opening this long before the music ends, so picture and sound finish together. */
 const val SPLASH_EXIT_MS = 450
 
+/** Gap between picture and music that is left alone, and the most the picture is moved per frame to close one. */
+private const val SYNC_TOLERANCE_S = 0.04f
+private const val SYNC_STEP_S = 0.002f
+
 /** Longest wait for the photo and the music to be ready before the opening starts anyway. */
 private const val PREPARE_TIMEOUT_MS = 1_500L
 
@@ -70,8 +72,8 @@ private fun fraction(value: Float, from: Float, length: Float): Float =
     ((value - from) / length).coerceIn(0f, 1f)
 
 /**
- * Opening screen: deep space, a white beam reaches a glass prism turning in 3D and leaves it split into a wide
- * spectrum that flies out of the screen, while a progress bar fills (the scene is [drawPrismScene]). It ends when the animation has finished and the app data is [ready].
+ * Opening screen: deep space, a fine white thread of light touches a crystal moon turning in 3D and leaves it split
+ * into a soft spectrum that flies out of the screen, while a progress bar fills (the scene is [drawPrismScene]). It ends when the animation has finished and the app data is [ready].
  */
 @Composable
 fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
@@ -115,24 +117,24 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
         }
         val startedAt = withFrameNanos { it }
         var correction = 0f
+        var drift = 0f
         var frame = 0
         var finished = false
         while (true) {
             val now = withFrameNanos { it }
-            var t = (now - startedAt) / 1e9f + correction
-            // Every few frames the picture is pulled gently towards where the music really is, so a slow start of
-            // the audio on the stick or a skipped frame never leaves them apart, without visible jumps.
-            if (++frame % 6 == 0 && t < SPLASH_SECONDS - 0.3f) {
+            // A few times a second the music says where it really is. Its position is coarse (it moves in steps of
+            // tens of milliseconds), so small gaps are ignored and a real gap is closed by at most 2 ms per frame:
+            // the picture speeds up or slows down by an unseen amount instead of jumping, which looked like stutter.
+            if (++frame % 10 == 0 && (now - startedAt) / 1e9f < SPLASH_SECONDS - 0.3f) {
                 val audio = runCatching { player?.takeIf { it.isPlaying }?.currentPosition?.div(1000f) }.getOrNull()
-                if (audio != null && audio > 0.1f) {
-                    val gap = audio - t
-                    if (kotlin.math.abs(gap) > 0.03f) {
-                        val step = gap.coerceIn(-0.05f, 0.05f)
-                        correction += step
-                        t += step
-                    }
-                }
+                if (audio != null && audio > 0.1f) drift = audio - ((now - startedAt) / 1e9f + correction)
             }
+            if (kotlin.math.abs(drift) > SYNC_TOLERANCE_S) {
+                val step = drift.coerceIn(-SYNC_STEP_S, SYNC_STEP_S)
+                correction += step
+                drift -= step
+            }
+            val t = (now - startedAt) / 1e9f + correction
             clock.floatValue = t
             if (!finished && readyNow && (skipped.value || t >= SPLASH_SECONDS - SPLASH_EXIT_MS / 1000f)) {
                 finished = true
@@ -163,7 +165,7 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
             .fillMaxSize()
             .background(Color(0xFF02030A)),
     ) {
-        Canvas(Modifier.fillMaxSize()) { drawPrismScene(t() / TIME_SCALE, images?.sky, images?.glass, moon = images?.moon) }
+        Canvas(Modifier.fillMaxSize()) { drawPrismScene(t() / TIME_SCALE, images?.sky, moon = images?.moon) }
         Column(
             Modifier
                 .align(Alignment.BottomCenter)
@@ -234,14 +236,12 @@ fun SplashScreen(ready: Boolean, onFinished: () -> Unit) {
     }
 }
 
-/** The sky photo and a small soft copy of it for what the glass shows. */
-internal class SplashImages(val sky: ImageBitmap, val glass: ImageBitmap, val moon: ImageBitmap? = null)
+/** The sky photo and the moon's map. */
+internal class SplashImages(val sky: ImageBitmap, val moon: ImageBitmap? = null)
 
-/** Loads the sky photo and its small soft copy away from the screen thread. */
+/** Loads the sky photo and the moon's map away from the screen thread. */
 internal fun loadSplashImages(context: android.content.Context): SplashImages? = runCatching {
     val sky = BitmapFactory.decodeResource(context.resources, R.drawable.galaxy_bg) ?: return@runCatching null
-    // A small copy of the sky, soft once stretched back to full size: what the glass shows through and reflects.
-    val small = Bitmap.createScaledBitmap(sky, 240, (240f * sky.height / sky.width).roundToInt().coerceAtLeast(1), true)
     val moon = BitmapFactory.decodeResource(context.resources, R.drawable.crystal_moon_map)?.asImageBitmap()
-    SplashImages(sky.asImageBitmap(), small.asImageBitmap(), moon)
+    SplashImages(sky.asImageBitmap(), moon)
 }.getOrNull()
