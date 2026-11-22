@@ -153,6 +153,27 @@ class HighlightsViewTest {
     }
 
     @Test
+    fun followTeamsIsOnlyForLiveNotForAnOnDemandOnlyList() {
+        val movie = Channel("Heat", "http://p/movie/u/p/1.mkv", "Cinema", type = dev.red74.prismplayer.data.ContentType.MOVIE)
+        val onDemand = dev.red74.prismplayer.data.Catalog(
+            emptyList(), listOf(dev.red74.prismplayer.data.Category("Cinema", listOf(movie))), emptyList(), null, false, 1,
+        )
+        rule.setContent {
+            CompositionLocalProvider(LocalHighlights provides HighlightsData.Empty) {
+                HighlightsView(nav = nav, onNav = { change -> nav = change(nav) }, onPlay = { _, _, _ -> }, catalog = onDemand)
+            }
+        }
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithTextCount("Follow teams"))
+    }
+
+    @Test
+    fun followTeamsStaysForALiveList() {
+        show()
+        assertEquals(1, rule.onAllNodesWithTextCount("Follow teams"))
+    }
+
+    @Test
     fun customizeOpensTheEditorAndSavesTheChoice() {
         show()
         rule.onNodeWithText("Follow teams").performClick()
