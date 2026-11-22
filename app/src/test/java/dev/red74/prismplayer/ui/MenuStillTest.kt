@@ -51,8 +51,8 @@ class MenuStillTest {
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FlagButton(italian = true, selected = true, onClick = {}, focusRequester = it)
-                    FlagButton(italian = false, selected = false, onClick = {}, focusRequester = en)
+                    FlagButton(language = "it", selected = true, onClick = {}, focusRequester = it)
+                    FlagButton(language = "en", selected = false, onClick = {}, focusRequester = en)
                     GlassButton(text = "Aspetto", onClick = {}, modifier = Modifier.weight(1f), focusRequester = aspect)
                 }
                 repeat(8) { GlassButton(text = "Voce $it", onClick = {}, modifier = Modifier.fillMaxWidth()) }

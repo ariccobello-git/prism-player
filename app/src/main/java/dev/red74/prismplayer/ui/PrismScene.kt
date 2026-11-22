@@ -18,15 +18,7 @@ import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-private val Spectrum = listOf(
-    Color(0xFFFF3B4E), // red
-    Color(0xFFFF9A3D), // orange
-    Color(0xFFFFE14D), // yellow
-    Color(0xFF4DFF88), // green
-    Color(0xFF3FE6FF), // cyan
-    Color(0xFF5F7BFF), // blue
-    Color(0xFFB765FF), // violet
-)
+private val Spectrum = PrismColors.Spectrum
 
 /** Which parts of the scene to draw: the closing animation takes the sky and the prism with its light apart. */
 internal enum class SceneLayers { ALL, SKY, PRISM }

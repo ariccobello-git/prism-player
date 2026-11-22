@@ -681,8 +681,8 @@ private fun GroupBrowser(
     val density = LocalDensity.current
     val subNeed = remember(subRows, measurer, density) {
         if (subRows.isEmpty()) 0.dp else with(density) {
-            val labelStyle = TextStyle(fontSize = COMPACT_LABEL_SP.sp, fontWeight = FontWeight.SemiBold)
-            val countStyle = TextStyle(fontSize = COMPACT_COUNT_SP.sp)
+            val labelStyle = TextStyle(fontSize = COMPACT_LABEL_SP.sp, fontWeight = FontWeight.SemiBold, fontFamily = PrismFont)
+            val countStyle = TextStyle(fontSize = COMPACT_COUNT_SP.sp, fontFamily = PrismFont)
             val widest = subRows.take(200).maxOf { row ->
                 measurer.measure(row.label, labelStyle, maxLines = 1).size.width +
                     measurer.measure(row.count.toString(), countStyle, maxLines = 1).size.width

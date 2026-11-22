@@ -48,6 +48,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.asImageBitmap
@@ -77,7 +78,7 @@ import androidx.tv.material3.darkColorScheme
 /**
  * Prism Player's glass look, tuned for a 10-foot UI:
  * translucent gradient panels with a light edge over a soft gradient backdrop, large type,
- * and an unmistakable focus state (scale + bright border) for D-pad navigation.
+ * and an unmistakable focus state (scale + spectrum ring + accent fill) for D-pad navigation.
  *
  * Real backdrop blur is deliberately not used: it is unavailable below Android 12 and too heavy for
  * entry-level sticks, so the depth comes from layered translucency instead.
@@ -93,8 +94,61 @@ object PrismColors {
     val Danger = Color(0xFFFF7C8A)
     val Ok = Color(0xFF6FE3B0)
     val Warn = Color(0xFFFFC857)
-    /** Warm terracotta orange used for favourites. */
-    val Favorite = Color(0xFFD97757)
+    /** Gold of the spectrum, used for the favourites star. */
+    val Favorite = Color(0xFFFFE14D)
+
+    /** The seven colours the prism splits white light into (splash, focus ring). */
+    val Spectrum: List<Color> = listOf(
+        Color(0xFFFF3B4E), // red
+        Color(0xFFFF9A3D), // orange
+        Color(0xFFFFE14D), // yellow
+        Color(0xFF4DFF88), // green
+        Color(0xFF3FE6FF), // cyan
+        Color(0xFF5F7BFF), // blue
+        Color(0xFFB765FF), // violet
+    )
+
+    /** The focus ring: white light split into the spectrum all around the focused element. */
+    val FocusRing: Brush = Brush.sweepGradient(Spectrum + Spectrum.first())
+}
+
+/** The app's typeface (Figtree, OFL, bundled): same width as the TV's Roboto, so no layout loses room. */
+val PrismFont: FontFamily = FontFamily(
+    Font(dev.red74.prismplayer.R.font.figtree_regular, FontWeight.Normal),
+    Font(dev.red74.prismplayer.R.font.figtree_medium, FontWeight.Medium),
+    Font(dev.red74.prismplayer.R.font.figtree_semibold, FontWeight.SemiBold),
+    Font(dev.red74.prismplayer.R.font.figtree_bold, FontWeight.Bold),
+    Font(dev.red74.prismplayer.R.font.figtree_extrabold, FontWeight.ExtraBold),
+)
+
+/**
+ * Edge of a glass element: a thin light line at rest, the spectrum ring with the focus.
+ * Brushes are shared constants, so nothing is created per frame.
+ */
+fun Modifier.glassEdge(
+    focused: Boolean,
+    rest: Color,
+    shape: androidx.compose.ui.graphics.Shape,
+    focusedWidth: androidx.compose.ui.unit.Dp = 3.dp,
+    restWidth: androidx.compose.ui.unit.Dp = 1.dp,
+): Modifier = border(
+    width = if (focused) focusedWidth else restWidth,
+    brush = if (focused) PrismColors.FocusRing else SolidColor(rest),
+    shape = shape,
+)
+
+/** A glass sheet lit from above: a faint light line along the top edge, between the rounded corners. */
+fun Modifier.topSheen(cornerRadius: androidx.compose.ui.unit.Dp): Modifier = drawWithCache {
+    val inset = cornerRadius.toPx()
+    val y = 1.dp.toPx()
+    val brush = Brush.horizontalGradient(
+        listOf(Color.Transparent, Color.White.copy(alpha = 0.24f), Color.Transparent),
+        startX = inset,
+        endX = size.width - inset,
+    )
+    onDrawBehind {
+        if (size.width > inset * 2) drawLine(brush, Offset(inset, y), Offset(size.width - inset, y), strokeWidth = y)
+    }
 }
 
 @Composable
@@ -149,6 +203,7 @@ fun PrismText(
             color = color,
             fontSize = size,
             fontWeight = weight,
+            fontFamily = PrismFont,
             maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
         )
@@ -160,6 +215,7 @@ fun PrismText(
         color = color,
         fontSize = size,
         fontWeight = weight,
+        fontFamily = PrismFont,
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis,
     )
@@ -224,7 +280,7 @@ fun PrismBackground(
                 dev.red74.prismplayer.R.string.version_label,
                 dev.red74.prismplayer.BuildConfig.BUILD_LABEL,
             ),
-            size = 13.sp,
+            size = 14.sp,
             color = PrismColors.TextSecondary,
             modifier = Modifier
                 .align(androidx.compose.ui.Alignment.BottomCenter)
@@ -248,6 +304,7 @@ fun GlassPanel(
                     listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.05f)),
                 ),
             )
+            .topSheen(cornerRadius)
             .border(
                 1.dp,
                 Brush.linearGradient(
@@ -316,13 +373,10 @@ fun GlassButton(
             }
             .clip(shape)
             .background(fill)
-            .border(
-                width = if (focused) 3.dp else 1.dp,
-                color = when {
-                    focused -> Color.White
-                    tint != null -> tint.copy(alpha = 0.85f)
-                    else -> Color.White.copy(alpha = 0.22f)
-                },
+            .topSheen(20.dp)
+            .glassEdge(
+                focused = focused,
+                rest = tint?.copy(alpha = 0.85f) ?: Color.White.copy(alpha = 0.22f),
                 shape = shape,
             )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)
@@ -403,18 +457,14 @@ fun GlassTextField(
                 )
                 .clip(shape)
                 .background(Color.White.copy(alpha = if (editing) 0.14f else 0.08f))
-                .border(
-                    width = if (focused) 3.dp else 1.dp,
-                    color = if (focused) Color.White else Color.White.copy(alpha = 0.22f),
-                    shape = shape,
-                )
+                .glassEdge(focused = focused, rest = Color.White.copy(alpha = 0.22f), shape = shape)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
         ) {
             BasicTextField(
                 value = value,
                 onValueChange = onValueChange,
                 singleLine = true,
-                textStyle = TextStyle(color = PrismColors.TextPrimary, fontSize = 22.sp),
+                textStyle = TextStyle(color = PrismColors.TextPrimary, fontSize = 22.sp, fontFamily = PrismFont),
                 cursorBrush = SolidColor(PrismColors.Accent),
                 keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
                 keyboardActions = KeyboardActions(
@@ -454,7 +504,7 @@ fun RequestFocusOnEnter(requester: FocusRequester, key: Any? = Unit) {
 
 /**
  * A focusable glass tile that can hold anything (a channel row, a poster card). It behaves like [GlassButton]:
- * spring lift when focused, a squeeze when pressed, a white border for the focus, a tint for warnings.
+ * spring lift when focused, a squeeze when pressed, the spectrum ring for the focus, a tint for warnings.
  */
 @Composable
 fun GlassSurface(
@@ -503,13 +553,10 @@ fun GlassSurface(
             }
             .clip(shape)
             .background(fill)
-            .border(
-                width = if (focused) 3.dp else 1.dp,
-                color = when {
-                    focused -> Color.White
-                    tint != null -> tint.copy(alpha = 0.85f)
-                    else -> Color.White.copy(alpha = 0.20f)
-                },
+            .topSheen(cornerRadius)
+            .glassEdge(
+                focused = focused,
+                rest = tint?.copy(alpha = 0.85f) ?: Color.White.copy(alpha = 0.20f),
                 shape = shape,
             )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)

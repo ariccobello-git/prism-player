@@ -134,13 +134,13 @@ fun HomeScreen(
                     // Language flags (the app restarts its window in the chosen language) and the colour page.
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val language = remember { Appearance.currentLanguage(context) }
-                    val flagFocus = remember { mapOf("it" to FocusRequester(), "en" to FocusRequester()) }
+                    val flagFocus = remember { mapOf("it" to FocusRequester(), "en" to FocusRequester(), "fr" to FocusRequester()) }
                     LaunchedEffect(Unit) {
                         // After a language change the window restarts: the cursor returns to the chosen flag.
                         val code = Appearance.flagToFocus ?: return@LaunchedEffect
                         Appearance.flagToFocus = null
                         // Other first-focus requests of the new window land in the first frames: ask again for a few
-                        // frames so the chosen flag (Italian or English alike) is the one that keeps the cursor.
+                        // frames so the chosen flag (Italian, English or French alike) is the one that keeps the cursor.
                         repeat(12) {
                             withFrameNanos { }
                             runCatching { flagFocus[code]?.requestFocus() }
@@ -155,11 +155,11 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        for (code in listOf("it", "en")) {
+                        for (code in Appearance.languages) {
                             FlagButton(
                                 focusRequester = flagFocus[code],
-                                modifier = Modifier.returnItem(menuMemory, if (code == "it") 0 else 1),
-                                italian = code == "it",
+                                modifier = Modifier.returnItem(menuMemory, FLAG_IDS.getValue(code)),
+                                language = code,
                                 selected = language == code,
                                 onClick = {
                                     if (code != language) {
@@ -411,3 +411,6 @@ private object NoScrollResponder : BringIntoViewResponder {
     override fun calculateRectForParent(localRect: Rect): Rect = Rect.Zero
     override suspend fun bringChildIntoView(localRect: () -> Rect?) {}
 }
+
+/** Cursor-memory ids of the language flags in the Home menu (the other menu items use 2 to 10). */
+private val FLAG_IDS = mapOf("it" to 0, "en" to 1, "fr" to 11)

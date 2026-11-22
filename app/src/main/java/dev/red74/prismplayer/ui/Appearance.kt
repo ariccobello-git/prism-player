@@ -103,7 +103,10 @@ object Appearance {
         runCatching { prefs?.edit()?.putInt("palette", index.intValue)?.apply() }
     }
 
-    /** "it" or "en", or null while the TV's own language is followed. */
+    /** The app's languages, in the order of the flags in the Home menu. */
+    val languages: List<String> = listOf("it", "en", "fr")
+
+    /** "it", "en" or "fr", or null while the TV's own language is followed. */
     fun savedLanguage(context: Context): String? =
         runCatching { context.applicationContext.getSharedPreferences("prism_ui", Context.MODE_PRIVATE).getString("lang", null) }.getOrNull()
 
@@ -123,9 +126,9 @@ object Appearance {
         return base.createConfigurationContext(config)
     }
 
-    /** The language shown right now: the chosen one, else the TV's, with Italian for Italian TVs and English for the rest. */
+    /** The language shown right now: the chosen one, else the TV's when the app has it, else English. */
     fun currentLanguage(context: Context): String =
-        savedLanguage(context) ?: if (Locale.getDefault().language == "it") "it" else "en"
+        savedLanguage(context) ?: Locale.getDefault().language.takeIf { it in languages } ?: "en"
 }
 
 /** A round, focusable button: lifts and gets a white ring on focus, like the glass buttons. */
@@ -158,26 +161,28 @@ fun RoundButton(
             }
             .size(size)
             .clip(CircleShape)
-            .border(
-                width = if (focused) 4.dp else if (selected) 3.dp else 1.dp,
-                color = when {
-                    focused -> Color.White
-                    selected -> PrismColors.Accent
-                    else -> Color.White.copy(alpha = 0.25f)
-                },
+            .glassEdge(
+                focused = focused,
+                rest = if (selected) PrismColors.Accent else Color.White.copy(alpha = 0.25f),
                 shape = CircleShape,
+                focusedWidth = 4.dp,
+                restWidth = if (selected) 3.dp else 1.dp,
             )
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { content() }
 }
 
-/** Italian or British flag filling the whole circle. */
+/** The flag of [language] (Italian, British or French) filling the whole circle. */
 @Composable
-fun FlagButton(italian: Boolean, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) {
+fun FlagButton(language: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) {
     RoundButton(onClick = onClick, modifier = modifier, selected = selected, focusRequester = focusRequester) {
         Canvas(Modifier.fillMaxSize()) {
-            if (italian) drawItalianFlag() else drawBritishFlag()
+            when (language) {
+                "it" -> drawItalianFlag()
+                "fr" -> drawFrenchFlag()
+                else -> drawBritishFlag()
+            }
         }
     }
 }
@@ -187,6 +192,13 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawItalianFlag() {
     drawRect(Color(0xFF009246), Offset.Zero, Size(band + 1f, size.height))
     drawRect(Color(0xFFFFFFFF), Offset(band, 0f), Size(band + 1f, size.height))
     drawRect(Color(0xFFCE2B37), Offset(band * 2f, 0f), Size(band + 1f, size.height))
+}
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrenchFlag() {
+    val band = size.width / 3f
+    drawRect(Color(0xFF002395), Offset.Zero, Size(band + 1f, size.height))
+    drawRect(Color(0xFFFFFFFF), Offset(band, 0f), Size(band + 1f, size.height))
+    drawRect(Color(0xFFED2939), Offset(band * 2f, 0f), Size(band + 1f, size.height))
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBritishFlag() {
@@ -444,7 +456,7 @@ private fun MockButton(text: String, p: Palette, focused: Boolean, sub: String? 
                 if (focused) Brush.linearGradient(listOf(p.accent.copy(alpha = 0.55f), p.accentAlt.copy(alpha = 0.45f)))
                 else Brush.linearGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f))),
             )
-            .border(if (focused) 2.dp else 1.dp, if (focused) Color.White else Color.White.copy(alpha = 0.22f), shape)
+            .glassEdge(focused = focused, rest = Color.White.copy(alpha = 0.22f), shape = shape, focusedWidth = 2.dp)
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
         PrismText(text = text, size = 13.sp, weight = FontWeight.SemiBold, maxLines = 1)

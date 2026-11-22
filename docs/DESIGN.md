@@ -23,17 +23,22 @@ Il contesto vincola tutto: si guarda da 3 metri, si usa solo il telecomando, e l
 | `Accent` / `AccentAlt` | `#7C9CFF` / `#B57CFF` | Fuoco, elementi scelti, aloni |
 | `TextPrimary` / `TextSecondary` | `#F4F6FF` / `#B4BBD6` | Testo / testo secondario e versione |
 | `Ok` / `Warn` / `Danger` | `#6FE3B0` / `#FFC857` / `#FF7C8A` | Stato liste, errori, eliminazione |
-| `Favorite` | `#D97757` | Stella dei preferiti |
+| `Favorite` | `#FFE14D` | Stella dei preferiti (oro dello spettro) |
+| `Spectrum` | 7 colori dello splash | Anello del fuoco (`FocusRing`, gradiente circolare) |
 
 | Elemento | Riempimento | Bordo | Raggio |
 |---|---|---|---|
 | `GlassPanel` | bianco 14% → 5% (gradiente lineare) | 1 dp, bianco 38% → 6% | 28 dp |
 | `GlassButton` a riposo | bianco 12% → 4% | 1 dp, bianco 22% | 20 dp |
 | `GlassButton` scelto (`emphasized`) | `Accent` 28% → `AccentAlt` 18% | 1 dp | 20 dp |
-| `GlassButton` con fuoco | `Accent` 55% → `AccentAlt` 45% | **3 dp bianco**, scala **1,06** | 20 dp |
+| `GlassButton` con fuoco | `Accent` 55% → `AccentAlt` 45% | **3 dp anello a spettro**, scala **1,06** | 20 dp |
 | `GlassTextField` | come i pulsanti | come i pulsanti | 16 dp |
 
-Testo: 22 sp semibold nei pulsanti, 20 sp corpo, 16 sp sottotitoli, 13 sp la versione in basso.
+Carattere: **Figtree** (OFL, `res/font/figtree_*.ttf`, istanze statiche 400–800), applicato da `PrismText` e dai campi di testo (`PrismFont`). Ha la stessa larghezza del Roboto di sistema (misurata sui testi dell'app: 1,00×), quindi nessuna impaginazione perde spazio; Lexend era stato valutato ma è più largo del 10–14% e avrebbe troncato i testi. I simboli che Figtree non ha passano ai caratteri di sistema o ai Noto Symbols.
+
+Testo: 22 sp semibold nei pulsanti, 20 sp corpo, 16 sp sottotitoli, 14 sp la versione in basso.
+
+Vetro: pannelli, pulsanti e superfici hanno una linea di luce di 1 dp sul bordo alto (`topSheen`, bianco 24% sfumato verso gli angoli). Il bordo con il fuoco è `glassEdge`: anello a spettro con il fuoco, linea sottile a riposo; usarlo per ogni nuovo elemento che riceve il fuoco.
 
 ### Come usarli
 
@@ -46,7 +51,7 @@ Testo: 22 sp semibold nei pulsanti, 20 sp corpo, 16 sp sottotitoli, 13 sp la ver
 
 ### Miglioramenti consigliati
 
-1. **Riflesso sul bordo superiore** (da provare). Una linea di 1 dp bianca al 20–25% sul solo bordo alto di pannelli e pulsanti dà l'idea di una lastra illuminata dall'alto, a costo quasi zero. Si disegna con `drawWithCache` per non ricreare il pennello a ogni frame.
+1. ~~**Riflesso sul bordo superiore**~~ (fatto: `topSheen`, da verificare sulla TV).
 2. **Pennelli memorizzati.** Oggi i `Brush.linearGradient` dei pulsanti vengono creati a ogni ricomposizione. Con centinaia di voci in lista conviene crearli una volta (`remember` o costanti a livello di file) e scegliere tra quelli pronti.
 3. **Opacità senza buffer extra in `depthFocus`.** Un `graphicsLayer` con `alpha < 1` disegna la sezione in un buffer fuori schermo e poi lo sfuma. Con `compositingStrategy = CompositingStrategy.ModulateAlpha` l'opacità si applica direttamente a ogni elemento, senza buffer: più leggero sulla stick. Va bene finché gli elementi di una sezione non si sovrappongono tra loro (vero per righe e griglie). Da provare e misurare.
 4. **Bande nei gradienti.** I pannelli TV a 8 bit mostrano gradini nei gradienti scuri e larghi. Se si notano sullo sfondo, aggiungere un rumore molto leggero (1–2% di opacità) sopra il gradiente.
