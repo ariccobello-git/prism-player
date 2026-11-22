@@ -144,8 +144,8 @@ fun RoundButton(
 ) {
     var focused by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (focused) 1.12f else 1f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow),
+        targetValue = if (focused) 1.10f else 1f,
+        animationSpec = PrismSprings.Focus,
         label = "roundButtonScale",
     )
     Box(
@@ -416,9 +416,9 @@ private fun PalettePreview(p: Palette, modifier: Modifier = Modifier) {
         Canvas(Modifier.fillMaxSize()) {
             val r = size.minDimension * 0.7f
             val a = Offset(size.width * 0.1f, size.height * 0.15f)
-            drawCircle(Brush.radialGradient(listOf(p.accent.copy(alpha = 0.32f), Color.Transparent), a, r), r, a)
+            drawCircle(Brush.radialGradient(listOf(p.accent.copy(alpha = HALO_ALPHA), Color.Transparent), a, r), r, a)
             val b = Offset(size.width * 0.95f, size.height * 0.9f)
-            drawCircle(Brush.radialGradient(listOf(p.accentAlt.copy(alpha = 0.28f), Color.Transparent), b, r), r, b)
+            drawCircle(Brush.radialGradient(listOf(p.accentAlt.copy(alpha = HALO_ALT_ALPHA), Color.Transparent), b, r), r, b)
             if (p.arches) drawRome(p.accent, crest)
         }
         Row(Modifier.fillMaxSize().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -453,7 +453,7 @@ private fun MockButton(text: String, p: Palette, focused: Boolean, sub: String? 
             .fillMaxWidth()
             .clip(shape)
             .background(
-                if (focused) Brush.linearGradient(listOf(p.accent.copy(alpha = 0.55f), p.accentAlt.copy(alpha = 0.45f)))
+                if (focused) Brush.linearGradient(listOf(p.accent.copy(alpha = 0.40f), p.accentAlt.copy(alpha = 0.26f)))
                 else Brush.linearGradient(listOf(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.04f))),
             )
             .glassEdge(focused = focused, rest = Color.White.copy(alpha = 0.22f), shape = shape, focusedWidth = 2.dp)
