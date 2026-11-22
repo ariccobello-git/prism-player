@@ -112,7 +112,7 @@ object Appearance {
 
     /** Set when the language was just changed: the restarted Home page puts the cursor back on that flag. */
     @Volatile
-    var flagToFocus: String? = null
+    var languageToFocus: String? = null
 
     fun saveLanguage(context: Context, lang: String) {
         runCatching { context.applicationContext.getSharedPreferences("prism_ui", Context.MODE_PRIVATE).edit().putString("lang", lang).apply() }
@@ -173,48 +173,48 @@ fun RoundButton(
     ) { content() }
 }
 
-/** The flag of [language] (Italian, British or French) filling the whole circle. */
+/**
+ * One language of the Home menu as a small, quiet chip with its code (IT, EN, FR): the chosen one is tinted with
+ * the accent, the focused one lifts with the white ring like every other control. Same height as a text line of
+ * the menu, so the three sit beside the "Look" button without weighing on the page.
+ */
 @Composable
-fun FlagButton(language: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) {
-    RoundButton(onClick = onClick, modifier = modifier, selected = selected, focusRequester = focusRequester) {
-        Canvas(Modifier.fillMaxSize()) {
-            when (language) {
-                "it" -> drawItalianFlag()
-                "fr" -> drawFrenchFlag()
-                else -> drawBritishFlag()
+fun LanguageChip(language: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, focusRequester: FocusRequester? = null) {
+    var focused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(if (focused) 1.06f else 1f, PrismSprings.Focus, label = "languageChipScale")
+    val shape = RoundedCornerShape(14.dp)
+    Box(
+        modifier
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .onFocusChanged { focused = it.isFocused }
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
             }
-        }
+            .size(width = 58.dp, height = 46.dp)
+            .clip(shape)
+            .background(
+                when {
+                    focused -> PrismColors.Accent.copy(alpha = 0.40f)
+                    selected -> PrismColors.Accent.copy(alpha = 0.18f)
+                    else -> Color.White.copy(alpha = 0.06f)
+                },
+            )
+            .glassEdge(
+                focused = focused,
+                rest = if (selected) PrismColors.Accent.copy(alpha = 0.75f) else Color.White.copy(alpha = 0.14f),
+                shape = shape,
+            )
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        PrismText(
+            text = language.uppercase(Locale.ROOT),
+            size = 17.sp,
+            weight = if (selected || focused) FontWeight.Bold else FontWeight.Medium,
+            color = if (selected || focused) PrismColors.TextPrimary else PrismColors.TextSecondary,
+        )
     }
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawItalianFlag() {
-    val band = size.width / 3f
-    drawRect(Color(0xFF009246), Offset.Zero, Size(band + 1f, size.height))
-    drawRect(Color(0xFFFFFFFF), Offset(band, 0f), Size(band + 1f, size.height))
-    drawRect(Color(0xFFCE2B37), Offset(band * 2f, 0f), Size(band + 1f, size.height))
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrenchFlag() {
-    val band = size.width / 3f
-    drawRect(Color(0xFF002395), Offset.Zero, Size(band + 1f, size.height))
-    drawRect(Color(0xFFFFFFFF), Offset(band, 0f), Size(band + 1f, size.height))
-    drawRect(Color(0xFFED2939), Offset(band * 2f, 0f), Size(band + 1f, size.height))
-}
-
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBritishFlag() {
-    val w = size.width
-    val h = size.height
-    drawRect(Color(0xFF012169))
-    val white = w * 0.2f
-    val red = w * 0.11f
-    drawLine(Color.White, Offset(0f, 0f), Offset(w, h), white)
-    drawLine(Color.White, Offset(w, 0f), Offset(0f, h), white)
-    drawLine(Color(0xFFC8102E), Offset(0f, 0f), Offset(w, h), red * 0.5f)
-    drawLine(Color(0xFFC8102E), Offset(w, 0f), Offset(0f, h), red * 0.5f)
-    drawRect(Color.White, Offset(w * 0.4f, 0f), Size(w * 0.2f, h))
-    drawRect(Color.White, Offset(0f, h * 0.4f), Size(w, h * 0.2f))
-    drawRect(Color(0xFFC8102E), Offset(w * 0.45f, 0f), Size(w * 0.1f, h))
-    drawRect(Color(0xFFC8102E), Offset(0f, h * 0.45f), Size(w, h * 0.1f))
 }
 
 /** Pick one of the eight base colour sets, see it on a small app page, then confirm or cancel. */

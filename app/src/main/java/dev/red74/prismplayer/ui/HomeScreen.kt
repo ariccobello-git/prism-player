@@ -131,40 +131,40 @@ fun HomeScreen(
                         color = PrismColors.TextSecondary,
                     )
                     Spacer(Modifier.height(12.dp))
-                    // Language flags (the app restarts its window in the chosen language) and the colour page.
+                    // Language chips (the app restarts its window in the chosen language) and the colour page.
                     val context = androidx.compose.ui.platform.LocalContext.current
                     val language = remember { Appearance.currentLanguage(context) }
-                    val flagFocus = remember { mapOf("it" to FocusRequester(), "en" to FocusRequester(), "fr" to FocusRequester()) }
+                    val languageFocus = remember { mapOf("it" to FocusRequester(), "en" to FocusRequester(), "fr" to FocusRequester()) }
                     LaunchedEffect(Unit) {
-                        // After a language change the window restarts: the cursor returns to the chosen flag.
-                        val code = Appearance.flagToFocus ?: return@LaunchedEffect
-                        Appearance.flagToFocus = null
+                        // After a language change the window restarts: the cursor returns to the chosen language.
+                        val code = Appearance.languageToFocus ?: return@LaunchedEffect
+                        Appearance.languageToFocus = null
                         // Other first-focus requests of the new window land in the first frames: ask again for a few
-                        // frames so the chosen flag (Italian, English or French alike) is the one that keeps the cursor.
+                        // frames so the chosen language (Italian, English or French alike) is the one that keeps the cursor.
                         repeat(12) {
                             withFrameNanos { }
-                            runCatching { flagFocus[code]?.requestFocus() }
-                            // Keep the menu at its top so the title stays visible (flags sit right under it).
+                            runCatching { languageFocus[code]?.requestFocus() }
+                            // Keep the menu at its top so the title stays visible (the languages sit right under it).
                             menuScroll.scrollTo(0)
                         }
                     }
                     // Fixed-height row (taller than the lifted circles) that never asks the menu to scroll when the
-                    // cursor moves inside it: the left panel stays perfectly still between flags and Aspetto.
+                    // cursor moves inside it: the left panel stays perfectly still between the languages and Aspetto.
                     Row(
                         Modifier.stillRow(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         for (code in Appearance.languages) {
-                            FlagButton(
-                                focusRequester = flagFocus[code],
+                            LanguageChip(
+                                focusRequester = languageFocus[code],
                                 modifier = Modifier.returnItem(menuMemory, FLAG_IDS.getValue(code)),
                                 language = code,
                                 selected = language == code,
                                 onClick = {
                                     if (code != language) {
                                         Appearance.saveLanguage(context, code)
-                                        Appearance.flagToFocus = code
+                                        Appearance.languageToFocus = code
                                         (context as? android.app.Activity)?.recreate()
                                     }
                                 },
@@ -412,5 +412,5 @@ private object NoScrollResponder : BringIntoViewResponder {
     override suspend fun bringChildIntoView(localRect: () -> Rect?) {}
 }
 
-/** Cursor-memory ids of the language flags in the Home menu (the other menu items use 2 to 10). */
+/** Cursor-memory ids of the language chips in the Home menu (the other menu items use 2 to 10). */
 private val FLAG_IDS = mapOf("it" to 0, "en" to 1, "fr" to 11)

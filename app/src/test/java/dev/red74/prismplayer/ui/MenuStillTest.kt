@@ -26,7 +26,7 @@ import org.robolectric.annotation.Config
 
 /**
  * The home menu (taller than the screen, so it scrolls) with the same flags + Aspetto row as the real one:
- * moving the cursor flag -> flag -> Aspetto and back must leave the scroll offset and the row position untouched.
+ * moving the cursor language -> language -> Aspetto and back must leave the scroll offset and the row position untouched.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -51,8 +51,8 @@ class MenuStillTest {
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    FlagButton(language = "it", selected = true, onClick = {}, focusRequester = it)
-                    FlagButton(language = "en", selected = false, onClick = {}, focusRequester = en)
+                    LanguageChip(language = "it", selected = true, onClick = {}, focusRequester = it)
+                    LanguageChip(language = "en", selected = false, onClick = {}, focusRequester = en)
                     GlassButton(text = "Aspetto", onClick = {}, modifier = Modifier.weight(1f), focusRequester = aspect)
                 }
                 repeat(8) { GlassButton(text = "Voce $it", onClick = {}, modifier = Modifier.fillMaxWidth()) }
