@@ -15,8 +15,6 @@ import kotlin.math.sqrt
  * stands [CAMERA] units in front of the prism.
  */
 internal object PrismView {
-    /** Half the prism's length, along its axis. */
-    const val HALF_LENGTH = 1.25
 
     /** Distance from the viewer to the centre of the prism. */
     const val CAMERA = 7.0
@@ -31,7 +29,6 @@ internal object PrismView {
     const val NEAREST = -0.86 * CAMERA
 
     class V(val x: Double, val y: Double, val z: Double) {
-        operator fun minus(o: V) = V(x - o.x, y - o.y, z - o.z)
         fun dot(o: V) = x * o.x + y * o.y + z * o.z
         fun unit(): V {
             val d = sqrt(dot(this)).coerceAtLeast(1e-9)
@@ -41,9 +38,6 @@ internal object PrismView {
 
     /** The light of the galaxy core: up and to the left, in front of the prism (view space, pointing to the light). */
     val LIGHT = V(-0.5, -0.75, -0.45).unit()
-
-    /** Where the viewer is, in view space. */
-    val EYE = V(0.0, 0.0, -CAMERA)
 
     private fun smooth(edge0: Double, edge1: Double, x: Double): Double {
         val t = ((x - edge0) / (edge1 - edge0)).coerceIn(0.0, 1.0)

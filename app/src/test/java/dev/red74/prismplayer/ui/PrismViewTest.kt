@@ -26,10 +26,10 @@ class PrismViewTest {
     }
 
     @Test
-    fun theLongSideFacesShowWhenThePrismRests() {
-        // with the resting view the near end is to the left and closer to the viewer than the far end
-        val near = PrismView.toView(0.0, 0.0, -PrismView.HALF_LENGTH, PrismView.REST_YAW)
-        val far = PrismView.toView(0.0, 0.0, PrismView.HALF_LENGTH, PrismView.REST_YAW)
+    fun theAxisLeansTowardsTheViewerAtRest() {
+        // with the resting view a point in front of the axis is to the left of and closer than one behind it
+        val near = PrismView.toView(0.0, 0.0, -1.25, PrismView.REST_YAW)
+        val far = PrismView.toView(0.0, 0.0, 1.25, PrismView.REST_YAW)
         assertTrue(near.z < far.z)
         assertTrue(kotlin.math.abs(near.x - far.x) > 1.0)
     }
