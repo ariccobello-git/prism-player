@@ -46,7 +46,14 @@ class LibraryFeaturedFocusTest {
     private val data = HighlightsData(
         mapOf(HighlightKind.SPORT to listOf(HighlightEvent(HighlightKind.SPORT, "Roma - Lazio", null, soon, soon + 7_200_000L, 50, listOf(sky)))),
     )
-    private val catalog: Catalog = CatalogBuilder.build(listOf(sky), null, false)
+    private val catalog: Catalog = CatalogBuilder.build(
+        listOf(
+            sky,
+            Channel("Film di prova", "http://x/m/1.mp4", "Cinema", type = dev.red74.prismplayer.data.ContentType.MOVIE),
+            Channel("Serie di prova S1E1", "http://x/s/1.mp4", "Serie TV", type = dev.red74.prismplayer.data.ContentType.SERIES, seriesTitle = "Serie di prova", season = 1, episode = 1),
+        ),
+        null, false,
+    )
     private var nav by mutableStateOf(LibraryNav())
 
     @Before
