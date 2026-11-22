@@ -124,6 +124,9 @@ data class LibraryNav(
     /** Selected sub-group of the main group: 0 is "all", n is the n-th sub-group. */
     val sub: Int = 0,
     val sort: dev.red74.prismplayer.data.SortMode = dev.red74.prismplayer.data.SortMode.STANDARD,
+    /** Order of the main groups and of the sub-groups (each level keeps its own; "All" always stays first). */
+    val groupSort: dev.red74.prismplayer.data.SortMode = dev.red74.prismplayer.data.SortMode.STANDARD,
+    val subSort: dev.red74.prismplayer.data.SortMode = dev.red74.prismplayer.data.SortMode.STANDARD,
     val query: String = "",
     val showTitle: String? = null,
     val showGroup: String? = null,

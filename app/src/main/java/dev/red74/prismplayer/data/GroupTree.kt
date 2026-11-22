@@ -10,6 +10,9 @@ fun <T> List<T>.sortedBy(mode: SortMode, title: (T) -> String): List<T> = when (
     SortMode.RECENT -> asReversed()
 }
 
+/** Positions of [labels] in the order [mode] shows them: Standard as the list, A-Z, Z-A, latest added first. */
+fun displayOrder(labels: List<String>, mode: SortMode): IntArray = labels.indices.toList().sortedBy(mode) { labels[it] }.toIntArray()
+
 /**
  * The groups of a playlist as levels: a main group (for example "SKY CINEMA") and, when the list names several
  * variants of it ("SKY CINEMA [S]", "SKY CINEMA [S+]", or "FILM | AZIONE"), the sub-groups below it.
