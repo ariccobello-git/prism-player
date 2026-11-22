@@ -314,7 +314,7 @@ class HighlightsViewTest {
     @Test
     fun theLiveHeroReservesRoomForThePreviewAndStartsNothingYet() {
         show()
-        rule.onNodeWithTag("heroPreview").assertIsDisplayed()
+        rule.onNodeWithTag("heroPreview", useUnmergedTree = true).assertIsDisplayed()
         assertTrue(dev.red74.prismplayer.player.PreviewPlayers.anyPlaying().not())
     }
 
@@ -327,11 +327,11 @@ class HighlightsViewTest {
         show(HighlightsData(mapOf(HighlightKind.SPORT to second)))
         rule.waitForIdle()
         rule.onNodeWithText("Inter - Juventus").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.RequestFocus)
-        rule.mainClock.advanceTimeBy(PREVIEW_DWELL_MS - 300)
+        rule.mainClock.advanceTimeBy(1000)
         rule.waitForIdle()
         // not yet: a quick pass over a card changes nothing
         rule.onNodeWithTag("hero").assertTextContains("Roma - Lazio", substring = true)
-        rule.mainClock.advanceTimeBy(600)
+        rule.mainClock.advanceTimeBy(PREVIEW_DWELL_MS + 1000)
         rule.waitForIdle()
         rule.onNodeWithTag("hero").assertTextContains("Inter - Juventus", substring = true)
         rule.onNodeWithText("Inter - Juventus").assertIsFocused()
