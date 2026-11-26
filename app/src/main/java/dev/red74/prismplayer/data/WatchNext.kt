@@ -44,7 +44,7 @@ object WatchNext {
         return Link(list, key, series)
     }
 
-    private val KEY = Regex("[0-9a-f]{64}")
+    private val KEY = Regex("[0-9a-f]{16,64}")
 
     /** A picture address is used only when it is on another server than the stream (the stream's address is private). */
     fun safeLogo(logo: String?, streamUrl: String): String? {
