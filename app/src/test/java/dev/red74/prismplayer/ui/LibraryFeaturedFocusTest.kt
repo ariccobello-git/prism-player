@@ -51,7 +51,8 @@ class LibraryFeaturedFocusTest {
             sky,
             Channel("Film di prova", "http://x/m/1.mp4", "Cinema", type = dev.red74.prismplayer.data.ContentType.MOVIE),
             Channel("Serie di prova S1E1", "http://x/s/1.mp4", "Serie TV", type = dev.red74.prismplayer.data.ContentType.SERIES, seriesTitle = "Serie di prova", season = 1, episode = 1),
-        ),
+        // a real mixed list has plenty of live channels (a list with only a handful is an on-demand list: no Live button)
+        ) + (1..320).map { Channel("Canale $it", "http://x/live/$it", "Italia", tvgId = "c$it") },
         null, false,
     )
     private var nav by mutableStateOf(LibraryNav())

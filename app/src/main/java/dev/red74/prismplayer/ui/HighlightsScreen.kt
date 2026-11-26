@@ -425,6 +425,7 @@ private fun EventRows(
             HeroCard(
                 event = hero,
                 live = onAir,
+                nowMs = nowMs,
                 liked = pageRows.firstOrNull { hero in it.events }?.forYou == true,
                 reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                 focusRequester = heroFocus,
@@ -476,6 +477,7 @@ private fun EventRows(
                         EventCard(
                             event = event,
                             live = onAir,
+                            nowMs = nowMs,
                             liked = row.forYou,
                             reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                             focusRequester = when {
@@ -826,7 +828,7 @@ internal fun locate(rows: List<HighlightRow>, played: String?): Pair<Int, Int> {
 
 @Composable
 private fun EventCard(
-    event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?,
+    event: HighlightEvent, live: Boolean, nowMs: Long, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?,
     onFocusChange: (Boolean) -> Unit, onClick: () -> Unit,
 ) {
     GlassSurface(
@@ -839,7 +841,11 @@ private fun EventCard(
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             EventHeader(event, live, liked, compact = true)
             PrismText(text = event.title, size = titleSp(event.title.length, large = false).sp, weight = FontWeight.Bold, maxLines = 2)
-            EventAction(event, reminder, 14.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // how far the programme on air has got, at a glance (no bar without the times of the guide)
+                event.progress(nowMs)?.let { ProgressLine(it, Modifier.fillMaxWidth().testTag("cardProgress")) }
+                EventAction(event, reminder, 14.sp)
+            }
         }
     }
 }
@@ -851,7 +857,7 @@ private fun EventCard(
  */
 @Composable
 private fun HeroCard(
-    event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?,
+    event: HighlightEvent, live: Boolean, nowMs: Long, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?,
     previewing: Boolean, onFocusChange: (Boolean) -> Unit, onDown: () -> Boolean, onClick: () -> Unit,
 ) {
     GlassSurface(
@@ -868,7 +874,11 @@ private fun HeroCard(
     ) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-                EventHeader(event, live, liked)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    EventHeader(event, live, liked, startedMin = if (live) event.minutesSinceStart(nowMs) else null)
+                    // how far the programme on air has got, at a glance (no bar without the times of the guide)
+                    event.progress(nowMs)?.let { ProgressLine(it, Modifier.fillMaxWidth().testTag("heroProgress")) }
+                }
                 PrismText(
                     text = event.title,
                     size = titleSp(event.title.length, large = true, narrow = live).sp,
@@ -885,9 +895,10 @@ private fun HeroCard(
 }
 
 @Composable
-private fun EventHeader(event: HighlightEvent, live: Boolean, liked: Boolean, compact: Boolean = false) {
+private fun EventHeader(event: HighlightEvent, live: Boolean, liked: Boolean, compact: Boolean = false, startedMin: Int? = null) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         TimeBadge(text = if (live) stringResource(R.string.highlights_on_air) else clockText(event.startMs), live = live)
+        if (startedMin != null) PrismText(text = stringResource(R.string.highlights_started_ago, startedMin), size = 16.sp, color = PrismColors.TextSecondary, maxLines = 1)
         if (liked) {
             LineIcon(LineIcon.STAR_ON, size = 20.dp, color = PrismColors.Accent)
             if (!compact) PrismText(text = stringResource(R.string.highlights_for_you), size = 17.sp, weight = FontWeight.SemiBold, color = PrismColors.Accent, maxLines = 1)

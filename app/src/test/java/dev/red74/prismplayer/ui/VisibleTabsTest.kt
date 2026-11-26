@@ -22,4 +22,16 @@ class VisibleTabsTest {
     fun fullListShowsEverythingInOrder() {
         assertEquals(listOf(LibraryTab.LIVE, LibraryTab.MOVIES, LibraryTab.SERIES, LibraryTab.FAVORITES), tabs(true, true))
     }
+
+    @Test
+    fun anOnDemandListHasNoLiveButtonEvenWithAFewLiveEntries() {
+        assertEquals(false, showsLiveTab(0, hasMovies = true, hasSeries = true))
+        assertEquals(false, showsLiveTab(40, hasMovies = true, hasSeries = false))
+        assertEquals(true, showsLiveTab(5_000, hasMovies = true, hasSeries = true))
+        assertEquals(true, showsLiveTab(12, hasMovies = false, hasSeries = false))
+        assertEquals(
+            listOf(LibraryTab.MOVIES, LibraryTab.SERIES, LibraryTab.FAVORITES),
+            visibleTabs(true, true, hasLive = false).map { it.first },
+        )
+    }
 }

@@ -11,6 +11,7 @@ import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performScrollTo
@@ -87,6 +88,19 @@ class HighlightsViewTest {
         rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
         rule.onNodeWithText("Inter - Juventus").assertIsDisplayed()
         assertTrue(rule.onAllNodesWithTextCount("Intrattenimento") == 0 && rule.onAllNodesWithTextCount("Entertainment") == 0)
+    }
+
+    @Test
+    fun aProgrammeOnAirShowsHowFarItHasGotAndOneNotStartedShowsNoBar() {
+        show()
+        rule.onNodeWithTag("heroProgress", useUnmergedTree = true).assertIsDisplayed()
+        rule.onNodeWithText("Started 10 min ago").assertIsDisplayed()
+        // the other cards have not started: no bar on them
+        assertEquals(0, rule.onAllNodesWithTag("cardProgress", useUnmergedTree = true).fetchSemanticsNodes().size)
+        nav = nav.copy(highlightKind = 1)
+        rule.waitForIdle()
+        rule.onNodeWithText("Heat").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithTag("heroProgress", useUnmergedTree = true).fetchSemanticsNodes().size)
     }
 
     @Test

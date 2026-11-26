@@ -170,8 +170,16 @@ private fun LibraryContent(
     var organizing by remember { mutableStateOf<Channel?>(null) }
     // The tab row remembers the tab the cursor was on last: going back up from the content lands on the tab it came
     // from. With the featured page showing (no tab selected) the cursor starts on the first tab.
-    val tabMemory = remember { ReturnFocus(initial = LibraryTab.LIVE.ordinal) }
-    val tabTarget = { tabMemory.target() ?: tabMemory.requester(if (nav.tab == LibraryTab.HIGHLIGHTS) LibraryTab.LIVE.ordinal else nav.tab.ordinal) }
+    // An on-demand list (films or series, and next to nothing live: a few Primafila events already in the Live list)
+    // has no Live button at all, even when that little live content exists.
+    val liveCount = remember(state.catalog) { state.catalog.live.sumOf { it.items.size } }
+    val hasLive = showsLiveTab(liveCount, state.catalog.movies.isNotEmpty(), state.catalog.series.isNotEmpty())
+    val firstTab = visibleTabs(state.catalog.movies.isNotEmpty(), state.catalog.series.isNotEmpty(), hasLive).first().first
+    val tabMemory = remember(hasLive) { ReturnFocus(initial = firstTab.ordinal) }
+    val tabTarget = { tabMemory.target() ?: tabMemory.requester(if (nav.tab == LibraryTab.HIGHLIGHTS) firstTab.ordinal else nav.tab.ordinal) }
+    LaunchedEffect(hasLive, nav.tab, state.loading) {
+        if (!hasLive && !state.loading && nav.tab == LibraryTab.LIVE) onNav { it.copy(tab = LibraryTab.HIGHLIGHTS, category = 0, level = 0, sub = 0, itemIndex = 0, query = "") }
+    }
     RequestFocusOnEnter(retryFocus, key = state.error)
     // The tab row takes the cursor on entry, except when coming back to a content (the item played, a detail page):
     // both asking at once left the cursor on the tabs instead of the channel just watched.
@@ -301,7 +309,7 @@ private fun LibraryContent(
                         size = 30.sp, weight = FontWeight.Bold, maxLines = 1,
                     )
                 }
-                if (!state.loading && state.error == null && organizing == null) TopBar(nav, onNav, tabMemory, onSearchAll, hasMovies = state.catalog.movies.isNotEmpty(), hasSeries = state.catalog.series.isNotEmpty())
+                if (!state.loading && state.error == null && organizing == null) TopBar(nav, onNav, tabMemory, onSearchAll, hasMovies = state.catalog.movies.isNotEmpty(), hasSeries = state.catalog.series.isNotEmpty(), hasLive = hasLive)
                 }
 
                 when {
@@ -366,13 +374,14 @@ private fun LibraryContent(
 }
 
 @Composable
-private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus, onSearchAll: () -> Unit, hasMovies: Boolean, hasSeries: Boolean) {
+private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus, onSearchAll: () -> Unit, hasMovies: Boolean, hasSeries: Boolean, hasLive: Boolean) {
+    val searchTab = visibleTabs(hasMovies, hasSeries, hasLive).first { it.first == LibraryTab.LIVE || it.first == LibraryTab.MOVIES || it.first == LibraryTab.SERIES || it.first == LibraryTab.FAVORITES }.first
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.Bottom,
     ) {
-        for ((tab, label) in visibleTabs(hasMovies, hasSeries)) {
+        for ((tab, label) in visibleTabs(hasMovies, hasSeries, hasLive)) {
             GlassButton(
                 text = stringResource(label),
                 onClick = {
@@ -397,7 +406,7 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus, on
             value = nav.query,
             onValueChange = { text ->
                 // The featured page has nothing to search: a search typed there looks through the live channels.
-                onNav { it.copy(tab = if (it.tab == LibraryTab.HIGHLIGHTS && text.isNotEmpty()) LibraryTab.LIVE else it.tab, query = text.take(60), itemIndex = 0) }
+                onNav { it.copy(tab = if (it.tab == LibraryTab.HIGHLIGHTS && text.isNotEmpty()) searchTab else it.tab, query = text.take(60), itemIndex = 0) }
             },
             label = stringResource(R.string.search_label),
             modifier = Modifier.weight(1f),
@@ -406,9 +415,15 @@ private fun TopBar(nav: LibraryNav, onNav: NavChange, tabMemory: ReturnFocus, on
     }
 }
 
-/** The tabs of the top row: Film and Serie are left out when the list has none of them. */
-internal fun visibleTabs(hasMovies: Boolean, hasSeries: Boolean): List<Pair<LibraryTab, Int>> = listOfNotNull(
-    LibraryTab.LIVE to R.string.tab_live,
+/** A list with films or series and only a handful of live entries is an on-demand list: no Live button. */
+internal fun showsLiveTab(liveCount: Int, hasMovies: Boolean, hasSeries: Boolean): Boolean =
+    !((hasMovies || hasSeries) && liveCount <= ON_DEMAND_LIVE_MAX)
+
+private const val ON_DEMAND_LIVE_MAX = 300
+
+/** The tabs of the top row: Film and Serie are left out when the list has none of them, Live when the list is on demand. */
+internal fun visibleTabs(hasMovies: Boolean, hasSeries: Boolean, hasLive: Boolean = true): List<Pair<LibraryTab, Int>> = listOfNotNull(
+    (LibraryTab.LIVE to R.string.tab_live).takeIf { hasLive },
     (LibraryTab.MOVIES to R.string.tab_movies).takeIf { hasMovies },
     (LibraryTab.SERIES to R.string.tab_series).takeIf { hasSeries },
     LibraryTab.FAVORITES to R.string.tab_favorites,
