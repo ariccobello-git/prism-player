@@ -83,6 +83,12 @@ open class Catalog(
         return found
     }
 
+    /** The episodes whose [FavoriteKey] is in [keys] (the ones with a resume point). Only the stored copy answers fast. */
+    open fun episodesWithKeys(keys: Set<String>): List<Channel> {
+        if (keys.isEmpty()) return emptyList()
+        return series.flatMap { it.shows }.flatMap { it.episodes }.filter { FavoriteKey.of(it) in keys }
+    }
+
     open fun favoriteShows(keys: Set<String>): List<Show> {
         if (keys.isEmpty()) return emptyList()
         return series.flatMap { it.shows }.filter { FavoriteKey.ofShow(it) in keys }

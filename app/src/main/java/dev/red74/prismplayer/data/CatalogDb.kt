@@ -168,6 +168,9 @@ class CatalogDb private constructor(
     override fun favorites(keys: Set<String>): List<Channel> =
         rows.entries(rows.idsWithKeys("entries", "kind IN (0, 1)", keys))
 
+    override fun episodesWithKeys(keys: Set<String>): List<Channel> =
+        rows.entries(rows.idsWithKeys("entries", "kind = ${ContentType.SERIES.ordinal}", keys))
+
     override fun favoriteShows(keys: Set<String>): List<Show> =
         rows.shows(rows.idsWithKeys("shows", "1", keys))
 

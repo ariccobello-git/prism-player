@@ -20,6 +20,8 @@ import dev.red74.prismplayer.data.Category
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.HighlightsData
+import dev.red74.prismplayer.data.SeriesCategory
+import dev.red74.prismplayer.data.Show
 import dev.red74.prismplayer.data.WatchProgress
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -100,6 +102,33 @@ class FilmsPageTest {
         rule.onNodeWithText("Open").performKeyInput { pressKey(Key.DirectionDown) }
         rule.waitForIdle()
         rule.onNodeWithText("Film 2").assertIsFocused()
+    }
+
+    private fun episode(show: Int, n: Int) = Channel(
+        "Serie $show S1E$n", "http://x/s$show/$n.mp4", "Serie TV", type = ContentType.SERIES, seriesTitle = "Serie $show", season = 1, episode = n,
+    )
+    private val shows = (1..4).map { Show("Serie $it", null, "Serie TV", listOf(episode(it, 1), episode(it, 2), episode(it, 3))) }
+
+    private class FakeSeries(private val shows: List<Show>) :
+        Catalog(emptyList(), emptyList(), listOf(SeriesCategory("Serie TV", shows)), null, false, shows.size) {
+        override fun recentShows(sinceMs: Long, limit: Int): List<Show> = shows
+    }
+
+    @Test
+    fun theSeriesPageContinuesTheLatestEpisodeOfEachSeriesLeftHalfWay() {
+        WatchProgress.init(ApplicationProvider.getApplicationContext())
+        WatchProgress.save(shows[2].episodes[1].url, 600_000L, 2_400_000L)
+        rule.setContent {
+            CompositionLocalProvider(LocalHighlights provides HighlightsData.Empty) {
+                HighlightsView(nav = nav, onNav = { change -> nav = change(nav) }, onPlay = { _, _, _ -> }, catalog = FakeSeries(shows))
+            }
+        }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCountSafe("Continue watching") == 1 }
+        rule.onNodeWithText("Serie 3").assertIsDisplayed()
+        rule.onNodeWithText("S1 E2").assertIsDisplayed()
+        // the series with the cursor memory is shown once: not repeated in the grid
+        assertEquals(1, rule.onAllNodesWithTextCountSafe("Serie 3"))
+        WatchProgress.clear(shows[2].episodes[1].url)
     }
 }
 

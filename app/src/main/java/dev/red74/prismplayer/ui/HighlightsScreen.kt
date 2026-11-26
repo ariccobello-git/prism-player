@@ -67,6 +67,7 @@ import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.HighlightEvent
+import dev.red74.prismplayer.data.Show
 import dev.red74.prismplayer.data.HighlightKind
 import dev.red74.prismplayer.data.HighlightRow
 import dev.red74.prismplayer.data.Highlights
@@ -558,9 +559,9 @@ private fun NewArrivals(
     val rowState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val progressVersion = WatchProgress.version
-    // The films left half way, the latest first (series keep their own "resume" inside the show page).
+    // The films (or the series) left half way, the latest first.
     val resumes by produceState(emptyList<Resume>(), catalog, movies, progressVersion) {
-        value = if (!movies) emptyList() else withContext(Dispatchers.IO) { resumesFor(catalog) }
+        value = withContext(Dispatchers.IO) { resumesFor(catalog, movies) }
     }
     val list = items
     LaunchedEffect(nav.resume, list) {
@@ -618,6 +619,7 @@ private fun NewArrivals(
                                     Poster(r.arrival.logo, Modifier.width(48.dp).height(70.dp))
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                         PrismText(text = r.arrival.title, size = 16.sp, weight = FontWeight.SemiBold, maxLines = 2)
+                                        r.note?.let { PrismText(text = it, size = 13.sp, color = PrismColors.TextSecondary, maxLines = 1) }
                                         ProgressLine(r.fraction, Modifier.fillMaxWidth())
                                     }
                                 }
@@ -673,7 +675,7 @@ private fun KindPill(text: String, strong: Boolean = false) {
     }
 }
 
-private class Resume(val arrival: Arrival, val fraction: Float)
+private class Resume(val arrival: Arrival, val fraction: Float, val note: String? = null)
 
 /** The large card at the top of the Films and Series pages: the first arrival, with its poster glowing behind it. */
 @Composable
@@ -700,16 +702,33 @@ private fun ArrivalHero(arrival: Arrival, movies: Boolean, focusRequester: Focus
     }
 }
 
-/** Films with a saved resume point, the most recently watched first. */
-private fun resumesFor(catalog: Catalog): List<Resume> {
+/** Films (or series, by their latest episode) with a saved resume point, the most recently watched first. */
+private fun resumesFor(catalog: Catalog, movies: Boolean): List<Resume> {
     val keys = WatchProgress.keys()
     if (keys.isEmpty()) return emptyList()
-    return catalog.favorites(keys).filter { it.type == ContentType.MOVIE && it.url.isNotEmpty() }
-        .mapNotNull { film -> WatchProgress.get(film.url)?.let { film to it } }
+    if (movies) {
+        return catalog.favorites(keys).filter { it.type == ContentType.MOVIE && it.url.isNotEmpty() }
+            .mapNotNull { film -> WatchProgress.get(film.url)?.let { film to it } }
+            .sortedByDescending { it.second.savedAt }
+            .take(RESUME_LIMIT)
+            .map { (film, point) -> Resume(filmArrival(film), point.fraction) }
+    }
+    val latest = LinkedHashMap<Pair<String?, String>, Pair<Channel, WatchProgress.Point>>()
+    catalog.episodesWithKeys(keys).filter { it.url.isNotEmpty() && it.seriesTitle != null }
+        .mapNotNull { e -> WatchProgress.get(e.url)?.let { e to it } }
         .sortedByDescending { it.second.savedAt }
-        .take(RESUME_LIMIT)
-        .map { (film, point) -> Resume(filmArrival(film), point.fraction) }
+        .forEach { latest.putIfAbsent(it.first.group to it.first.seriesTitle!!, it) }
+    return latest.entries.take(RESUME_LIMIT).mapNotNull { (id, pair) ->
+        val show = catalog.findShow(id.first, id.second) ?: return@mapNotNull null
+        val (episode, point) = pair
+        Resume(showArrival(show), point.fraction, "S${episode.season} E${episode.episode}")
+    }
 }
+
+private fun showArrival(show: Show): Arrival =
+    Arrival(VariantTags.of(show.title).title, show.group, show.logo, FavoriteKey.ofShow(show)) { nav ->
+        nav.copy(tab = LibraryTab.SERIES, showTitle = show.title, showGroup = show.group, season = -1, query = "", origin = nav.copy(resume = true, origin = null))
+    }
 
 private fun filmArrival(film: Channel): Arrival =
     Arrival(VariantTags.of(film.name).title, film.group.orEmpty(), film.logo, film.url) { nav ->
