@@ -334,8 +334,10 @@ class HighlightsViewTest {
         // the viewer goes on to the next entry before the cursor would move to the large card
         rule.mainClock.advanceTimeBy(HERO_ENTER_MS / 2)
         rule.onNodeWithText("Sport").performSemanticsAction(SemanticsActions.RequestFocus)
-        rule.mainClock.advanceTimeBy(HERO_ENTER_MS * 3)
+        // it rests on the new entry for less than the rest time: nothing moves, the cursor stays on the menu
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS / 2)
         rule.waitForIdle()
+        assertEquals(1, nav.highlightKind)
         rule.onNodeWithText("Sport").assertIsFocused()
     }
 
