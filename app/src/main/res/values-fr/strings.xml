@@ -264,6 +264,9 @@
     <string name="topic_hockey">Hockey</string>
     <string name="topic_olympics">Jeux olympiques</string>
     <string name="highlights_for_you">Pour vous</string>
+    <string name="highlights_following">Équipes suivies</string>
+    <string name="following_choose">Choisissez vos équipes dans la page Favoris : leurs matchs et programmes apparaîtront ici, en direct ou plus tard.</string>
+    <string name="following_none">Rien en direct ni à venir pour les équipes suivies dans les 36 prochaines heures.</string>
     <string name="sport_prefs_button">Suivre des équipes</string>
     <string name="highlights_watch_on">Regarder · %1$s</string>
     <string name="follow_sports">Sports</string>

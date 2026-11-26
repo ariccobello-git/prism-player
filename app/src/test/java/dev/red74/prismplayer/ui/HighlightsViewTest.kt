@@ -107,10 +107,12 @@ class HighlightsViewTest {
     }
 
     @Test
-    fun anOutOfRangeKindIsClamped() {
+    fun anOutOfRangeKindIsClampedToTheLastPage() {
         nav = nav.copy(highlightKind = 9)
         show()
-        rule.onNodeWithText("Heat").assertIsDisplayed()
+        // the last page of a live list is "Followed teams"; with nothing followed it asks to choose on the Favourites page
+        rule.onNodeWithText("Followed teams").assertIsDisplayed()
+        assertEquals(1, rule.onAllNodesWithTextCount("Choose your teams on the Favourites page: their matches and programmes will appear here, on air now or later."))
     }
 
     @Test
@@ -154,7 +156,7 @@ class HighlightsViewTest {
     }
 
     @Test
-    fun followTeamsIsOnlyForLiveNotForAnOnDemandOnlyList() {
+    fun followedTeamsIsOnlyForLiveNotForAnOnDemandOnlyList() {
         val movie = Channel("Heat", "http://p/movie/u/p/1.mkv", "Cinema", type = dev.red74.prismplayer.data.ContentType.MOVIE)
         val onDemand = dev.red74.prismplayer.data.Catalog(
             emptyList(), listOf(dev.red74.prismplayer.data.Category("Cinema", listOf(movie))), emptyList(), null, false, 1,
@@ -165,22 +167,23 @@ class HighlightsViewTest {
             }
         }
         rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithTextCount("Followed teams"))
+    }
+
+    @Test
+    fun followedTeamsPageStaysForALiveList() {
+        show()
+        assertEquals(1, rule.onAllNodesWithTextCount("Followed teams"))
+        // the choice itself moved to the Favourites page
         assertEquals(0, rule.onAllNodesWithTextCount("Follow teams"))
     }
 
     @Test
-    fun followTeamsStaysForALiveList() {
-        show()
-        assertEquals(1, rule.onAllNodesWithTextCount("Follow teams"))
-    }
-
-    @Test
-    fun customizeOpensTheEditorAndSavesTheChoice() {
-        show()
-        rule.onNodeWithText("Follow teams").performClick()
+    fun theEditorSavesTheChoice() {
+        var done = false
+        rule.setContent { FollowScreen(SportPrefsStore.current, onDone = { done = true }) }
         rule.waitForIdle()
         rule.onNodeWithText("Done").assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithTextCount("Roma - Lazio"))
         rule.onNodeWithText("Football").performClick()
         rule.waitForIdle()
         assertTrue(SportTopic.FOOTBALL in SportPrefsStore.current.topics)
@@ -189,7 +192,7 @@ class HighlightsViewTest {
         assertTrue(SportPrefsStore.current.topics.isEmpty())
         rule.onNodeWithText("Done").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
+        assertTrue(done)
     }
 
     @Test
@@ -222,22 +225,72 @@ class HighlightsViewTest {
 
     @Test
     fun followingATeamFiltersTheForYouRowToThatTeamOnly() {
+        SportPrefsStore.update { it.withKeyword("Inter") }
         show()
-        rule.onNodeWithText("Follow teams").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("Inter").performScrollTo().performClick()
-        rule.waitForIdle()
-        assertEquals(listOf("inter"), SportPrefsStore.current.keywords)
-        rule.onNodeWithText("Done").performClick()
-        rule.waitForIdle()
         rule.onNodeWithText("For you").assertIsDisplayed()
         rule.onNodeWithTag("hero").assertIsDisplayed()
-        // following it again (from the editor) stops following
-        rule.onNodeWithText("Follow teams").performClick()
+        SportPrefsStore.update { it.withoutKeyword("inter") }
         rule.waitForIdle()
-        rule.onNodeWithText("Inter").performScrollTo().performClick()
+        assertEquals(0, rule.onAllNodesWithTextCount("For you"))
+    }
+
+    @Test
+    fun followedTeamsPageShowsOnlyTheirEventsOnAirAndLater() {
+        SportPrefsStore.update { it.withKeyword("Inter") }
+        nav = nav.copy(highlightKind = 2)
+        show()
         rule.waitForIdle()
-        assertTrue(SportPrefsStore.current.keywords.isEmpty())
+        rule.onNodeWithText("Inter - Juventus").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithTextCount("Roma - Lazio"))
+        assertEquals(0, rule.onAllNodesWithTextCount("Heat"))
+    }
+
+    @Test
+    fun followedTeamsPageWithNothingChosenAsksToChooseOnFavourites() {
+        nav = nav.copy(highlightKind = 2)
+        show()
+        rule.waitForIdle()
+        assertTrue(rule.onAllNodesWithTextCount("Choose your teams on the Favourites page: their matches and programmes will appear here, on air now or later.") == 1)
+    }
+
+    @Test
+    fun followedTeamsPageWithNoMatchSaysSo() {
+        SportPrefsStore.update { it.withKeyword("Torino") }
+        nav = nav.copy(highlightKind = 2)
+        show()
+        rule.waitForIdle()
+        assertEquals(1, rule.onAllNodesWithTextCount("Nothing on air or coming up for the teams you follow in the next 36 hours."))
+    }
+
+    @Test
+    fun theCursorRestingOnAMenuEntryMakesThePageFollowIt() {
+        show()
+        rule.waitForIdle()
+        // the page shows Sport; a quick pass over Films changes nothing
+        rule.onNodeWithText("Films").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS / 2)
+        rule.waitForIdle()
+        assertEquals(0, nav.highlightKind)
+        rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
+        // after the rest the film page comes by itself, and the cursor is still on the menu
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS + 500)
+        rule.waitForIdle()
+        assertEquals(1, nav.highlightKind)
+        rule.onNodeWithText("Heat").assertIsDisplayed()
+        rule.onNodeWithText("Films").assertIsFocused()
+    }
+
+    @Test
+    fun leavingTheMenuBeforeTheRestChangesNothing() {
+        show()
+        rule.waitForIdle()
+        rule.onNodeWithText("Films").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS / 2)
+        rule.onNodeWithText("Roma - Lazio").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS * 3)
+        rule.waitForIdle()
+        assertEquals(0, nav.highlightKind)
+        rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
     }
 
     @Test
@@ -265,7 +318,7 @@ class HighlightsViewTest {
         val hero = rule.onNodeWithTag("hero").getBoundsInRoot()
         assertTrue("menu ${menu.right} must end before the hero ${hero.left}", menu.right <= hero.left)
         assertTrue("menu width ${menu.right - menu.left}", (menu.right - menu.left).value in 150f..260f)
-        rule.onNodeWithText("Follow teams").assertIsDisplayed()
+        rule.onNodeWithText("Followed teams").assertIsDisplayed()
     }
 
     @Test
@@ -404,6 +457,32 @@ class HighlightsViewTest {
             rule.onNodeWithText("Oggi $n - Team $n").assertIsFocused()
             assertEquals("page moved up/down going back at $n", heroTop, rule.onNodeWithTag("hero").getBoundsInRoot().top.value, 0.5f)
         }
+    }
+
+    @Test
+    fun downFromTheLargeCardAlwaysGoesToTheFirstCardOfTheRowBelow() {
+        show(manyEvents())
+        rule.waitForIdle()
+        // the large card is "Oggi 0"; the row below starts with "Oggi 1"
+        rule.onNodeWithTag("hero").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(300)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onNodeWithText("Oggi 1 - Team 1").assertIsFocused()
+        // and again after moving along the row and back up to the large card
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onNodeWithText("Oggi 1 - Team 1").assertIsFocused()
     }
 
     @Test

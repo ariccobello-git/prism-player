@@ -1,7 +1,6 @@
 package dev.red74.prismplayer.ui
 
 import android.text.format.DateFormat
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -36,6 +35,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -77,6 +81,7 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.layout.widthIn
@@ -132,6 +137,8 @@ fun HighlightsView(
     val likedGroups = remember(tasteVersion) { Taste.top(ContentType.LIVE, 3).toSet() }
     val tabs = remember(kinds, catalog) {
         kinds.map { HighlightTab.Events(it) } +
+            // The events of the followed teams (chosen on the Favourites page), only for a list with live events.
+            (if (kinds.isNotEmpty()) listOf(HighlightTab.Following) else emptyList()) +
             (if (catalog.movies.isNotEmpty()) listOf(HighlightTab.Movies) else emptyList()) +
             (if (catalog.series.isNotEmpty()) listOf(HighlightTab.Series) else emptyList())
     }
@@ -143,31 +150,26 @@ fun HighlightsView(
     }
     val tabIndex = nav.highlightKind.coerceIn(0, tabs.size - 1)
     val tab = tabs[tabIndex]
-    var editing by remember { mutableStateOf(false) }
-    val prefsFocus = remember { FocusRequester() }
     val prefs = SportPrefsStore.current
-    val sport = tab is HighlightTab.Events && tab.kind == HighlightKind.SPORT
-    val showFollow = tabs.any { it is HighlightTab.Events }
-
-    BackHandler(enabled = editing) { editing = false }
-    var wasEditing by remember { mutableStateOf(false) }
-    LaunchedEffect(editing) {
-        if (!editing && wasEditing) prefsFocus.requestWhenReady()
-        wasEditing = editing
-    }
 
     val selectedFocus = remember { FocusRequester() }
-    if (editing) {
-        FollowScreen(prefs, onDone = { editing = false })
-        return
+    // The entry the cursor has rested on for a moment: the page on the right follows it by itself (OK is not needed),
+    // as the large card follows a live card. A quick pass over the menu changes nothing.
+    var menuFocus by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(menuFocus, tabIndex) {
+        if (menuFocus in tabs.indices && menuFocus != tabIndex) {
+            delay(MENU_DWELL_MS)
+            onNav { it.copy(highlightKind = menuFocus) }
+        }
     }
-    // A side menu on the left (the kinds of page and "Follow teams"), the content on the right. Going back into the menu
-    // always lands on the page being shown.
+    // A side menu on the left (the kinds of page), the content on the right. Going back into the menu always lands on
+    // the page being shown.
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
         Column(
             Modifier
                 .width(MenuWidth)
+                .onFocusChanged { if (!it.hasFocus) menuFocus = -1 }
                 .focusProperties { enter = { selectedFocus } },
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -176,22 +178,15 @@ fun HighlightsView(
                     text = tabLabel(item),
                     selected = index == tabIndex,
                     focusRequester = if (index == tabIndex) selectedFocus else null,
+                    onFocused = { menuFocus = index },
                     onClick = { onNav { it.copy(highlightKind = index) } },
-                )
-            }
-            // Following teams only makes sense for live events: a list with just films and series (On Demand) has no such button.
-            if (showFollow) {
-                MenuItem(
-                    text = stringResource(R.string.sport_prefs_button),
-                    selected = false,
-                    focusRequester = prefsFocus,
-                    onClick = { editing = true },
                 )
             }
         }
         Column(Modifier.weight(1f).fillMaxSize()) {
             when {
                 tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups)
+                tab == HighlightTab.Following -> FollowedRows(kinds.flatMap { data.events(it) }, prefs, nav, onNav, onPlay)
                 else -> NewArrivals(catalog, tab == HighlightTab.Movies, nav, onNav)
             }
         }
@@ -200,9 +195,10 @@ fun HighlightsView(
 
 /** One entry of the side menu: the page shown is filled, the cursor adds the white border. */
 @Composable
-private fun MenuItem(text: String, selected: Boolean, focusRequester: FocusRequester?, onClick: () -> Unit) {
+private fun MenuItem(text: String, selected: Boolean, focusRequester: FocusRequester?, onFocused: () -> Unit = {}, onClick: () -> Unit) {
     GlassSurface(
         onClick = onClick,
+        onFocused = onFocused,
         modifier = Modifier.fillMaxWidth().height(60.dp),
         focusRequester = focusRequester,
         selected = selected,
@@ -221,8 +217,38 @@ private fun MenuItem(text: String, selected: Boolean, focusRequester: FocusReque
 
 private sealed interface HighlightTab {
     data class Events(val kind: HighlightKind) : HighlightTab
+    data object Following : HighlightTab
     data object Movies : HighlightTab
     data object Series : HighlightTab
+}
+
+/** Seconds the cursor rests on a menu entry before the page follows it. */
+internal const val MENU_DWELL_MS = 500L
+
+/**
+ * The events of the sports and teams the viewer follows, on air now or later, laid out like the Sport, Film and
+ * Entertainment pages (same rows, same priority for DAZN and Sky). Nothing followed yet: a hint to the Favourites page.
+ */
+@Composable
+private fun FollowedRows(
+    all: List<HighlightEvent>,
+    prefs: SportPrefs,
+    nav: LibraryNav,
+    onNav: ((LibraryNav) -> LibraryNav) -> Unit,
+    onPlay: (List<Channel>, Int, Boolean) -> Unit,
+) {
+    val followed = remember(all, prefs) { if (prefs.isEmpty) emptyList() else all.filter { prefs.matches(it) } }
+    if (followed.isEmpty()) {
+        PrismText(
+            text = stringResource(if (prefs.isEmpty) R.string.following_choose else R.string.following_none),
+            size = 20.sp,
+            color = PrismColors.TextSecondary,
+            modifier = Modifier.widthIn(max = 640.dp),
+        )
+        return
+    }
+    // The followed events are the whole page, so no "For you" row is added on top of them.
+    EventRows(followed, nav, onNav, onPlay, SportPrefs(), emptySet())
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -273,6 +299,11 @@ private fun EventRows(
     val density = LocalDensity.current
     val anchoredRow = remember(density) { AnchoredScroll(with(density) { 4.dp.toPx() }) }
     val heroFocus = remember { FocusRequester() }
+    // The first card of the first row (the large card's "Down" goes there), and the sideways position of every row.
+    val firstFocus = remember { FocusRequester() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val rowStates = remember { HashMap<String, androidx.compose.foundation.lazy.LazyListState>() }
+    val firstRequester = if (!onHero && target.first == 0 && target.second == 0) cardFocus else firstFocus
     // A programme that has not started: OK sets or removes a reminder (a notification a few minutes before it begins).
     val toggleReminder = rememberReminderToggle()
     val reminders = dev.red74.prismplayer.reminders.ReminderStore.current
@@ -364,6 +395,19 @@ private fun EventRows(
                 reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                 focusRequester = heroFocus,
                 previewing = previewing,
+                onDown = {
+                    val first = rows.firstOrNull()
+                    if (first == null) false else {
+                        // The first row may have slid to the side: bring it back to its first card, then go there.
+                        scope.launch {
+                            rowStates["${first.forYou}-${first.live}-${first.day}"]?.scrollToItem(0)
+                            withFrameNanos { }
+                            withFrameNanos { }
+                            runCatching { firstRequester.requestFocus() }
+                        }
+                        true
+                    }
+                },
                 onFocusChange = { has ->
                     heroHasFocus = has
                     if (has) focusedRow = -1
@@ -382,7 +426,9 @@ private fun EventRows(
         itemsIndexed(rows, key = { _, row -> "${row.forYou}-${row.live}-${row.day}" }) { rowIndex, row ->
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 PrismText(text = rowTitle(row), size = 24.sp, weight = FontWeight.Bold)
-                val rowState = rememberLazyListState(initialFirstVisibleItemIndex = if (rowIndex == target.first) target.second else 0)
+                val rowState = rowStates.getOrPut("${row.forYou}-${row.live}-${row.day}") {
+                    androidx.compose.foundation.lazy.LazyListState(if (rowIndex == target.first) target.second else 0)
+                }
                 CompositionLocalProvider(LocalBringIntoViewSpec provides anchoredRow) {
                 LazyRow(
                     Modifier.fillMaxWidth(),
@@ -398,7 +444,11 @@ private fun EventRows(
                             live = onAir,
                             liked = row.forYou,
                             reminder = if (onAir) null else reminders.any { it.id == reminder.id },
-                            focusRequester = if (!onHero && rowIndex == target.first && column == target.second) cardFocus else null,
+                            focusRequester = when {
+                                !onHero && rowIndex == target.first && column == target.second -> cardFocus
+                                rowIndex == 0 && column == 0 -> firstFocus
+                                else -> null
+                            },
                             onFocusChange = { has ->
                                 if (has) focusedRow = rowIndex
                                 focusedEvent = if (has) event else if (focusedEvent == event) null else focusedEvent
@@ -543,7 +593,7 @@ internal val FOLLOW_SUGGESTIONS = listOf(
  * the "For you" row of the Sport page then shows only what is followed. Any other name can be typed at the bottom.
  */
 @Composable
-private fun FollowScreen(prefs: SportPrefs, onDone: () -> Unit) {
+internal fun FollowScreen(prefs: SportPrefs, onDone: () -> Unit) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { first.requestWhenReady() }
     var word by remember { mutableStateOf("") }
@@ -652,11 +702,14 @@ private fun EventCard(
 @Composable
 private fun HeroCard(
     event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?,
-    previewing: Boolean, onFocusChange: (Boolean) -> Unit, onClick: () -> Unit,
+    previewing: Boolean, onFocusChange: (Boolean) -> Unit, onDown: () -> Boolean, onClick: () -> Unit,
 ) {
     GlassSurface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(HeroHeight).testTag("hero").onFocusChanged { onFocusChange(it.hasFocus) },
+        modifier = Modifier.fillMaxWidth().height(HeroHeight).testTag("hero")
+            .onFocusChanged { onFocusChange(it.hasFocus) }
+            // "Down" from the large card always goes to the first card of the row below, not to whichever card is nearest.
+            .onPreviewKeyEvent { it.type == KeyEventType.KeyDown && it.key == Key.DirectionDown && onDown() },
         focusRequester = focusRequester,
         tint = PrismColors.Accent,
         cornerRadius = 28.dp,
@@ -744,6 +797,7 @@ private fun tabLabel(tab: HighlightTab): String = stringResource(
             HighlightKind.FILM -> R.string.highlights_film
             HighlightKind.ENTERTAINMENT -> R.string.highlights_entertainment
         }
+        HighlightTab.Following -> R.string.highlights_following
         HighlightTab.Movies -> R.string.new_movies
         HighlightTab.Series -> R.string.new_series
     },

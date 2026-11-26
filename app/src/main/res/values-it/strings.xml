@@ -264,6 +264,9 @@
     <string name="topic_hockey">Hockey</string>
     <string name="topic_olympics">Olimpiadi</string>
     <string name="highlights_for_you">Per te</string>
+    <string name="highlights_following">Squadre seguite</string>
+    <string name="following_choose">Scegli le tue squadre nella pagina Preferiti: qui vedrai le loro partite e i loro programmi, in onda adesso o più tardi.</string>
+    <string name="following_none">Nessun evento in onda o in arrivo per le squadre che segui nelle prossime 36 ore.</string>
     <string name="sport_prefs_button">Segui squadre</string>
     <string name="highlights_watch_on">Guarda ora · %1$s</string>
     <string name="follow_sports">Sport</string>
