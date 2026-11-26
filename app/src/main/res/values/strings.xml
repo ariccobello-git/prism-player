@@ -331,4 +331,5 @@
     <string name="kind_film">FILM</string>
     <string name="kind_series">SERIES</string>
     <string name="highlights_started_ago">Started %1$d min ago</string>
+    <string name="guide_button">Guide</string>
 </resources>

@@ -1004,9 +1004,45 @@ private fun LiveView(
         }
     }
 
+    // The programme guide (channels down, time across) replaces the list and the preview until Back.
+    var guide by remember { mutableStateOf(false) }
+    val guideFocus = remember { FocusRequester() }
+    val guideEntry = remember { FocusRequester() }
+    val toggleReminder = rememberReminderToggle()
+    BackHandler(enabled = guide) {
+        UiSounds.play(UiSounds.Kind.BACK)
+        guide = false
+    }
+    var guideWasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(guide) {
+        if (guide) {
+            guideWasOpen = true
+            guideEntry.requestWhenReady()
+        } else if (guideWasOpen) {
+            guideWasOpen = false
+            guideFocus.requestWhenReady()
+        }
+    }
+    if (guide) {
+        GuideGrid(
+            channels = list,
+            epg = epg,
+            onPlay = { index ->
+                fullscreen = true
+                onNav { it.copy(itemIndex = if (restorable) index else 0, resume = restorable) }
+                onPlay(list, index, restorable)
+            },
+            onReminder = { channel, programme -> toggleReminder(reminderFor(programme.title, programme.startMs, channel)) },
+            firstFocus = guideEntry,
+        )
+        return
+    }
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rowMemory)) { SortBar(nav, onNav, sortFocus) }
+        if (!epg.isEmpty) GlassButton(text = stringResource(R.string.guide_button), onClick = { guide = true }, focusRequester = guideFocus)
+        }
         LazyColumn(
             Modifier
                 .weight(1f)
