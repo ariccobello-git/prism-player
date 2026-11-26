@@ -89,6 +89,7 @@ import dev.red74.prismplayer.data.Novelty
 import dev.red74.prismplayer.data.VodPlatforms
 import dev.red74.prismplayer.data.WatchProgress
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.rememberCoroutineScope
 
 /** The featured events found in the guide; filled in the background by the view model. */
