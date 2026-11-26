@@ -107,10 +107,12 @@ class HighlightsViewTest {
     }
 
     @Test
-    fun anOutOfRangeKindIsClamped() {
+    fun anOutOfRangeKindIsClampedToTheLastPage() {
         nav = nav.copy(highlightKind = 9)
         show()
-        rule.onNodeWithText("Heat").assertIsDisplayed()
+        // the last page of a live list is "Followed teams"; with nothing followed it asks to choose on the Favourites page
+        rule.onNodeWithText("Followed teams").assertIsDisplayed()
+        assertEquals(1, rule.onAllNodesWithTextCount("Choose your teams on the Favourites page: their matches and programmes will appear here, on air now or later."))
     }
 
     @Test
