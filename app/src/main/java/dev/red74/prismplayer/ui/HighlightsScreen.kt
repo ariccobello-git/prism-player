@@ -25,7 +25,14 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -41,6 +48,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -216,6 +224,7 @@ private sealed interface HighlightTab {
     data object Series : HighlightTab
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EventRows(
     all: List<HighlightEvent>,
@@ -249,6 +258,8 @@ private fun EventRows(
     var focusedEvent by remember { mutableStateOf<HighlightEvent?>(null) }
     var previewing by remember { mutableStateOf(false) }
     var refocus by remember { mutableIntStateOf(0) }
+    // The row the cursor is on (-1: the large card), so the page moves up or down once per row change and never when the cursor moves along a row.
+    var focusedRow by remember { mutableIntStateOf(-2) }
     val played = nav.played
     val heroPlayed = remember(hero, played) { hero != null && played != null && hero.channels.any { it.url == played } }
     val target = remember(rows, played) { locate(rows, played) }
@@ -257,6 +268,9 @@ private fun EventRows(
     val offset = if (hero != null) 1 else 0
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = if (onHero) 0 else target.first + offset)
     val cardFocus = remember { FocusRequester() }
+    // Moving along a row slides the row by exactly one card and keeps the cursor on the same spot (like the big apps do).
+    val density = LocalDensity.current
+    val anchoredRow = remember(density) { AnchoredScroll(with(density) { 4.dp.toPx() }) }
     val heroFocus = remember { FocusRequester() }
     // A programme that has not started: OK sets or removes a reminder (a notification a few minutes before it begins).
     val toggleReminder = rememberReminderToggle()
@@ -306,6 +320,19 @@ private fun EventRows(
         }
     }
 
+    LaunchedEffect(focusedRow) {
+        if (focusedRow < -1) return@LaunchedEffect
+        val index = if (focusedRow < 0) 0 else focusedRow + offset
+        val info = listState.layoutInfo
+        val item = info.visibleItemsInfo.firstOrNull { it.index == index } ?: return@LaunchedEffect
+        val delta = when {
+            item.offset < info.viewportStartOffset -> (item.offset - info.viewportStartOffset).toFloat()
+            item.offset + item.size > info.viewportEndOffset -> (item.offset + item.size - info.viewportEndOffset).toFloat()
+            else -> 0f
+        }
+        if (delta != 0f) listState.animateScrollBy(delta, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow))
+    }
+
     LaunchedEffect(nav.resume) {
         if (nav.resume && (rows.isNotEmpty() || hero != null)) {
             val index = if (onHero) 0 else target.first + offset
@@ -320,6 +347,7 @@ private fun EventRows(
     }
     // The notice floats over the rows: nothing moves when it appears, so the cursor never shifts.
     Box(Modifier.fillMaxSize()) {
+    CompositionLocalProvider(LocalBringIntoViewSpec provides NoAutoScroll) {
     LazyColumn(
         Modifier.fillMaxSize(),
         state = listState,
@@ -337,6 +365,7 @@ private fun EventRows(
                 previewing = previewing,
                 onFocusChange = { has ->
                     heroHasFocus = has
+                    if (has) focusedRow = -1
                     focusedEvent = if (has) hero else if (focusedEvent == hero) null else focusedEvent
                 },
                 onClick = {
@@ -353,6 +382,7 @@ private fun EventRows(
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 PrismText(text = rowTitle(row), size = 24.sp, weight = FontWeight.Bold)
                 val rowState = rememberLazyListState(initialFirstVisibleItemIndex = if (rowIndex == target.first) target.second else 0)
+                CompositionLocalProvider(LocalBringIntoViewSpec provides anchoredRow) {
                 LazyRow(
                     Modifier.fillMaxWidth(),
                     state = rowState,
@@ -368,7 +398,10 @@ private fun EventRows(
                             liked = row.forYou,
                             reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                             focusRequester = if (!onHero && rowIndex == target.first && column == target.second) cardFocus else null,
-                            onFocusChange = { has -> focusedEvent = if (has) event else if (focusedEvent == event) null else focusedEvent },
+                            onFocusChange = { has ->
+                                if (has) focusedRow = rowIndex
+                                focusedEvent = if (has) event else if (focusedEvent == event) null else focusedEvent
+                            },
                             onClick = {
                                 if (onAir) {
                                     onNav { it.copy(resume = true) }
@@ -380,8 +413,10 @@ private fun EventRows(
                         )
                     }
                 }
+                }
             }
         }
+    }
     }
     notice?.let {
         GlassPanel(Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp), cornerRadius = 18.dp) {
@@ -389,6 +424,18 @@ private fun EventRows(
         }
     }
     }
+}
+
+/** The page never scrolls by itself when the cursor moves: [HighlightsView] moves it once per change of row. */
+@OptIn(ExperimentalFoundationApi::class)
+internal object NoAutoScroll : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = 0f
+}
+
+/** Keeps the card with the cursor at a fixed place ([anchor], the start of the row): a step to the side slides the row by one card. */
+@OptIn(ExperimentalFoundationApi::class)
+internal class AnchoredScroll(private val anchor: Float) : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float = offset - anchor
 }
 
 private data class NewArrivalsKey(val catalog: Int, val movies: Boolean, val hour: Long)

@@ -362,4 +362,89 @@ class HighlightsViewTest {
         rule.waitForIdle()
         rule.onNodeWithTag("hero").assertTextContains("Heat", substring = true)
     }
+
+    /** Two long rows of cards not yet started (no preview, no promotion): to check how the page moves under the cursor. */
+    private fun manyEvents(): HighlightsData {
+        // Starting two minutes from now keeps the whole first group inside today (a few seconds apart) at any hour.
+        val soon0 = System.currentTimeMillis() + 120_000L
+        val today = (0 until 12).map { n ->
+            HighlightEvent(HighlightKind.SPORT, "Oggi $n - Team $n", null, soon0 + n * 1_000L, soon0 + 7_200_000L + n * 1_000L, 60 - n, listOf(sky))
+        }
+        val tomorrow = (0 until 12).map { n ->
+            HighlightEvent(HighlightKind.SPORT, "Domani $n - Club $n", null, soon0 + 86_400_000L + n * 1_000L, soon0 + 93_600_000L + n * 1_000L, 30 - n, listOf(dazn))
+        }
+        return HighlightsData(mapOf(HighlightKind.SPORT to today + tomorrow))
+    }
+
+    private fun left(title: String) = rule.onNodeWithText(title).getBoundsInRoot().left.value
+    private fun top(title: String) = rule.onNodeWithText(title).getBoundsInRoot().top.value
+
+    // With no event on air the first one is the large card, so the "Oggi" row starts at "Oggi 1".
+    @Test
+    fun movingAlongARowNeverMovesThePageUpOrDown() {
+        show(manyEvents())
+        rule.waitForIdle()
+        rule.onNodeWithText("Oggi 1 - Team 1").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(1000)
+        rule.waitForIdle()
+        val heroTop = rule.onNodeWithTag("hero").getBoundsInRoot().top.value
+        val cardTop = top("Oggi 1 - Team 1")
+        for (n in 2..8) {
+            rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            rule.mainClock.advanceTimeBy(600)
+            rule.waitForIdle()
+            rule.onNodeWithText("Oggi $n - Team $n").assertIsFocused()
+            assertEquals("page moved up/down at step $n", heroTop, rule.onNodeWithTag("hero").getBoundsInRoot().top.value, 0.5f)
+            assertEquals("row moved up/down at step $n", cardTop, top("Oggi $n - Team $n"), TOLERANCE)
+        }
+        for (n in 7 downTo 1) {
+            rule.onRoot().performKeyInput { pressKey(Key.DirectionLeft) }
+            rule.mainClock.advanceTimeBy(600)
+            rule.waitForIdle()
+            rule.onNodeWithText("Oggi $n - Team $n").assertIsFocused()
+            assertEquals("page moved up/down going back at $n", heroTop, rule.onNodeWithTag("hero").getBoundsInRoot().top.value, 0.5f)
+        }
+    }
+
+    @Test
+    fun theCardWithTheCursorStaysInPlaceWhileTheRowSlides() {
+        show(manyEvents())
+        rule.waitForIdle()
+        rule.onNodeWithText("Oggi 1 - Team 1").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(1000)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        // From the first step on the cursor card sits at the same horizontal place, whatever the card.
+        val place = left("Oggi 2 - Team 2")
+        for (n in 3..7) {
+            rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            rule.mainClock.advanceTimeBy(600)
+            rule.waitForIdle()
+            rule.onNodeWithText("Oggi $n - Team $n").assertIsFocused()
+            assertEquals("cursor card moved at step $n", place, left("Oggi $n - Team $n"), TOLERANCE)
+        }
+    }
+
+    @Test
+    fun goingDownToTheNextRowMovesThePageOnceAndAlongTheRowNoMore() {
+        show(manyEvents())
+        rule.waitForIdle()
+        rule.onNodeWithText("Oggi 1 - Team 1").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(1000)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        rule.mainClock.advanceTimeBy(1000)
+        rule.waitForIdle()
+        rule.onNodeWithText("Domani 0 - Club 0").assertIsFocused()
+        val topNow = top("Domani 0 - Club 0")
+        for (n in 1..4) {
+            rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+            rule.mainClock.advanceTimeBy(600)
+            rule.waitForIdle()
+            rule.onNodeWithText("Domani $n - Club $n").assertIsFocused()
+            assertEquals("row moved up/down at step $n", topNow, top("Domani $n - Club $n"), TOLERANCE)
+        }
+    }
 }
