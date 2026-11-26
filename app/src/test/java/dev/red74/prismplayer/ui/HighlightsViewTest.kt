@@ -246,6 +246,32 @@ class HighlightsViewTest {
     }
 
     @Test
+    fun followedTeamsPageNeverFillsUpWithOtherContent() {
+        // a whole sport is followed too, and a film has the team's name in its title: neither belongs to the page
+        val interFilm = HighlightEvent(HighlightKind.FILM, "Inter Stellar", null, soon, soon + 7_000_000L, 40, listOf(cinema))
+        val football = HighlightEvent(HighlightKind.SPORT, "Napoli - Genoa", SportTopic.FOOTBALL, soon + 900_000L, soon + 8_000_000L, 40, listOf(sky))
+        SportPrefsStore.update { it.withKeyword("Inter").withTopic(SportTopic.FOOTBALL, true) }
+        nav = nav.copy(highlightKind = 2)
+        show(HighlightsData(mapOf(HighlightKind.SPORT to sport + football, HighlightKind.FILM to film + interFilm)))
+        rule.waitForIdle()
+        rule.onNodeWithText("Inter - Juventus").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithTextCount("Napoli - Genoa"))
+        assertEquals(0, rule.onAllNodesWithTextCount("Roma - Lazio"))
+        assertEquals(0, rule.onAllNodesWithTextCount("Inter Stellar"))
+        assertEquals(0, rule.onAllNodesWithTextCount("Heat"))
+    }
+
+    @Test
+    fun followingOnlyASportAndNoTeamAsksToChooseTeams() {
+        SportPrefsStore.update { it.withTopic(SportTopic.FOOTBALL, true) }
+        nav = nav.copy(highlightKind = 2)
+        show()
+        rule.waitForIdle()
+        assertEquals(1, rule.onAllNodesWithTextCount("Choose your teams on the Favourites page: their matches and programmes will appear here, on air now or later."))
+        assertEquals(0, rule.onAllNodesWithTextCount("Roma - Lazio"))
+    }
+
+    @Test
     fun followedTeamsPageWithNothingChosenAsksToChooseOnFavourites() {
         nav = nav.copy(highlightKind = 2)
         show()

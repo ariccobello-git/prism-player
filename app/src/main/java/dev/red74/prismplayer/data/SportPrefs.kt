@@ -18,6 +18,16 @@ data class SportPrefs(val topics: Set<SportTopic> = emptySet(), val keywords: Li
         return keywords.any { text.contains(" $it ") }
     }
 
+    /**
+     * The "Followed teams" page: only sport events whose title has one of the followed teams (or words) as a whole
+     * word. Following a whole sport does not bring every event of that sport here, and no other kind of programme.
+     */
+    fun followsTeam(event: HighlightEvent): Boolean {
+        if (event.kind != HighlightKind.SPORT || keywords.isEmpty()) return false
+        val text = " " + Highlights.clean(event.title) + " "
+        return keywords.any { text.contains(" $it ") }
+    }
+
     fun withTopic(topic: SportTopic, on: Boolean): SportPrefs = copy(topics = if (on) topics + topic else topics - topic)
 
     /** Adds a followed word (kept in its cleaned form); empty, repeated or beyond [MAX_KEYWORDS] words are ignored. */

@@ -259,10 +259,10 @@ private fun FollowedRows(
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
     enter: Int,
 ) {
-    val followed = remember(all, prefs) { if (prefs.isEmpty) emptyList() else all.filter { prefs.matches(it) } }
+    val followed = remember(all, prefs) { all.filter { prefs.followsTeam(it) } }
     if (followed.isEmpty()) {
         PrismText(
-            text = stringResource(if (prefs.isEmpty) R.string.following_choose else R.string.following_none),
+            text = stringResource(if (prefs.keywords.isEmpty()) R.string.following_choose else R.string.following_none),
             size = 20.sp,
             color = PrismColors.TextSecondary,
             modifier = Modifier.widthIn(max = 640.dp),
