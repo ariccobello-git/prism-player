@@ -9,6 +9,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import dev.red74.prismplayer.LibraryNav
 import dev.red74.prismplayer.LibraryState
 import dev.red74.prismplayer.LibraryTab
@@ -78,7 +79,7 @@ class FavoritesTeamsTest {
         rule.onNodeWithText("Follow teams").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Done").assertIsDisplayed()
-        rule.onNodeWithText("Inter").performClick()
+        rule.onNodeWithText("Inter").performScrollTo().performClick()
         rule.waitForIdle()
         assertTrue("inter" in SportPrefsStore.current.keywords)
         rule.onNodeWithText("Done").performClick()
