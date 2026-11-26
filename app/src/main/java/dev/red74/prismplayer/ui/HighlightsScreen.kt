@@ -582,6 +582,7 @@ private fun NewArrivals(
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ArrivalHero(
                     arrival = list.first(),
+                    movies = movies,
                     focusRequester = focus,
                     // Down always lands on the FIRST card below, never on the nearest one.
                     onDown = {
@@ -623,7 +624,7 @@ private fun NewArrivals(
                     }
                 }
                 if (rest.isNotEmpty()) {
-                    PrismText(text = stringResource(R.string.new_title, list.size), size = 20.sp, weight = FontWeight.SemiBold)
+                    PrismText(text = stringResource(if (movies) R.string.new_title_movies else R.string.new_title_series, list.size), size = 22.sp, weight = FontWeight.Bold)
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(CardWidth),
                         modifier = Modifier.fillMaxWidth().weight(1f),
@@ -642,6 +643,7 @@ private fun NewArrivals(
                                     Poster(a.logo, Modifier.width(72.dp).height(104.dp))
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         PrismText(text = a.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 3)
+                                        KindPill(stringResource(if (movies) R.string.kind_film else R.string.kind_series))
                                         PrismText(text = a.group, size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
                                     }
                                 }
@@ -656,17 +658,33 @@ private fun NewArrivals(
 
 private val ResumeHeight = 96.dp
 
+/** A small label that says at a glance what a card is (film or series), filled for the large card. */
+@Composable
+private fun KindPill(text: String, strong: Boolean = false) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (strong) PrismColors.Accent else PrismColors.Accent.copy(alpha = 0.22f))
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+    ) {
+        PrismText(text = text, size = if (strong) 14.sp else 12.sp, weight = FontWeight.Bold, color = if (strong) PrismColors.Bg0 else PrismColors.TextPrimary, maxLines = 1)
+    }
+}
+
 private class Resume(val arrival: Arrival, val fraction: Float)
 
 /** The large card at the top of the Films and Series pages: the first arrival, with its poster glowing behind it. */
 @Composable
-private fun ArrivalHero(arrival: Arrival, focusRequester: FocusRequester, onDown: () -> Boolean, onOpen: () -> Unit) {
+private fun ArrivalHero(arrival: Arrival, movies: Boolean, focusRequester: FocusRequester, onDown: () -> Boolean, onOpen: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(172.dp).clip(RoundedCornerShape(24.dp)).background(PrismColors.Bg1.copy(alpha = 0.6f))) {
         AmbientBackdrop(arrival.logo)
         Row(Modifier.fillMaxSize().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Poster(arrival.logo, Modifier.fillMaxHeight().aspectRatio(2f / 3f))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrismText(text = arrival.group, size = 16.sp, color = PrismColors.Accent, maxLines = 1)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    KindPill(stringResource(if (movies) R.string.new_badge_movie else R.string.new_badge_series), strong = true)
+                    PrismText(text = arrival.group, size = 16.sp, color = PrismColors.Accent, maxLines = 1)
+                }
                 PrismText(text = arrival.title, size = 32.sp, weight = FontWeight.Bold, maxLines = 2)
                 GlassButton(
                     text = stringResource(R.string.new_open),

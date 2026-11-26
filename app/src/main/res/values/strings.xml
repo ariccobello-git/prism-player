@@ -320,9 +320,14 @@
     <string name="highlights_loading">Looking for the featured events…</string>
     <string name="new_movies">New films</string>
     <string name="new_series">New series</string>
-    <string name="new_title">Added in the last 7 days · %1$d</string>
     <string name="new_none_movies">No new films in the last 7 days. New arrivals show up here after the list renews.</string>
     <string name="new_none_series">No new series in the last 7 days. New arrivals show up here after the list renews.</string>
     <string name="continue_watching">Continue watching</string>
     <string name="new_open">Open</string>
+    <string name="new_title_movies">New films · %1$d</string>
+    <string name="new_title_series">New series · %1$d</string>
+    <string name="new_badge_movie">NEW FILM</string>
+    <string name="new_badge_series">NEW SERIES</string>
+    <string name="kind_film">FILM</string>
+    <string name="kind_series">SERIES</string>
 </resources>

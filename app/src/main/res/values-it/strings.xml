@@ -320,9 +320,14 @@
     <string name="highlights_loading">Cerco gli eventi in evidenza…</string>
     <string name="new_movies">Nuovi film</string>
     <string name="new_series">Nuove serie</string>
-    <string name="new_title">Aggiunti negli ultimi 7 giorni · %1$d</string>
     <string name="new_none_movies">Nessun film nuovo negli ultimi 7 giorni. Le novità compaiono qui quando la lista si aggiorna.</string>
     <string name="new_none_series">Nessuna serie nuova negli ultimi 7 giorni. Le novità compaiono qui quando la lista si aggiorna.</string>
     <string name="continue_watching">Continua a guardare</string>
     <string name="new_open">Apri</string>
+    <string name="new_title_movies">Nuovi film · %1$d</string>
+    <string name="new_title_series">Nuove serie · %1$d</string>
+    <string name="new_badge_movie">NUOVO FILM</string>
+    <string name="new_badge_series">NUOVA SERIE</string>
+    <string name="kind_film">FILM</string>
+    <string name="kind_series">SERIE</string>
 </resources>
