@@ -48,13 +48,13 @@ object ContentInfo {
         val saved = read(key)
         if (saved != null) {
             // Answers saved before the badges existed (no "d") are asked again once, in the background.
-            if (saved.d == null || InfoKeys.isStale(saved.savedAt, System.currentTimeMillis(), FILM_MAX_AGE_MS)) {
+            if (saved.d == null || saved.b == null || InfoKeys.isStale(saved.savedAt, System.currentTimeMillis(), FILM_MAX_AGE_MS)) {
                 refreshLater(key) { fetchFilm(address, key) }
             }
-            return FilmInfo(saved.a, InfoKeys.badges(saved.d))
+            return FilmInfo(saved.a, InfoKeys.badges(saved.d), InfoKeys.badges(saved.b))
         }
         // A failed request is not remembered, so the next visit asks again.
-        return fetchFilm(address, key)?.let { FilmInfo(it.a, InfoKeys.badges(it.d)) }
+        return fetchFilm(address, key)?.let { FilmInfo(it.a, InfoKeys.badges(it.d), InfoKeys.badges(it.b)) }
     }
 
     /** Picture and audio badges of a film already saved on the stick, without asking the panel; empty if unknown. */
@@ -109,7 +109,7 @@ object ContentInfo {
             if (answer.isFailure) return@withContext cutOrNull<ContentInfoStore.Row>(answer)
             // "No plot" is saved too, so a film without one does not ask the panel on every visit.
             val film = answer.getOrNull()
-            val row = ContentInfoStore.Row(film?.plot, null, null, System.currentTimeMillis(), film?.badges.orEmpty().joinToString("|"))
+            val row = ContentInfoStore.Row(film?.plot, film?.meta.orEmpty().joinToString("|"), null, System.currentTimeMillis(), film?.badges.orEmpty().joinToString("|"))
             runCatching { store?.put(key, row) }
             row
         }
@@ -220,7 +220,26 @@ object InfoKeys {
 data class EpisodeInfo(val plot: String?, val duration: String?, val released: String?, val badges: List<String> = emptyList())
 
 /** What the panel says about one film; [badges] are its real picture and audio ("FHD", "HEVC", "ITA", "5.1"). */
-data class FilmInfo(val plot: String?, val badges: List<String> = emptyList())
+data class FilmInfo(val plot: String?, val badges: List<String> = emptyList(), val meta: List<String> = emptyList())
+
+/** The few facts a film page shows under the title (rating, length, year, genre), from one `get_vod_info` answer. */
+object FilmMeta {
+    fun of(rating: String?, year: String?, durationSecs: String?, duration: String?, genre: String?): List<String> {
+        val out = ArrayList<String>(4)
+        rating?.trim()?.replace(',', '.')?.toDoubleOrNull()?.takeIf { it > 0.0 && it <= 10.0 }?.let { out += "★ " + "%.1f".format(java.util.Locale.ROOT, it) }
+        val minutes = durationSecs?.trim()?.toDoubleOrNull()?.takeIf { it >= 60.0 }?.let { (it / 60.0).toInt() } ?: clock(duration)
+        if (minutes != null && minutes in 1..1000) out += if (minutes >= 60) "%dh %02dm".format(minutes / 60, minutes % 60) else "${minutes}m"
+        year?.trim()?.take(4)?.toIntOrNull()?.takeIf { it in 1900..2100 }?.let { out += it.toString() }
+        genre?.split(',', '/')?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.let { out += it.take(24).replace('|', ' ') }
+        return out
+    }
+
+    /** "01:55:12" or "55:12" to whole minutes; null when it is not a clock. */
+    private fun clock(text: String?): Int? {
+        val parts = text?.trim()?.split(':')?.map { it.toIntOrNull() ?: return null } ?: return null
+        return when (parts.size) { 3 -> parts[0] * 60 + parts[1]; 2 -> parts[0]; else -> null }
+    }
+}
 
 /**
  * The `video` and `audio` blocks a panel adds to a film or an episode once it has probed the file: resolution,
@@ -343,15 +362,25 @@ object PanelJson {
     fun film(reader: Reader): FilmInfo {
         var plot: String? = null
         var description: String? = null
+        var rating: String? = null
+        var year: String? = null
+        var secs: String? = null
+        var duration: String? = null
+        var genre: String? = null
         val facts = MediaFacts()
         val scan = JsonScan(reader, numbers = true)
         scan.run { _, key, value ->
             if (!facts.take(scan, key, value)) when (key.lowercase()) {
                 "plot" -> if (plot == null) plot = clean(value)
                 "description" -> if (description == null) description = clean(value)
+                "rating" -> if (rating == null) rating = value
+                "releasedate", "release_date", "releasedate_utc" -> if (year == null) year = value
+                "duration_secs" -> if (secs == null) secs = value
+                "duration" -> if (duration == null) duration = value
+                "genre" -> if (genre == null) genre = clean(value)
             }
         }
-        return FilmInfo(plot ?: description, facts.badges())
+        return FilmInfo(plot ?: description, facts.badges(), FilmMeta.of(rating, year, secs, duration, genre))
     }
 
     class SeriesEntry(val id: String?, val plot: String?)

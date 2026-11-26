@@ -1385,6 +1385,9 @@ private fun MovieDetail(
         Poster(movie.logo, Modifier.width(240.dp).aspectRatio(2f / 3f))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PrismText(text = tags.title, size = 40.sp, weight = FontWeight.Bold, maxLines = 3)
+            info.second?.meta?.takeIf { it.isNotEmpty() }?.let {
+                PrismText(text = it.joinToString("  ·  "), size = 20.sp, color = PrismColors.TextSecondary, maxLines = 1)
+            }
             Badges(VariantTags.withFacts(info.second?.badges.orEmpty(), tags.badges), max = 7)
             movie.group?.takeIf { it.isNotBlank() }?.let {
                 PrismText(text = it, size = 18.sp, color = PrismColors.Accent, maxLines = 1)

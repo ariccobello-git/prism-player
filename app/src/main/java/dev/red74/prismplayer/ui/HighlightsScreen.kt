@@ -81,6 +81,7 @@ import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.layout.widthIn
 import dev.red74.prismplayer.data.Novelty
+import dev.red74.prismplayer.data.VodPlatforms
 
 /** The featured events found in the guide; filled in the background by the view model. */
 val LocalHighlights = compositionLocalOf { HighlightsData.Empty }
@@ -514,13 +515,13 @@ private fun NewArrivals(
 private fun arrivalsFor(catalog: Catalog, movies: Boolean): List<Arrival> {
     val since = System.currentTimeMillis() - Novelty.WINDOW_MS
     return if (movies) {
-        catalog.recentMovies(since, ARRIVALS_LIMIT).filter { it.url.isNotEmpty() }.distinctBy { it.url }.map { film ->
+        catalog.recentMovies(since, ARRIVALS_LIMIT).filter { it.url.isNotEmpty() }.distinctBy { it.url }.sortedBy { VodPlatforms.rank(it.group) }.map { film ->
             Arrival(VariantTags.of(film.name).title, film.group.orEmpty(), film.logo, film.url) { nav ->
                 nav.copy(tab = LibraryTab.MOVIES, movieUrl = film.url, itemIndex = 0, resume = true, origin = nav.copy(resume = true, origin = null))
             }
         }
     } else {
-        catalog.recentShows(since, ARRIVALS_LIMIT).distinctBy { FavoriteKey.ofShow(it) }.map { show ->
+        catalog.recentShows(since, ARRIVALS_LIMIT).distinctBy { FavoriteKey.ofShow(it) }.sortedBy { VodPlatforms.rank(it.group) }.map { show ->
             Arrival(VariantTags.of(show.title).title, show.group, show.logo, FavoriteKey.ofShow(show)) { nav ->
                 nav.copy(tab = LibraryTab.SERIES, showTitle = show.title, showGroup = show.group, season = -1, query = "", origin = nav.copy(resume = true, origin = null))
             }
