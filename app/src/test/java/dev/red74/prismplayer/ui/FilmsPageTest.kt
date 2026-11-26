@@ -29,6 +29,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /** The Films page: a large card on top, "Continue watching" for films left half way, and Down goes to the FIRST card below. */
+@OptIn(androidx.compose.ui.test.ExperimentalTestApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "w1280dp-h720dp")
 class FilmsPageTest {
