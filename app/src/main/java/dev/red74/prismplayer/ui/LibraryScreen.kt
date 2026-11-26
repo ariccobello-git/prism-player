@@ -1443,7 +1443,7 @@ private fun MovieDetail(
 
 /** A thin bar with how much of a film or episode has been watched. */
 @Composable
-private fun ProgressLine(fraction: Float, modifier: Modifier = Modifier) {
+internal fun ProgressLine(fraction: Float, modifier: Modifier = Modifier) {
     Box(modifier.height(4.dp).clip(RoundedCornerShape(2.dp)).background(PrismColors.TextSecondary.copy(alpha = 0.3f))) {
         Box(Modifier.fillMaxHeight().fillMaxWidth(fraction).background(PrismColors.Accent))
     }
