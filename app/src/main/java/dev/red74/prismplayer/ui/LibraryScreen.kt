@@ -79,6 +79,7 @@ import dev.red74.prismplayer.data.EpisodeInfo
 import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.GroupTree
 import dev.red74.prismplayer.data.SortMode
+import dev.red74.prismplayer.data.SportPrefsStore
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.NowNext
 import dev.red74.prismplayer.data.Show
@@ -527,7 +528,21 @@ private fun LibraryBody(
             }
         }
 
-        LibraryTab.FAVORITES -> FavoritesView(query, nav, favorites, onNav, onPlay, onToggleFavorite)
+        LibraryTab.FAVORITES -> {
+            // The choice of sports and teams to follow lives here, on the Favourites page (the page "Followed teams" of In evidenza shows their events).
+            var choosingTeams by remember { mutableStateOf(false) }
+            var cameBack by remember { mutableStateOf(false) }
+            if (choosingTeams) {
+                BackHandler { choosingTeams = false; cameBack = true }
+                FollowScreen(SportPrefsStore.current, onDone = { choosingTeams = false; cameBack = true })
+            } else {
+                FavoritesView(
+                    query, nav, favorites, onNav, onPlay, onToggleFavorite,
+                    onTeams = if (catalog.live.isNotEmpty()) ({ choosingTeams = true }) else null,
+                    focusTeams = cameBack,
+                )
+            }
+        }
     }
 }
 
@@ -1649,15 +1664,21 @@ private fun FavoritesView(
     onNav: NavChange,
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
     onToggleFavorite: (String) -> Unit,
+    onTeams: (() -> Unit)? = null,
+    focusTeams: Boolean = false,
 ) {
     // The view model has already found them (see FavoriteList): the page only shows them, so it opens at once.
     val found = LocalFavoriteList.current
-    if (favorites.isEmpty()) {
-        EmptyNote(R.string.favorites_empty)
-        return
+    val teamsFocus = remember { FocusRequester() }
+    LaunchedEffect(focusTeams) { if (focusTeams && onTeams != null) teamsFocus.requestWhenReady() }
+    val teamsButton: @Composable () -> Unit = {
+        if (onTeams != null) GlassButton(text = stringResource(R.string.sport_prefs_button), onClick = onTeams, focusRequester = teamsFocus)
     }
-    if (found == null) {
-        EmptyNote(R.string.favorites_loading)
+    if (favorites.isEmpty() || found == null) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            teamsButton()
+            EmptyNote(if (favorites.isEmpty()) R.string.favorites_empty else R.string.favorites_loading)
+        }
         return
     }
     val entries = remember(found, query, nav.sort) {
@@ -1666,7 +1687,10 @@ private fun FavoritesView(
             .sortedBy(nav.sort) { it.title }
     }
     if (entries.isEmpty()) {
-        EmptyNote(R.string.search_none)
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            teamsButton()
+            EmptyNote(R.string.search_none)
+        }
         return
     }
     val playable = remember(entries) { entries.mapNotNull { it.channel } }
@@ -1694,7 +1718,10 @@ private fun FavoritesView(
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
     // The same sort button as above the contents of the other tabs.
     Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rowMemory)) {
-        SortButton(nav.sort) { mode -> onNav { it.copy(sort = mode) } }
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            SortButton(nav.sort) { mode -> onNav { it.copy(sort = mode) } }
+            teamsButton()
+        }
     }
     LazyColumn(Modifier.weight(1f).fillMaxWidth().returnSection(), state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         itemsIndexed(entries) { index, entry ->

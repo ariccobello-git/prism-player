@@ -1,7 +1,6 @@
 package dev.red74.prismplayer.ui
 
 import android.text.format.DateFormat
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -132,6 +131,8 @@ fun HighlightsView(
     val likedGroups = remember(tasteVersion) { Taste.top(ContentType.LIVE, 3).toSet() }
     val tabs = remember(kinds, catalog) {
         kinds.map { HighlightTab.Events(it) } +
+            // The events of the followed teams (chosen on the Favourites page), only for a list with live events.
+            (if (kinds.isNotEmpty()) listOf(HighlightTab.Following) else emptyList()) +
             (if (catalog.movies.isNotEmpty()) listOf(HighlightTab.Movies) else emptyList()) +
             (if (catalog.series.isNotEmpty()) listOf(HighlightTab.Series) else emptyList())
     }
@@ -143,31 +144,26 @@ fun HighlightsView(
     }
     val tabIndex = nav.highlightKind.coerceIn(0, tabs.size - 1)
     val tab = tabs[tabIndex]
-    var editing by remember { mutableStateOf(false) }
-    val prefsFocus = remember { FocusRequester() }
     val prefs = SportPrefsStore.current
-    val sport = tab is HighlightTab.Events && tab.kind == HighlightKind.SPORT
-    val showFollow = tabs.any { it is HighlightTab.Events }
-
-    BackHandler(enabled = editing) { editing = false }
-    var wasEditing by remember { mutableStateOf(false) }
-    LaunchedEffect(editing) {
-        if (!editing && wasEditing) prefsFocus.requestWhenReady()
-        wasEditing = editing
-    }
 
     val selectedFocus = remember { FocusRequester() }
-    if (editing) {
-        FollowScreen(prefs, onDone = { editing = false })
-        return
+    // The entry the cursor has rested on for a moment: the page on the right follows it by itself (OK is not needed),
+    // as the large card follows a live card. A quick pass over the menu changes nothing.
+    var menuFocus by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(menuFocus, tabIndex) {
+        if (menuFocus in tabs.indices && menuFocus != tabIndex) {
+            delay(MENU_DWELL_MS)
+            onNav { it.copy(highlightKind = menuFocus) }
+        }
     }
-    // A side menu on the left (the kinds of page and "Follow teams"), the content on the right. Going back into the menu
-    // always lands on the page being shown.
+    // A side menu on the left (the kinds of page), the content on the right. Going back into the menu always lands on
+    // the page being shown.
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
         Column(
             Modifier
                 .width(MenuWidth)
+                .onFocusChanged { if (!it.hasFocus) menuFocus = -1 }
                 .focusProperties { enter = { selectedFocus } },
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -176,22 +172,15 @@ fun HighlightsView(
                     text = tabLabel(item),
                     selected = index == tabIndex,
                     focusRequester = if (index == tabIndex) selectedFocus else null,
+                    onFocused = { menuFocus = index },
                     onClick = { onNav { it.copy(highlightKind = index) } },
-                )
-            }
-            // Following teams only makes sense for live events: a list with just films and series (On Demand) has no such button.
-            if (showFollow) {
-                MenuItem(
-                    text = stringResource(R.string.sport_prefs_button),
-                    selected = false,
-                    focusRequester = prefsFocus,
-                    onClick = { editing = true },
                 )
             }
         }
         Column(Modifier.weight(1f).fillMaxSize()) {
             when {
                 tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups)
+                tab == HighlightTab.Following -> FollowedRows(kinds.flatMap { data.events(it) }, prefs, nav, onNav, onPlay)
                 else -> NewArrivals(catalog, tab == HighlightTab.Movies, nav, onNav)
             }
         }
@@ -200,9 +189,10 @@ fun HighlightsView(
 
 /** One entry of the side menu: the page shown is filled, the cursor adds the white border. */
 @Composable
-private fun MenuItem(text: String, selected: Boolean, focusRequester: FocusRequester?, onClick: () -> Unit) {
+private fun MenuItem(text: String, selected: Boolean, focusRequester: FocusRequester?, onFocused: () -> Unit = {}, onClick: () -> Unit) {
     GlassSurface(
         onClick = onClick,
+        onFocused = onFocused,
         modifier = Modifier.fillMaxWidth().height(60.dp),
         focusRequester = focusRequester,
         selected = selected,
@@ -221,8 +211,38 @@ private fun MenuItem(text: String, selected: Boolean, focusRequester: FocusReque
 
 private sealed interface HighlightTab {
     data class Events(val kind: HighlightKind) : HighlightTab
+    data object Following : HighlightTab
     data object Movies : HighlightTab
     data object Series : HighlightTab
+}
+
+/** Seconds the cursor rests on a menu entry before the page follows it. */
+internal const val MENU_DWELL_MS = 500L
+
+/**
+ * The events of the sports and teams the viewer follows, on air now or later, laid out like the Sport, Film and
+ * Entertainment pages (same rows, same priority for DAZN and Sky). Nothing followed yet: a hint to the Favourites page.
+ */
+@Composable
+private fun FollowedRows(
+    all: List<HighlightEvent>,
+    prefs: SportPrefs,
+    nav: LibraryNav,
+    onNav: ((LibraryNav) -> LibraryNav) -> Unit,
+    onPlay: (List<Channel>, Int, Boolean) -> Unit,
+) {
+    val followed = remember(all, prefs) { if (prefs.isEmpty) emptyList() else all.filter { prefs.matches(it) } }
+    if (followed.isEmpty()) {
+        PrismText(
+            text = stringResource(if (prefs.isEmpty) R.string.following_choose else R.string.following_none),
+            size = 20.sp,
+            color = PrismColors.TextSecondary,
+            modifier = Modifier.widthIn(max = 640.dp),
+        )
+        return
+    }
+    // The followed events are the whole page, so no "For you" row is added on top of them.
+    EventRows(followed, nav, onNav, onPlay, SportPrefs(), emptySet())
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -543,7 +563,7 @@ internal val FOLLOW_SUGGESTIONS = listOf(
  * the "For you" row of the Sport page then shows only what is followed. Any other name can be typed at the bottom.
  */
 @Composable
-private fun FollowScreen(prefs: SportPrefs, onDone: () -> Unit) {
+internal fun FollowScreen(prefs: SportPrefs, onDone: () -> Unit) {
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { first.requestWhenReady() }
     var word by remember { mutableStateOf("") }
@@ -744,6 +764,7 @@ private fun tabLabel(tab: HighlightTab): String = stringResource(
             HighlightKind.FILM -> R.string.highlights_film
             HighlightKind.ENTERTAINMENT -> R.string.highlights_entertainment
         }
+        HighlightTab.Following -> R.string.highlights_following
         HighlightTab.Movies -> R.string.new_movies
         HighlightTab.Series -> R.string.new_series
     },

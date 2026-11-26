@@ -264,6 +264,9 @@
     <string name="topic_hockey">Hockey</string>
     <string name="topic_olympics">Olympics</string>
     <string name="highlights_for_you">For you</string>
+    <string name="highlights_following">Followed teams</string>
+    <string name="following_choose">Choose your teams on the Favourites page: their matches and programmes will appear here, on air now or later.</string>
+    <string name="following_none">Nothing on air or coming up for the teams you follow in the next 36 hours.</string>
     <string name="sport_prefs_button">Follow teams</string>
     <string name="highlights_watch_on">Watch now · %1$s</string>
     <string name="follow_sports">Sports</string>
