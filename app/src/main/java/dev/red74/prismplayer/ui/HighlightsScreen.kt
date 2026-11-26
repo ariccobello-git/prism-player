@@ -34,7 +34,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -293,6 +299,10 @@ private fun EventRows(
     val density = LocalDensity.current
     val anchoredRow = remember(density) { AnchoredScroll(with(density) { 4.dp.toPx() }) }
     val heroFocus = remember { FocusRequester() }
+    // The first card of the first row (the large card's "Down" goes there) and whether it is on screen right now.
+    val firstFocus = remember { FocusRequester() }
+    var firstShown by remember { mutableStateOf(false) }
+    val firstRequester = if (!onHero && target.first == 0 && target.second == 0) cardFocus else firstFocus
     // A programme that has not started: OK sets or removes a reminder (a notification a few minutes before it begins).
     val toggleReminder = rememberReminderToggle()
     val reminders = dev.red74.prismplayer.reminders.ReminderStore.current
@@ -384,6 +394,12 @@ private fun EventRows(
                 reminder = if (onAir) null else reminders.any { it.id == reminder.id },
                 focusRequester = heroFocus,
                 previewing = previewing,
+                onDown = {
+                    if (firstShown) {
+                        runCatching { firstRequester.requestFocus() }
+                        true
+                    } else false
+                },
                 onFocusChange = { has ->
                     heroHasFocus = has
                     if (has) focusedRow = -1
@@ -413,12 +429,22 @@ private fun EventRows(
                     itemsIndexed(row.events, key = { _, event -> event.title + event.startMs }) { column, event ->
                         val onAir = event.isLive(nowMs)
                         val reminder = remember(event) { reminderFor(event.title, event.startMs, event.channels.first()) }
+                        if (rowIndex == 0 && column == 0) {
+                            DisposableEffect(Unit) {
+                                firstShown = true
+                                onDispose { firstShown = false }
+                            }
+                        }
                         EventCard(
                             event = event,
                             live = onAir,
                             liked = row.forYou,
                             reminder = if (onAir) null else reminders.any { it.id == reminder.id },
-                            focusRequester = if (!onHero && rowIndex == target.first && column == target.second) cardFocus else null,
+                            focusRequester = when {
+                                !onHero && rowIndex == target.first && column == target.second -> cardFocus
+                                rowIndex == 0 && column == 0 -> firstFocus
+                                else -> null
+                            },
                             onFocusChange = { has ->
                                 if (has) focusedRow = rowIndex
                                 focusedEvent = if (has) event else if (focusedEvent == event) null else focusedEvent
@@ -672,11 +698,14 @@ private fun EventCard(
 @Composable
 private fun HeroCard(
     event: HighlightEvent, live: Boolean, liked: Boolean, reminder: Boolean?, focusRequester: FocusRequester?,
-    previewing: Boolean, onFocusChange: (Boolean) -> Unit, onClick: () -> Unit,
+    previewing: Boolean, onFocusChange: (Boolean) -> Unit, onDown: () -> Boolean, onClick: () -> Unit,
 ) {
     GlassSurface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().height(HeroHeight).testTag("hero").onFocusChanged { onFocusChange(it.hasFocus) },
+        modifier = Modifier.fillMaxWidth().height(HeroHeight).testTag("hero")
+            .onFocusChanged { onFocusChange(it.hasFocus) }
+            // "Down" from the large card always goes to the first card of the row below, not to whichever card is nearest.
+            .onPreviewKeyEvent { it.type == KeyEventType.KeyDown && it.key == Key.DirectionDown && onDown() },
         focusRequester = focusRequester,
         tint = PrismColors.Accent,
         cornerRadius = 28.dp,

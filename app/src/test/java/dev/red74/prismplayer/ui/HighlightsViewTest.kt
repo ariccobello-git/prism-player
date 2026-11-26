@@ -460,6 +460,32 @@ class HighlightsViewTest {
     }
 
     @Test
+    fun downFromTheLargeCardAlwaysGoesToTheFirstCardOfTheRowBelow() {
+        show(manyEvents())
+        rule.waitForIdle()
+        // the large card is "Oggi 0"; the row below starts with "Oggi 1"
+        rule.onNodeWithTag("hero").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(300)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onNodeWithText("Oggi 1 - Team 1").assertIsFocused()
+        // and again after moving along the row and back up to the large card
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionDown) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onNodeWithText("Oggi 1 - Team 1").assertIsFocused()
+    }
+
+    @Test
     fun theCardWithTheCursorStaysInPlaceWhileTheRowSlides() {
         show(manyEvents())
         rule.waitForIdle()
