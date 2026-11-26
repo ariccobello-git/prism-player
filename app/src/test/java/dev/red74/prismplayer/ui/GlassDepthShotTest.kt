@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -75,7 +76,7 @@ class GlassDepthShotTest {
         // a point well inside each card, away from the edge and the top sheen
         val inside = { b: android.graphics.Bitmap -> b.getPixel(b.width / 2, b.height / 2) }
         val low = { b: android.graphics.Bitmap -> b.getPixel(b.width / 2, b.height * 9 / 10) }
-        val pageColor = page.value.toLong().let { (0xFF000000L or (it shr 40 and 0xFFFFFF)).toInt() }
+        val pageColor = page.toArgb()
         assertEquals("a content card shows the page through", lum(pageColor), lum(inside(plain)))
         assertTrue("a glass control is lighter than the page: ${inside(glass)}", lum(inside(glass)) > lum(inside(plain)))
         assertTrue("the focused card is lit: ${inside(focused)}", lum(inside(focused)) > lum(inside(plain)) + 20)
