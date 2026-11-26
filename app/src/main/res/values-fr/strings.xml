@@ -330,4 +330,5 @@
     <string name="new_badge_series">NOUVELLE SÉRIE</string>
     <string name="kind_film">FILM</string>
     <string name="kind_series">SÉRIE</string>
+    <string name="highlights_started_ago">Commencé il y a %1$d min</string>
 </resources>

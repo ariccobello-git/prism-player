@@ -286,4 +286,18 @@ class HighlightsTest {
         val show = build(mapOf("u1" to listOf(programme("X Factor", -0.5, 120))), skyUno)
         assertTrue(Highlights.isPriority(show.events(HighlightKind.ENTERTAINMENT).single()))
     }
+
+    @Test
+    fun progressShowsHowFarAnEventOnAirHasGot() {
+        val now = 10_000_000L
+        val sky = Channel("Sky Sport Uno", "http://x/1", "Sport")
+        val e = HighlightEvent(HighlightKind.SPORT, "A", null, now - 30 * 60_000L, now + 90 * 60_000L, 10, listOf(sky))
+        assertEquals(0.25f, e.progress(now)!!, 0.001f)
+        assertEquals(30, e.minutesSinceStart(now))
+        // not started yet, already over, or nonsense times: no bar
+        assertEquals(null, e.progress(now - 31 * 60_000L))
+        assertEquals(null, e.progress(now + 90 * 60_000L))
+        assertEquals(null, HighlightEvent(HighlightKind.SPORT, "B", null, now, now, 10, listOf(sky)).progress(now))
+        assertEquals(0, e.minutesSinceStart(now - 40 * 60_000L))
+    }
 }

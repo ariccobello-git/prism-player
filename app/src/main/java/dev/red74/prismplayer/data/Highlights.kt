@@ -21,6 +21,13 @@ data class HighlightEvent(
 ) {
     fun isLive(nowMs: Long): Boolean = startMs <= nowMs && nowMs < endMs
 
+    /** How far the programme has got (0..1) while it is on air; null when it is not on air or its times make no sense. */
+    fun progress(nowMs: Long): Float? =
+        if (!isLive(nowMs) || endMs <= startMs) null else ((nowMs - startMs).toFloat() / (endMs - startMs)).coerceIn(0f, 1f)
+
+    /** Whole minutes since the programme began (never negative). */
+    fun minutesSinceStart(nowMs: Long): Int = ((nowMs - startMs) / 60_000L).coerceAtLeast(0L).toInt()
+
     companion object {
         const val MAX_CHANNELS = 4
     }
