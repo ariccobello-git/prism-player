@@ -332,4 +332,7 @@
     <string name="kind_series">SERIE</string>
     <string name="highlights_started_ago">Iniziato da %1$d min</string>
     <string name="guide_button">Guida</string>
+    <string name="sleep_button">Timer di spegnimento</string>
+    <string name="sleep_off">Spento</string>
+    <string name="sleep_in">Si ferma tra %1$d min</string>
 </resources>
