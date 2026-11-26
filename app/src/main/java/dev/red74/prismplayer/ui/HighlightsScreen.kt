@@ -34,7 +34,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -82,6 +81,7 @@ import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.layout.widthIn
@@ -299,9 +299,10 @@ private fun EventRows(
     val density = LocalDensity.current
     val anchoredRow = remember(density) { AnchoredScroll(with(density) { 4.dp.toPx() }) }
     val heroFocus = remember { FocusRequester() }
-    // The first card of the first row (the large card's "Down" goes there) and whether it is on screen right now.
+    // The first card of the first row (the large card's "Down" goes there), and the sideways position of every row.
     val firstFocus = remember { FocusRequester() }
-    var firstShown by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val rowStates = remember { HashMap<String, androidx.compose.foundation.lazy.LazyListState>() }
     val firstRequester = if (!onHero && target.first == 0 && target.second == 0) cardFocus else firstFocus
     // A programme that has not started: OK sets or removes a reminder (a notification a few minutes before it begins).
     val toggleReminder = rememberReminderToggle()
@@ -395,10 +396,17 @@ private fun EventRows(
                 focusRequester = heroFocus,
                 previewing = previewing,
                 onDown = {
-                    if (firstShown) {
-                        runCatching { firstRequester.requestFocus() }
+                    val first = rows.firstOrNull()
+                    if (first == null) false else {
+                        // The first row may have slid to the side: bring it back to its first card, then go there.
+                        scope.launch {
+                            rowStates["${first.forYou}-${first.live}-${first.day}"]?.scrollToItem(0)
+                            withFrameNanos { }
+                            withFrameNanos { }
+                            runCatching { firstRequester.requestFocus() }
+                        }
                         true
-                    } else false
+                    }
                 },
                 onFocusChange = { has ->
                     heroHasFocus = has
@@ -418,7 +426,9 @@ private fun EventRows(
         itemsIndexed(rows, key = { _, row -> "${row.forYou}-${row.live}-${row.day}" }) { rowIndex, row ->
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 PrismText(text = rowTitle(row), size = 24.sp, weight = FontWeight.Bold)
-                val rowState = rememberLazyListState(initialFirstVisibleItemIndex = if (rowIndex == target.first) target.second else 0)
+                val rowState = rowStates.getOrPut("${row.forYou}-${row.live}-${row.day}") {
+                    androidx.compose.foundation.lazy.LazyListState(if (rowIndex == target.first) target.second else 0)
+                }
                 CompositionLocalProvider(LocalBringIntoViewSpec provides anchoredRow) {
                 LazyRow(
                     Modifier.fillMaxWidth(),
@@ -429,12 +439,6 @@ private fun EventRows(
                     itemsIndexed(row.events, key = { _, event -> event.title + event.startMs }) { column, event ->
                         val onAir = event.isLive(nowMs)
                         val reminder = remember(event) { reminderFor(event.title, event.startMs, event.channels.first()) }
-                        if (rowIndex == 0 && column == 0) {
-                            DisposableEffect(Unit) {
-                                firstShown = true
-                                onDispose { firstShown = false }
-                            }
-                        }
                         EventCard(
                             event = event,
                             live = onAir,
