@@ -93,14 +93,14 @@ class HighlightsViewTest {
     @Test
     fun aProgrammeOnAirShowsHowFarItHasGotAndOneNotStartedShowsNoBar() {
         show()
-        rule.onNodeWithTag("heroProgress").assertIsDisplayed()
+        rule.onNodeWithTag("heroProgress", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithText("Started 10 min ago").assertIsDisplayed()
         // the other cards have not started: no bar on them
-        assertEquals(0, rule.onAllNodesWithTag("cardProgress").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithTag("cardProgress", useUnmergedTree = true).fetchSemanticsNodes().size)
         nav = nav.copy(highlightKind = 1)
         rule.waitForIdle()
         rule.onNodeWithText("Heat").assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithTag("heroProgress").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithTag("heroProgress", useUnmergedTree = true).fetchSemanticsNodes().size)
     }
 
     @Test

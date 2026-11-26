@@ -874,20 +874,18 @@ private fun HeroCard(
     ) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
-                EventHeader(event, live, liked)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    EventHeader(event, live, liked, startedMin = if (live) event.minutesSinceStart(nowMs) else null)
+                    // how far the programme on air has got, at a glance (no bar without the times of the guide)
+                    event.progress(nowMs)?.let { ProgressLine(it, Modifier.fillMaxWidth().testTag("heroProgress")) }
+                }
                 PrismText(
                     text = event.title,
                     size = titleSp(event.title.length, large = true, narrow = live).sp,
                     weight = FontWeight.Bold,
                     maxLines = 3,
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    event.progress(nowMs)?.let {
-                        PrismText(text = stringResource(R.string.highlights_started_ago, event.minutesSinceStart(nowMs)), size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
-                        ProgressLine(it, Modifier.fillMaxWidth(0.8f).testTag("heroProgress"))
-                    }
-                    EventAction(event, reminder, 18.sp, strong = true)
-                }
+                EventAction(event, reminder, 18.sp, strong = true)
             }
             if (live) {
                 HeroPreview(event.channels.first(), active = previewing, Modifier.fillMaxHeight().testTag("heroPreview"))
@@ -897,9 +895,10 @@ private fun HeroCard(
 }
 
 @Composable
-private fun EventHeader(event: HighlightEvent, live: Boolean, liked: Boolean, compact: Boolean = false) {
+private fun EventHeader(event: HighlightEvent, live: Boolean, liked: Boolean, compact: Boolean = false, startedMin: Int? = null) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         TimeBadge(text = if (live) stringResource(R.string.highlights_on_air) else clockText(event.startMs), live = live)
+        if (startedMin != null) PrismText(text = stringResource(R.string.highlights_started_ago, startedMin), size = 16.sp, color = PrismColors.TextSecondary, maxLines = 1)
         if (liked) {
             LineIcon(LineIcon.STAR_ON, size = 20.dp, color = PrismColors.Accent)
             if (!compact) PrismText(text = stringResource(R.string.highlights_for_you), size = 17.sp, weight = FontWeight.SemiBold, color = PrismColors.Accent, maxLines = 1)
