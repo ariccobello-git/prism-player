@@ -323,4 +323,6 @@
     <string name="new_title">Aggiunti negli ultimi 7 giorni · %1$d</string>
     <string name="new_none_movies">Nessun film nuovo negli ultimi 7 giorni. Le novità compaiono qui quando la lista si aggiorna.</string>
     <string name="new_none_series">Nessuna serie nuova negli ultimi 7 giorni. Le novità compaiono qui quando la lista si aggiorna.</string>
+    <string name="continue_watching">Continua a guardare</string>
+    <string name="new_open">Apri</string>
 </resources>

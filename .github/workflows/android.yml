@@ -49,6 +49,15 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Robolectric downloads its Android jars from Maven Central while the tests run; a hiccup there failed dozens
+      # of tests at once. Keeping the jars between runs (saved even when a test fails) makes that rare.
+      - name: Restore Robolectric jars
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-jars-${{ hashFiles('gradle/libs.versions.toml') }}-${{ github.run_id }}
+          restore-keys: robolectric-jars-
+
       - name: Check toolchain compatibility
         shell: bash
         run: |
@@ -93,6 +102,13 @@ jobs:
           if [ -z "${LABEL}" ] && [ "${REF_TYPE}" = "tag" ]; then LABEL="${REF_NAME}"; fi
           if [ -z "${LABEL}" ]; then LABEL="${COMMIT:0:7}"; fi
           ./gradlew --no-daemon --stacktrace --continue -PprismVersion="${LABEL}" -PprismCode="${{ github.run_number }}" testDebugUnitTest lintDebug assembleDebug 2>&1 | tee build.log
+
+      - name: Save Robolectric jars
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.m2/repository/org/robolectric
+          key: robolectric-jars-${{ hashFiles('gradle/libs.versions.toml') }}-${{ github.run_id }}
 
       # The job log is not readable from outside GitHub, so compile errors and failed tests are repeated
       # as one annotation that shows up in the run's check summary.

@@ -323,4 +323,6 @@
     <string name="new_title">Added in the last 7 days · %1$d</string>
     <string name="new_none_movies">No new films in the last 7 days. New arrivals show up here after the list renews.</string>
     <string name="new_none_series">No new series in the last 7 days. New arrivals show up here after the list renews.</string>
+    <string name="continue_watching">Continue watching</string>
+    <string name="new_open">Open</string>
 </resources>

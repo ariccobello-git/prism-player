@@ -87,6 +87,10 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.layout.widthIn
 import dev.red74.prismplayer.data.Novelty
 import dev.red74.prismplayer.data.VodPlatforms
+import dev.red74.prismplayer.data.WatchProgress
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.rememberCoroutineScope
 
 /** The featured events found in the guide; filled in the background by the view model. */
 val LocalHighlights = compositionLocalOf { HighlightsData.Empty }
@@ -517,6 +521,15 @@ private fun NewArrivals(
         }
     }
     val focus = remember { FocusRequester() }
+    val gridFirst = remember { FocusRequester() }
+    val rowFirst = remember { FocusRequester() }
+    val rowState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val progressVersion = WatchProgress.version
+    // The films left half way, the latest first (series keep their own "resume" inside the show page).
+    val resumes by produceState(emptyList<Resume>(), catalog, movies, progressVersion) {
+        value = if (!movies) emptyList() else withContext(Dispatchers.IO) { resumesFor(catalog) }
+    }
     val list = items
     LaunchedEffect(nav.resume, list) {
         if (nav.resume && !list.isNullOrEmpty()) {
@@ -532,27 +545,76 @@ private fun NewArrivals(
             color = PrismColors.TextSecondary,
             modifier = Modifier.widthIn(max = 640.dp),
         )
-        else -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrismText(text = stringResource(R.string.new_title, list.size), size = 20.sp, weight = FontWeight.SemiBold)
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(CardWidth),
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                itemsIndexed(list, key = { _, a -> a.key }) { index, a ->
-                    GlassSurface(
-                        onClick = { onNav(a.open) },
-                        modifier = Modifier.height(CardHeight),
-                        focusRequester = if (index == 0) focus else null,
-                        focusScale = 1.04f,
+        else -> {
+            val resumeKeys = resumes.map { it.arrival.key }.toSet()
+            // a film already in "Continue watching" is not repeated in the grid
+            val rest = list.drop(1).filter { it.key !in resumeKeys }
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                ArrivalHero(
+                    arrival = list.first(),
+                    focusRequester = focus,
+                    // Down always lands on the FIRST card below, never on the nearest one.
+                    onDown = {
+                        when {
+                            resumes.isNotEmpty() -> {
+                                scope.launch {
+                                    rowState.scrollToItem(0)
+                                    withFrameNanos { }
+                                    withFrameNanos { }
+                                    runCatching { rowFirst.requestFocus() }
+                                }
+                                true
+                            }
+                            rest.isNotEmpty() -> runCatching { gridFirst.requestFocus() }.isSuccess
+                            else -> false
+                        }
+                    },
+                    onOpen = { onNav(list.first().open) },
+                )
+                if (resumes.isNotEmpty()) {
+                    PrismText(text = stringResource(R.string.continue_watching), size = 20.sp, weight = FontWeight.SemiBold)
+                    LazyRow(state = rowState, horizontalArrangement = Arrangement.spacedBy(14.dp), contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)) {
+                        itemsIndexed(resumes, key = { _, r -> r.arrival.key }) { index, r ->
+                            GlassSurface(
+                                onClick = { onNav(r.arrival.open) },
+                                modifier = Modifier.width(CardWidth).height(ResumeHeight),
+                                focusRequester = if (index == 0) rowFirst else null,
+                                focusScale = 1.04f,
+                            ) {
+                                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Poster(r.arrival.logo, Modifier.width(48.dp).height(70.dp))
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        PrismText(text = r.arrival.title, size = 16.sp, weight = FontWeight.SemiBold, maxLines = 2)
+                                        ProgressLine(r.fraction, Modifier.fillMaxWidth())
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (rest.isNotEmpty()) {
+                    PrismText(text = stringResource(R.string.new_title, list.size), size = 20.sp, weight = FontWeight.SemiBold)
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(CardWidth),
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        contentPadding = PaddingValues(vertical = 8.dp, horizontal = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Poster(a.logo, Modifier.width(72.dp).height(104.dp))
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                PrismText(text = a.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 3)
-                                PrismText(text = a.group, size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                        itemsIndexed(rest, key = { _, a -> a.key }) { index, a ->
+                            GlassSurface(
+                                onClick = { onNav(a.open) },
+                                modifier = Modifier.height(CardHeight),
+                                focusRequester = if (index == 0) gridFirst else null,
+                                focusScale = 1.04f,
+                            ) {
+                                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Poster(a.logo, Modifier.width(72.dp).height(104.dp))
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        PrismText(text = a.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 3)
+                                        PrismText(text = a.group, size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                                    }
+                                }
                             }
                         }
                     }
@@ -562,14 +624,54 @@ private fun NewArrivals(
     }
 }
 
+private val ResumeHeight = 96.dp
+
+private class Resume(val arrival: Arrival, val fraction: Float)
+
+/** The large card at the top of the Films and Series pages: the first arrival, with its poster glowing behind it. */
+@Composable
+private fun ArrivalHero(arrival: Arrival, focusRequester: FocusRequester, onDown: () -> Boolean, onOpen: () -> Unit) {
+    Box(Modifier.fillMaxWidth().height(172.dp).clip(RoundedCornerShape(24.dp)).background(PrismColors.Bg1.copy(alpha = 0.6f))) {
+        AmbientBackdrop(arrival.logo)
+        Row(Modifier.fillMaxSize().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Poster(arrival.logo, Modifier.fillMaxHeight().aspectRatio(2f / 3f))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrismText(text = arrival.group, size = 16.sp, color = PrismColors.Accent, maxLines = 1)
+                PrismText(text = arrival.title, size = 32.sp, weight = FontWeight.Bold, maxLines = 2)
+                GlassButton(
+                    text = stringResource(R.string.new_open),
+                    onClick = onOpen,
+                    focusRequester = focusRequester,
+                    emphasized = true,
+                    modifier = Modifier.onPreviewKeyEvent { it.type == KeyEventType.KeyDown && it.key == Key.DirectionDown && onDown() },
+                )
+            }
+        }
+    }
+}
+
+/** Films with a saved resume point, the most recently watched first. */
+private fun resumesFor(catalog: Catalog): List<Resume> {
+    val keys = WatchProgress.keys()
+    if (keys.isEmpty()) return emptyList()
+    return catalog.favorites(keys).filter { it.type == ContentType.MOVIE && it.url.isNotEmpty() }
+        .mapNotNull { film -> WatchProgress.get(film.url)?.let { film to it } }
+        .sortedByDescending { it.second.savedAt }
+        .take(RESUME_LIMIT)
+        .map { (film, point) -> Resume(filmArrival(film), point.fraction) }
+}
+
+private fun filmArrival(film: Channel): Arrival =
+    Arrival(VariantTags.of(film.name).title, film.group.orEmpty(), film.logo, film.url) { nav ->
+        nav.copy(tab = LibraryTab.MOVIES, movieUrl = film.url, itemIndex = 0, resume = true, origin = nav.copy(resume = true, origin = null))
+    }
+
+private const val RESUME_LIMIT = 12
+
 private fun arrivalsFor(catalog: Catalog, movies: Boolean): List<Arrival> {
     val since = System.currentTimeMillis() - Novelty.WINDOW_MS
     return if (movies) {
-        catalog.recentMovies(since, ARRIVALS_LIMIT).filter { it.url.isNotEmpty() }.distinctBy { it.url }.sortedBy { VodPlatforms.rank(it.group) }.map { film ->
-            Arrival(VariantTags.of(film.name).title, film.group.orEmpty(), film.logo, film.url) { nav ->
-                nav.copy(tab = LibraryTab.MOVIES, movieUrl = film.url, itemIndex = 0, resume = true, origin = nav.copy(resume = true, origin = null))
-            }
-        }
+        catalog.recentMovies(since, ARRIVALS_LIMIT).filter { it.url.isNotEmpty() }.distinctBy { it.url }.sortedBy { VodPlatforms.rank(it.group) }.map(::filmArrival)
     } else {
         catalog.recentShows(since, ARRIVALS_LIMIT).distinctBy { FavoriteKey.ofShow(it) }.sortedBy { VodPlatforms.rank(it.group) }.map { show ->
             Arrival(VariantTags.of(show.title).title, show.group, show.logo, FavoriteKey.ofShow(show)) { nav ->
