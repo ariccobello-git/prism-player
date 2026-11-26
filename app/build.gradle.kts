@@ -124,6 +124,7 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.nanohttpd)
     implementation(libs.emoji2.bundled)
+    implementation(libs.androidx.tvprovider)
 
     testImplementation(libs.junit)
     // UI test on the JVM: moves the focus in the menu and checks that nothing shifts.

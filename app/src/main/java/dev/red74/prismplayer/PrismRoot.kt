@@ -168,6 +168,58 @@ private fun PrismNavigation(
     }
     LaunchedEffect(library.error) { if (library.error != null) UiSounds.play(UiSounds.Kind.ERROR) }
 
+    // "Play next" on the TV home screen: the cards are kept equal to what was left half way in the open list ...
+    val appContext = LocalContext.current.applicationContext
+    val progressVersion = dev.red74.prismplayer.data.WatchProgress.version
+    LaunchedEffect(progressVersion, library.catalog, library.playlistId) {
+        val listId = library.playlistId ?: return@LaunchedEffect
+        if (library.catalog.isEmpty) return@LaunchedEffect
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                dev.red74.prismplayer.tv.WatchNextSync.sync(appContext, listId, dev.red74.prismplayer.data.WatchNext.entries(library.catalog))
+            }
+        }
+    }
+    // ... and a card opens the film or series where it was left: its list first, then the page of the content.
+    val link by MainActivity.link
+    LaunchedEffect(link, playlists) {
+        val wanted = link ?: return@LaunchedEffect
+        if (playlists.none { it.id == wanted.listId }) {
+            if (playlists.isNotEmpty()) MainActivity.link.value = null
+            return@LaunchedEffect
+        }
+        confirmExit = false
+        if ((stack.last() as? Screen.Library)?.playlistId != wanted.listId || stack.size != 2) {
+            while (stack.size > 1) stack.removeAt(stack.lastIndex)
+            forward = true
+            stack.add(Screen.Library(wanted.listId))
+        }
+    }
+    LaunchedEffect(link, library.playlistId, library.catalog) {
+        val wanted = link ?: return@LaunchedEffect
+        if (library.playlistId != wanted.listId || library.catalog.isEmpty) return@LaunchedEffect
+        val keys = setOf(wanted.key)
+        val film = if (wanted.series) null else library.catalog.favorites(keys).firstOrNull { it.type == dev.red74.prismplayer.data.ContentType.MOVIE }
+        val show = if (wanted.series) library.catalog.favoriteShows(keys).firstOrNull() else null
+        MainActivity.link.value = null
+        when {
+            film != null -> viewModel.updateNav {
+                it.copy(
+                    tab = LibraryTab.MOVIES, category = 0, level = 0, sub = 0, itemIndex = 0, query = "",
+                    movieUrl = film.url, showTitle = null, showGroup = null, episodeUrl = null, season = -1,
+                    resume = true, origin = null, returnKey = null,
+                )
+            }
+            show != null -> viewModel.updateNav {
+                it.copy(
+                    tab = LibraryTab.SERIES, category = 0, level = 0, sub = 0, itemIndex = 0, query = "",
+                    movieUrl = null, showTitle = show.title, showGroup = show.group, episodeUrl = null, season = -1,
+                    resume = true, origin = null, returnKey = null,
+                )
+            }
+        }
+    }
+
     // Closing when nobody uses the app. The full-screen player (playing or paused), a preview on screen, a list
     // loading or being checked and the pairing page all count as "in use", so the countdown never shows over a
     // content being watched.
