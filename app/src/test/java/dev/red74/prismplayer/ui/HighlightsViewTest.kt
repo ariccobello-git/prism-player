@@ -95,6 +95,8 @@ class HighlightsViewTest {
         show()
         rule.onNodeWithTag("heroProgress", useUnmergedTree = true).assertIsDisplayed()
         rule.onNodeWithText("Started 10 min ago").assertIsDisplayed()
+        // the programme on air carries the pulsing dot; the ones that have not started do not
+        assertEquals(1, rule.onAllNodesWithTag("onAirDot", useUnmergedTree = true).fetchSemanticsNodes().size)
         // the other cards have not started: no bar on them
         assertEquals(0, rule.onAllNodesWithTag("cardProgress", useUnmergedTree = true).fetchSemanticsNodes().size)
         nav = nav.copy(highlightKind = 1)

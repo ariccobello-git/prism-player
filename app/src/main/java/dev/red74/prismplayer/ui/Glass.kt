@@ -3,6 +3,7 @@ package dev.red74.prismplayer.ui
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -155,6 +156,45 @@ fun Modifier.topSheen(cornerRadius: androidx.compose.ui.unit.Dp): Modifier = dra
         if (size.width > inset * 2) drawLine(brush, Offset(inset, y), Offset(size.width - inset, y), strokeWidth = y)
     }
 }
+
+
+/**
+ * Depth for the item that holds the cursor: a soft shadow tinted by [glow] under it that grows with [lift] (0..1),
+ * and a faint light reflection on its lower half. One focused item at a time, so it costs the stick nothing.
+ */
+fun Modifier.focusReflection(lift: () -> Float): Modifier = drawWithCache {
+    val brush = Brush.verticalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.10f)), startY = size.height * 0.45f, endY = size.height)
+    onDrawBehind {
+        val l = lift()
+        if (l > 0.01f) drawRect(brush, alpha = l)
+    }
+}
+
+/**
+ * A poster that opens into its page: it grows from a smaller, fainter card with a soft spring when the page appears,
+ * the way a card opens into its details on Apple TV. Drawn in the graphics layer only, so nothing is laid out again.
+ */
+@Composable
+fun Modifier.expandsIn(): Modifier {
+    val progress = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        progress.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow))
+    }
+    return graphicsLayer {
+        val p = progress.value
+        val grow = EXPAND_FROM + (1f - EXPAND_FROM) * p
+        scaleX = grow
+        scaleY = grow
+        alpha = p.coerceIn(0f, 1f)
+        transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
+    }
+}
+
+/** How small a poster starts when its page opens (a fraction of its final size). */
+const val EXPAND_FROM = 0.78f
+
+/** The height of the shadow of a focused item, in dp. */
+const val FOCUS_SHADOW_DP = 22
 
 /** Strength of the two coloured halos behind every page: a tint of the colour set, not a glow. */
 const val HALO_ALPHA = 0.20f
@@ -388,6 +428,8 @@ fun GlassButton(
         label = "glassButtonScale",
     )
     val shape = RoundedCornerShape(20.dp)
+    val lift by animateFloatAsState(if (focused) 1f else 0f, tween(200), label = "glassButtonLift")
+    val glow = tint ?: if (danger) PrismColors.Danger else PrismColors.Accent
     // Built once per state (not on every recomposition): long lists would otherwise rebuild hundreds of brushes.
     val fill = remember(tint, focused, danger, emphasized, PrismColors.Accent, PrismColors.AccentAlt) {
     when {
@@ -418,10 +460,16 @@ fun GlassButton(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                shadowElevation = lift * FOCUS_SHADOW_DP.dp.toPx()
+                this.shape = shape
+                clip = false
+                spotShadowColor = glow
+                ambientShadowColor = Color.Black
             }
             .clip(shape)
             .background(fill)
             .topSheen(20.dp)
+            .focusReflection { lift }
             .glassEdge(
                 focused = focused,
                 rest = tint?.copy(alpha = 0.70f) ?: Color.White.copy(alpha = 0.16f),
@@ -566,6 +614,7 @@ fun GlassSurface(
     contentPadding: androidx.compose.foundation.layout.PaddingValues =
         androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 10.dp),
     focusScale: Float = 1.03f,
+    glass: Boolean = true,
     content: @Composable BoxScope.() -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -582,8 +631,10 @@ fun GlassSurface(
     )
     val shape = RoundedCornerShape(cornerRadius)
     val base = tint ?: PrismColors.Accent
-    val fill = remember(base, focused, tint, selected, PrismColors.AccentAlt) {
+    val lift by animateFloatAsState(if (focused) 1f else 0f, tween(200), label = "glassSurfaceLift")
+    val fill = remember(base, focused, tint, selected, glass, PrismColors.AccentAlt) {
     when {
+        !glass && !focused && tint == null && !selected -> Brush.linearGradient(listOf(Color.Transparent, Color.Transparent))
         focused -> Brush.linearGradient(listOf(base.copy(alpha = 0.38f), PrismColors.AccentAlt.copy(alpha = 0.24f)))
         tint != null -> Brush.linearGradient(listOf(tint.copy(alpha = 0.20f), tint.copy(alpha = 0.08f)))
         selected -> Brush.linearGradient(listOf(base.copy(alpha = 0.22f), PrismColors.AccentAlt.copy(alpha = 0.12f)))
@@ -600,13 +651,19 @@ fun GlassSurface(
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                shadowElevation = lift * FOCUS_SHADOW_DP.dp.toPx()
+                this.shape = shape
+                clip = false
+                spotShadowColor = base
+                ambientShadowColor = Color.Black
             }
             .clip(shape)
             .background(fill)
-            .topSheen(cornerRadius)
+            .then(if (glass) Modifier.topSheen(cornerRadius) else Modifier)
+            .focusReflection { lift }
             .glassEdge(
                 focused = focused,
-                rest = tint?.copy(alpha = 0.70f) ?: Color.White.copy(alpha = 0.14f),
+                rest = tint?.copy(alpha = 0.70f) ?: if (glass) Color.White.copy(alpha = 0.14f) else Color.Transparent,
                 shape = shape,
             )
             .clickable(interactionSource = interaction, indication = null, onClick = onClick)

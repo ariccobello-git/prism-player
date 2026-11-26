@@ -1427,6 +1427,7 @@ private fun ItemGrid(
                     modifier = Modifier.returnItem(itemMemory, index),
                     tint = if (item.favorite) PrismColors.Favorite else null,
                     contentPadding = PaddingValues(6.dp),
+                    glass = false,
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box {
@@ -1460,7 +1461,7 @@ private fun MovieDetail(
     Box(Modifier.fillMaxSize()) {
     AmbientBackdrop(movie.logo)
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        Poster(movie.logo, Modifier.width(240.dp).aspectRatio(2f / 3f))
+        Poster(movie.logo, Modifier.width(240.dp).aspectRatio(2f / 3f).expandsIn())
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PrismText(text = tags.title, size = 40.sp, weight = FontWeight.Bold, maxLines = 3)
             info.second?.meta?.takeIf { it.isNotEmpty() }?.let {
@@ -1549,7 +1550,7 @@ private fun EpisodeDetail(
         value = true to ContentInfo.episodeInfo(episode.url, show.title)
     }
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        Poster(episode.logo ?: show.logo, Modifier.width(240.dp).aspectRatio(2f / 3f))
+        Poster(episode.logo ?: show.logo, Modifier.width(240.dp).aspectRatio(2f / 3f).expandsIn())
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PrismText(text = VariantTags.of(show.title).title, size = 32.sp, weight = FontWeight.Bold, maxLines = 2)
             val where = listOfNotNull(
@@ -1641,7 +1642,7 @@ private fun ShowDetail(
     AmbientBackdrop(show.logo)
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.width(240.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Poster(show.logo, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+            Poster(show.logo, Modifier.fillMaxWidth().aspectRatio(2f / 3f).expandsIn())
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val tags = remember(show.title) { VariantTags.of(show.title) }

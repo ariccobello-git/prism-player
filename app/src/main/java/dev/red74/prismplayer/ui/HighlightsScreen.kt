@@ -23,6 +23,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -614,6 +624,7 @@ private fun NewArrivals(
                                 modifier = Modifier.width(CardWidth).height(ResumeHeight),
                                 focusRequester = if (index == 0) rowFirst else null,
                                 focusScale = 1.04f,
+                                glass = false,
                             ) {
                                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Poster(r.arrival.logo, Modifier.width(48.dp).height(70.dp))
@@ -642,6 +653,7 @@ private fun NewArrivals(
                                 modifier = Modifier.height(CardHeight),
                                 focusRequester = if (index == 0) gridFirst else null,
                                 focusScale = 1.04f,
+                                glass = false,
                             ) {
                                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Poster(a.logo, Modifier.width(72.dp).height(104.dp))
@@ -946,9 +958,33 @@ private fun EventAction(event: HighlightEvent, reminder: Boolean?, size: android
 @Composable
 private fun TimeBadge(text: String, live: Boolean) {
     val color = if (live) PrismColors.Danger else PrismColors.Accent
-    Box(Modifier.background(color.copy(alpha = 0.45f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 4.dp)) {
+    Row(
+        Modifier.background(color.copy(alpha = 0.45f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (live) {
+            OnAirDot()
+            Spacer(Modifier.width(8.dp))
+        }
         PrismText(text = text, size = 17.sp, weight = FontWeight.Bold, maxLines = 1)
     }
+}
+
+/**
+ * A white dot that pulses slowly: "this is on right now". Only the alpha changes (graphics layer, no recomposition).
+ * Under the test runner it stays still, because an endless animation keeps a UI test from ever being idle.
+ */
+@Composable
+private fun OnAirDot() {
+    val still = android.os.Build.FINGERPRINT == "robolectric"
+    val pulse = if (still) 1f else {
+        val value by rememberInfiniteTransition(label = "onAir").animateFloat(
+            initialValue = 1f, targetValue = 0.3f,
+            animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "onAirDot",
+        )
+        value
+    }
+    Box(Modifier.size(9.dp).graphicsLayer { alpha = pulse }.background(Color.White, CircleShape).testTag("onAirDot"))
 }
 
 @Composable
