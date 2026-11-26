@@ -8,7 +8,8 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.performSemanticsAction
 import dev.red74.prismplayer.LibraryNav
 import dev.red74.prismplayer.LibraryState
 import dev.red74.prismplayer.LibraryTab
@@ -75,13 +76,13 @@ class FavoritesTeamsTest {
     @Test
     fun theEditorOpensSavesAndTheCursorComesBackToTheButton() {
         show(liveCatalog)
-        rule.onNodeWithText("Follow teams").performClick()
+        rule.onNodeWithText("Follow teams").performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         rule.onNodeWithText("Done").assertIsDisplayed()
-        rule.onNodeWithText("Juventus").performClick()
+        rule.onNodeWithText("Juventus").performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         assertTrue("juventus" in SportPrefsStore.current.keywords)
-        rule.onNodeWithText("Done").performClick()
+        rule.onNodeWithText("Done").performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         rule.onNodeWithText("Follow teams").assertIsDisplayed()
         rule.onNodeWithText("Follow teams").assertIsFocused()
