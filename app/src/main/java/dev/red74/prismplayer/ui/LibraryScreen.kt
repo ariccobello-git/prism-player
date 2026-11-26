@@ -1379,10 +1379,12 @@ private fun MovieDetail(
     val info by produceState<Pair<Boolean, dev.red74.prismplayer.data.FilmInfo?>>(false to null, movie.url) {
         value = true to ContentInfo.film(movie.url)
     }
+    Box(Modifier.fillMaxSize()) {
+    AmbientBackdrop(movie.logo)
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
         Poster(movie.logo, Modifier.width(240.dp).aspectRatio(2f / 3f))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            PrismText(text = tags.title, size = 32.sp, weight = FontWeight.Bold, maxLines = 3)
+            PrismText(text = tags.title, size = 40.sp, weight = FontWeight.Bold, maxLines = 3)
             Badges(VariantTags.withFacts(info.second?.badges.orEmpty(), tags.badges), max = 7)
             movie.group?.takeIf { it.isNotBlank() }?.let {
                 PrismText(text = it, size = 18.sp, color = PrismColors.Accent, maxLines = 1)
@@ -1417,6 +1419,7 @@ private fun MovieDetail(
             point?.let { ProgressLine(it.fraction, Modifier.width(320.dp)) }
             PlotText(info.first, info.second?.plot, maxLines = 10)
         }
+    }
     }
 }
 
@@ -1553,13 +1556,15 @@ private fun ShowDetail(
         runCatching { seasonFocus.requestFocus() }
     }
 
+    Box(Modifier.fillMaxSize()) {
+    AmbientBackdrop(show.logo)
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.width(240.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Poster(show.logo, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val tags = remember(show.title) { VariantTags.of(show.title) }
-            PrismText(text = tags.title, size = 30.sp, weight = FontWeight.Bold, maxLines = 2)
+            PrismText(text = tags.title, size = 38.sp, weight = FontWeight.Bold, maxLines = 2)
             Badges(tags.badges)
             Description(show, maxLines = 4) { ContentInfo.seriesPlot(show.episodes.firstOrNull()?.url, show.title) }
             LazyRow(
@@ -1623,6 +1628,7 @@ private fun ShowDetail(
                 }
             }
         }
+    }
     }
 }
 
