@@ -246,6 +246,32 @@ class HighlightsViewTest {
     }
 
     @Test
+    fun followedTeamsPageNeverFillsUpWithOtherContent() {
+        // a whole sport is followed too, and a film has the team's name in its title: neither belongs to the page
+        val interFilm = HighlightEvent(HighlightKind.FILM, "Inter Stellar", null, soon, soon + 7_000_000L, 40, listOf(cinema))
+        val football = HighlightEvent(HighlightKind.SPORT, "Napoli - Genoa", SportTopic.FOOTBALL, soon + 900_000L, soon + 8_000_000L, 40, listOf(sky))
+        SportPrefsStore.update { it.withKeyword("Inter").withTopic(SportTopic.FOOTBALL, true) }
+        nav = nav.copy(highlightKind = 2)
+        show(HighlightsData(mapOf(HighlightKind.SPORT to sport + football, HighlightKind.FILM to film + interFilm)))
+        rule.waitForIdle()
+        rule.onNodeWithText("Inter - Juventus").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithTextCount("Napoli - Genoa"))
+        assertEquals(0, rule.onAllNodesWithTextCount("Roma - Lazio"))
+        assertEquals(0, rule.onAllNodesWithTextCount("Inter Stellar"))
+        assertEquals(0, rule.onAllNodesWithTextCount("Heat"))
+    }
+
+    @Test
+    fun followingOnlyASportAndNoTeamAsksToChooseTeams() {
+        SportPrefsStore.update { it.withTopic(SportTopic.FOOTBALL, true) }
+        nav = nav.copy(highlightKind = 2)
+        show()
+        rule.waitForIdle()
+        assertEquals(1, rule.onAllNodesWithTextCount("Choose your teams on the Favourites page: their matches and programmes will appear here, on air now or later."))
+        assertEquals(0, rule.onAllNodesWithTextCount("Roma - Lazio"))
+    }
+
+    @Test
     fun followedTeamsPageWithNothingChosenAsksToChooseOnFavourites() {
         nav = nav.copy(highlightKind = 2)
         show()
@@ -273,10 +299,56 @@ class HighlightsViewTest {
         assertEquals(0, nav.highlightKind)
         rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
         // after the rest the film page comes by itself, and the cursor is still on the menu
-        rule.mainClock.advanceTimeBy(MENU_DWELL_MS + 500)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS)
         rule.waitForIdle()
         assertEquals(1, nav.highlightKind)
         rule.onNodeWithText("Heat").assertIsDisplayed()
+        rule.onNodeWithText("Films").assertIsFocused()
+    }
+
+    @Test
+    fun afterThePageFollowedTheCursorItGoesOnToTheLargeCard() {
+        show()
+        rule.waitForIdle()
+        rule.onNodeWithText("Films").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS / 2)
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS)
+        rule.waitForIdle()
+        assertEquals(1, nav.highlightKind)
+        rule.mainClock.advanceTimeBy(HERO_ENTER_MS + 500)
+        rule.waitForIdle()
+        rule.onNodeWithText("Heat").assertIsFocused()
+    }
+
+    @Test
+    fun keepingMovingAlongTheMenuNeverStealsTheCursor() {
+        show()
+        rule.waitForIdle()
+        rule.onNodeWithText("Films").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS / 2)
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS)
+        rule.waitForIdle()
+        assertEquals(1, nav.highlightKind)
+        // the viewer goes on to the next entry before the cursor would move to the large card
+        rule.mainClock.advanceTimeBy(HERO_ENTER_MS / 2)
+        rule.onNodeWithText("Sport").performSemanticsAction(SemanticsActions.RequestFocus)
+        // it rests on the new entry for less than the rest time: nothing moves, the cursor stays on the menu
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS / 2)
+        rule.waitForIdle()
+        assertEquals(1, nav.highlightKind)
+        rule.onNodeWithText("Sport").assertIsFocused()
+    }
+
+    @Test
+    fun comingBackToTheMenuOnTheCurrentPageDoesNotPushTheCursorAway() {
+        nav = nav.copy(highlightKind = 1)
+        show()
+        rule.waitForIdle()
+        rule.onNodeWithText("Films").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS + HERO_ENTER_MS * 3)
+        rule.waitForIdle()
         rule.onNodeWithText("Films").assertIsFocused()
     }
 

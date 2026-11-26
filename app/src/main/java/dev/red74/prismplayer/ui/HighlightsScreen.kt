@@ -160,10 +160,24 @@ fun HighlightsView(
     // The entry the cursor has rested on for a moment: the page on the right follows it by itself (OK is not needed),
     // as the large card follows a live card. A quick pass over the menu changes nothing.
     var menuFocus by remember { mutableIntStateOf(-1) }
+    var pendingEnter by remember { mutableIntStateOf(-1) }
+    var enterHero by remember { mutableIntStateOf(0) }
     LaunchedEffect(menuFocus, tabIndex) {
         if (menuFocus in tabs.indices && menuFocus != tabIndex) {
             delay(MENU_DWELL_MS)
             onNav { it.copy(highlightKind = menuFocus) }
+            pendingEnter = menuFocus
+        }
+    }
+    // After the page followed the cursor by itself and the cursor still rests on that entry, it goes on to the large
+    // card so its preview starts. Never when the viewer just came back to the menu or keeps moving along it.
+    LaunchedEffect(pendingEnter, menuFocus) {
+        if (pendingEnter >= 0 && menuFocus == pendingEnter && pendingEnter == tabIndex) {
+            delay(HERO_ENTER_MS)
+            enterHero++
+            pendingEnter = -1
+        } else if (menuFocus != pendingEnter) {
+            pendingEnter = -1
         }
     }
     // A side menu on the left (the kinds of page), the content on the right. Going back into the menu always lands on
@@ -189,8 +203,8 @@ fun HighlightsView(
         }
         Column(Modifier.weight(1f).fillMaxSize()) {
             when {
-                tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups)
-                tab == HighlightTab.Following -> FollowedRows(kinds.flatMap { data.events(it) }, prefs, nav, onNav, onPlay)
+                tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups, enterHero)
+                tab == HighlightTab.Following -> FollowedRows(kinds.flatMap { data.events(it) }, prefs, nav, onNav, onPlay, enterHero)
                 else -> NewArrivals(catalog, tab == HighlightTab.Movies, nav, onNav)
             }
         }
@@ -229,6 +243,9 @@ private sealed interface HighlightTab {
 /** Seconds the cursor rests on a menu entry before the page follows it. */
 internal const val MENU_DWELL_MS = 500L
 
+/** After the page changed, how long the cursor must still rest on the menu entry before it goes to the large card. */
+internal const val HERO_ENTER_MS = 600L
+
 /**
  * The events of the sports and teams the viewer follows, on air now or later, laid out like the Sport, Film and
  * Entertainment pages (same rows, same priority for DAZN and Sky). Nothing followed yet: a hint to the Favourites page.
@@ -240,11 +257,12 @@ private fun FollowedRows(
     nav: LibraryNav,
     onNav: ((LibraryNav) -> LibraryNav) -> Unit,
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
+    enter: Int,
 ) {
-    val followed = remember(all, prefs) { if (prefs.isEmpty) emptyList() else all.filter { prefs.matches(it) } }
+    val followed = remember(all, prefs) { all.filter { prefs.followsTeam(it) } }
     if (followed.isEmpty()) {
         PrismText(
-            text = stringResource(if (prefs.isEmpty) R.string.following_choose else R.string.following_none),
+            text = stringResource(if (prefs.keywords.isEmpty()) R.string.following_choose else R.string.following_none),
             size = 20.sp,
             color = PrismColors.TextSecondary,
             modifier = Modifier.widthIn(max = 640.dp),
@@ -252,7 +270,7 @@ private fun FollowedRows(
         return
     }
     // The followed events are the whole page, so no "For you" row is added on top of them.
-    EventRows(followed, nav, onNav, onPlay, SportPrefs(), emptySet())
+    EventRows(followed, nav, onNav, onPlay, SportPrefs(), emptySet(), enter)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -264,6 +282,7 @@ private fun EventRows(
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
     prefs: SportPrefs,
     likedGroups: Set<String>,
+    enter: Int = 0,
 ) {
     val nowMs = rememberMinuteNow()
     val minute = nowMs / 60_000L
@@ -346,6 +365,17 @@ private fun EventRows(
     // The cursor follows the promoted card. It runs in its own effect: the promotion changes `hero`, which restarts the
     // effect above, and a focus move made there was cancelled half way (the cursor ended on "Indietro").
     var heroHasFocus by remember { mutableStateOf(false) }
+    // The menu asks to move on to the large card (the page followed the cursor and the cursor rested there).
+    LaunchedEffect(enter) {
+        if (enter == 0 || hero == null) return@LaunchedEffect
+        listState.scrollToItem(0)
+        repeat(60) {
+            withFrameNanos { }
+            if (heroHasFocus) return@LaunchedEffect
+            runCatching { heroFocus.requestFocus() }
+        }
+    }
+
     LaunchedEffect(refocus) {
         if (refocus == 0) return@LaunchedEffect
         listState.scrollToItem(0)
@@ -552,6 +582,7 @@ private fun NewArrivals(
             Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 ArrivalHero(
                     arrival = list.first(),
+                    movies = movies,
                     focusRequester = focus,
                     // Down always lands on the FIRST card below, never on the nearest one.
                     onDown = {
@@ -593,7 +624,7 @@ private fun NewArrivals(
                     }
                 }
                 if (rest.isNotEmpty()) {
-                    PrismText(text = stringResource(R.string.new_title, list.size), size = 20.sp, weight = FontWeight.SemiBold)
+                    PrismText(text = stringResource(if (movies) R.string.new_title_movies else R.string.new_title_series, list.size), size = 22.sp, weight = FontWeight.Bold)
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(CardWidth),
                         modifier = Modifier.fillMaxWidth().weight(1f),
@@ -612,6 +643,7 @@ private fun NewArrivals(
                                     Poster(a.logo, Modifier.width(72.dp).height(104.dp))
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                         PrismText(text = a.title, size = 20.sp, weight = FontWeight.SemiBold, maxLines = 3)
+                                        KindPill(stringResource(if (movies) R.string.kind_film else R.string.kind_series))
                                         PrismText(text = a.group, size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
                                     }
                                 }
@@ -626,17 +658,33 @@ private fun NewArrivals(
 
 private val ResumeHeight = 96.dp
 
+/** A small label that says at a glance what a card is (film or series), filled for the large card. */
+@Composable
+private fun KindPill(text: String, strong: Boolean = false) {
+    Box(
+        Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (strong) PrismColors.Accent else PrismColors.Accent.copy(alpha = 0.22f))
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+    ) {
+        PrismText(text = text, size = if (strong) 14.sp else 12.sp, weight = FontWeight.Bold, color = if (strong) PrismColors.Bg0 else PrismColors.TextPrimary, maxLines = 1)
+    }
+}
+
 private class Resume(val arrival: Arrival, val fraction: Float)
 
 /** The large card at the top of the Films and Series pages: the first arrival, with its poster glowing behind it. */
 @Composable
-private fun ArrivalHero(arrival: Arrival, focusRequester: FocusRequester, onDown: () -> Boolean, onOpen: () -> Unit) {
+private fun ArrivalHero(arrival: Arrival, movies: Boolean, focusRequester: FocusRequester, onDown: () -> Boolean, onOpen: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(172.dp).clip(RoundedCornerShape(24.dp)).background(PrismColors.Bg1.copy(alpha = 0.6f))) {
         AmbientBackdrop(arrival.logo)
         Row(Modifier.fillMaxSize().padding(14.dp), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Poster(arrival.logo, Modifier.fillMaxHeight().aspectRatio(2f / 3f))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrismText(text = arrival.group, size = 16.sp, color = PrismColors.Accent, maxLines = 1)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    KindPill(stringResource(if (movies) R.string.new_badge_movie else R.string.new_badge_series), strong = true)
+                    PrismText(text = arrival.group, size = 16.sp, color = PrismColors.Accent, maxLines = 1)
+                }
                 PrismText(text = arrival.title, size = 32.sp, weight = FontWeight.Bold, maxLines = 2)
                 GlassButton(
                     text = stringResource(R.string.new_open),

@@ -68,6 +68,17 @@ class FilmsPageTest {
     }
 
     @Test
+    fun theFilmsPageSaysWhatItIsAtAGlance() {
+        show()
+        rule.waitForIdle()
+        rule.onNodeWithText("NEW FILM").assertIsDisplayed()
+        rule.onNodeWithText("New films · 8").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithTextCountSafe("New series · 8"))
+        // every card of the grid carries the FILM label
+        assertEquals(true, rule.onAllNodesWithTextCountSafe("FILM") >= 1)
+    }
+
+    @Test
     fun downFromTheLargeCardGoesToTheFirstCardOfTheRowBelow() {
         WatchProgress.init(ApplicationProvider.getApplicationContext())
         WatchProgress.save(films[5].url, 1_800_000L, 6_000_000L)
