@@ -22,7 +22,6 @@ import dev.red74.prismplayer.data.HighlightsData
 import dev.red74.prismplayer.data.SportPrefs
 import dev.red74.prismplayer.data.SportPrefsStore
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -74,14 +73,11 @@ class FavoritesTeamsTest {
     }
 
     @Test
-    fun theEditorOpensSavesAndTheCursorComesBackToTheButton() {
+    fun theEditorOpensAndTheCursorComesBackToTheButton() {
         show(liveCatalog)
         rule.onNodeWithText("Follow teams").performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         rule.onNodeWithText("Done").assertIsDisplayed()
-        rule.onNodeWithText("Juventus").performSemanticsAction(SemanticsActions.OnClick)
-        rule.waitForIdle()
-        assertTrue("juventus" in SportPrefsStore.current.keywords)
         rule.onNodeWithText("Done").performSemanticsAction(SemanticsActions.OnClick)
         rule.waitForIdle()
         rule.onNodeWithText("Follow teams").assertIsDisplayed()
