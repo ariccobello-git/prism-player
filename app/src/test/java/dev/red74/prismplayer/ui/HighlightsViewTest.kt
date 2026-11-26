@@ -365,11 +365,13 @@ class HighlightsViewTest {
 
     /** Two long rows of cards not yet started (no preview, no promotion): to check how the page moves under the cursor. */
     private fun manyEvents(): HighlightsData {
+        // Starting two minutes from now keeps the whole first group inside today (a few seconds apart) at any hour.
+        val soon0 = System.currentTimeMillis() + 120_000L
         val today = (0 until 12).map { n ->
-            HighlightEvent(HighlightKind.SPORT, "Oggi $n - Team $n", null, soon + n * 60_000L, soon + 7_200_000L + n * 60_000L, 60 - n, listOf(sky))
+            HighlightEvent(HighlightKind.SPORT, "Oggi $n - Team $n", null, soon0 + n * 1_000L, soon0 + 7_200_000L + n * 1_000L, 60 - n, listOf(sky))
         }
         val tomorrow = (0 until 12).map { n ->
-            HighlightEvent(HighlightKind.SPORT, "Domani $n - Club $n", null, soon + 86_400_000L + n * 60_000L, soon + 93_600_000L + n * 60_000L, 30 - n, listOf(dazn))
+            HighlightEvent(HighlightKind.SPORT, "Domani $n - Club $n", null, soon0 + 86_400_000L + n * 1_000L, soon0 + 93_600_000L + n * 1_000L, 30 - n, listOf(dazn))
         }
         return HighlightsData(mapOf(HighlightKind.SPORT to today + tomorrow))
     }
