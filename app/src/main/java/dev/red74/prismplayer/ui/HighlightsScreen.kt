@@ -269,7 +269,8 @@ private fun EventRows(
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = if (onHero) 0 else target.first + offset)
     val cardFocus = remember { FocusRequester() }
     // Moving along a row slides the row by exactly one card and keeps the cursor on the same spot (like the big apps do).
-    val anchoredRow = remember(LocalDensity.current) { AnchoredScroll(with(LocalDensity.current) { 4.dp.toPx() }) }
+    val density = LocalDensity.current
+    val anchoredRow = remember(density) { AnchoredScroll(with(density) { 4.dp.toPx() }) }
     val heroFocus = remember { FocusRequester() }
     // A programme that has not started: OK sets or removes a reminder (a notification a few minutes before it begins).
     val toggleReminder = rememberReminderToggle()
