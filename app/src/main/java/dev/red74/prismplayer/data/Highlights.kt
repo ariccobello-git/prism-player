@@ -75,11 +75,12 @@ object Highlights {
         val merged = HashMap<String, Candidate>()
         for ((list, owners) in groups) {
             val sportChannel = owners.any { isSportChannel(it) }
-            val filmChannel = !sportChannel && owners.any { isFilmChannel(it) }
+            val seriesChannel = !sportChannel && owners.any { isSeriesChannel(it) }
+            val filmChannel = !sportChannel && (seriesChannel || owners.any { isFilmChannel(it) })
             for (programme in list) {
                 if (programme.endMs <= nowMs || programme.startMs > nowMs + FUTURE_MS) continue
                 if (programme.endMs - programme.startMs < MIN_MS) continue
-                val found = classify(programme, sportChannel, filmChannel, zone) ?: continue
+                val found = classify(programme, sportChannel, filmChannel, zone, seriesChannel) ?: continue
                 val key = found.kind.name + "|" + (EpgData.normalize(programme.title) ?: continue) + "|" + programme.startMs / 300_000L
                 val existing = merged[key]
                 if (existing == null) {
@@ -151,10 +152,11 @@ object Highlights {
         fun toEvent(): HighlightEvent {
             val unique = channels.distinctBy { it.url }
             val best = unique.sortedWith(
-                compareBy<Channel> { !(found.kind == HighlightKind.SPORT && isPriorityChannel(it)) }.thenBy { if (isLowQuality(it.name)) 1 else 0 },
+                compareBy<Channel> { !isPriorityFor(found.kind, it) }.thenBy { if (isLowQuality(it.name)) 1 else 0 },
             ).take(HighlightEvent.MAX_CHANNELS)
             val extra = ((unique.size.coerceAtMost(4)) - 1) * 4
-            return HighlightEvent(found.kind, programme.title, found.topic, programme.startMs, programme.endMs, found.score + extra, best)
+            val platform = if (found.kind == HighlightKind.SPORT) 0 else if (unique.any { isPremiumScreenChannel(it) }) PREMIUM_BONUS else if (unique.any { isGoodScreenChannel(it) }) GOOD_BONUS else 0
+            return HighlightEvent(found.kind, programme.title, found.topic, programme.startMs, programme.endMs, found.score + extra + platform, best)
         }
     }
 
@@ -163,12 +165,21 @@ object Highlights {
         "dazn" in name || "sky sport" in name || "sky calcio" in name
     }
 
-    /** A sport event carried by one of the priority channels; it goes first among those on air. */
-    fun isPriority(event: HighlightEvent): Boolean = event.kind == HighlightKind.SPORT && event.channels.any { isPriorityChannel(it) }
+    /** Channels of the big film, series and show platforms (Sky Cinema, Sky Atlantic, Sky Serie, Sky Uno, HBO...). */
+    internal fun isPremiumScreenChannel(channel: Channel): Boolean = hasAny(" " + clean(channel.name) + " ", PREMIUM_SCREEN)
+
+    /** Well liked secondary channels for films and shows (Rai Movie, Iris, Cine34, Paramount, Warner, the generalist ones...). */
+    internal fun isGoodScreenChannel(channel: Channel): Boolean = hasAny(" " + clean(channel.name) + " ", GOOD_SCREEN)
+
+    private fun isPriorityFor(kind: HighlightKind, channel: Channel): Boolean =
+        if (kind == HighlightKind.SPORT) isPriorityChannel(channel) else isPremiumScreenChannel(channel)
+
+    /** An event carried by a priority channel (sport: DAZN/Sky Sport; films, series, shows: the premium platforms); it goes first among those on air. */
+    fun isPriority(event: HighlightEvent): Boolean = event.channels.any { isPriorityFor(event.kind, it) }
 
     private fun isLowQuality(name: String): Boolean = clean(name).let { it.endsWith(" sd") || " sd " in it }
 
-    internal fun classify(programme: Programme, sportChannel: Boolean, filmChannel: Boolean, zone: TimeZone): Found? {
+    internal fun classify(programme: Programme, sportChannel: Boolean, filmChannel: Boolean, zone: TimeZone, seriesChannel: Boolean = false): Found? {
         val title = clean(programme.title)
         val text = " " + title + " " + clean(programme.description.orEmpty().take(200)) + " "
         val padded = " $title "
@@ -196,7 +207,7 @@ object Highlights {
             }
             if (sportChannel) return null
         }
-        if (filmChannel && minutes in 70..240 && !hasAny(padded, EXCLUDE_FILM)) {
+        if (filmChannel && (minutes in 70..240 || seriesChannel && minutes in 40..90) && !hasAny(padded, EXCLUDE_FILM)) {
             var score = 10
             if (primeTime) score += 25
             if (hasAny(text, PREMIERE)) score += 15
@@ -213,6 +224,8 @@ object Highlights {
     }
 
     fun isSportChannel(channel: Channel): Boolean = hasAny(" " + clean(channel.name) + " " + clean(channel.group.orEmpty()) + " ", SPORT_CHANNEL)
+
+    fun isSeriesChannel(channel: Channel): Boolean = hasAny(" " + clean(channel.name) + " ", SERIES_CHANNEL)
 
     fun isFilmChannel(channel: Channel): Boolean = hasAny(" " + clean(channel.name) + " " + clean(channel.group.orEmpty()) + " ", FILM_CHANNEL)
 
@@ -237,6 +250,14 @@ object Highlights {
 
     private val SPORT_CHANNEL = listOf("sport", "sports", "dazn", "eurosport", "tennis", "f1", "motogp", "calcio", "nba", "golf", "supertennis", "bein", "bein sports")
     private val FILM_CHANNEL = listOf("cinema", "film", "films", "movie", "movies", "cine", "hollywood")
+    private const val PREMIUM_BONUS = 25
+    private const val GOOD_BONUS = 8
+    private val SERIES_CHANNEL = listOf("sky atlantic", "sky serie", "sky collection", "sky investigation", "hbo")
+    private val PREMIUM_SCREEN = listOf("sky cinema", "sky atlantic", "sky serie", "sky uno", "sky collection", "premium cinema", "premium crime", "hbo", "mediaset infinity")
+    private val GOOD_SCREEN = listOf(
+        "rai movie", "iris", "cine34", "la7 cinema", "paramount network", "warner tv", "top crime", "topcrime", "giallo",
+        "tv8", "nove", "27 twentyseven", "rai 1", "canale 5", "italia 1", "rai 2", "rai 3", "la7",
+    )
     private val VERSUS = listOf("vs", "v", "contro")
     private val LIVE_WORDS = listOf("diretta", "live", "in diretta")
     private val EXCLUDE_SPORT = listOf(

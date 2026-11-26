@@ -246,4 +246,44 @@ class HighlightsTest {
         val data = build(mapOf("e1" to listOf(programme("Inter - Milan", -0.5, 120)), "d1" to listOf(programme("Inter - Milan", -0.5, 120))), euro, dazn)
         assertEquals("DAZN 1", data.events(HighlightKind.SPORT).single().channels.first().name)
     }
+
+    private val atlantic = Channel("Sky Atlantic HD", "http://x/20", "Serie TV", tvgId = "a1")
+    private val skyUno = Channel("Sky Uno", "http://x/21", "Intrattenimento", tvgId = "u1")
+    private val irisCh = Channel("Iris", "http://x/22", "Generali", tvgId = "i1")
+
+    @Test
+    fun premiumScreenChannelsAreFoundByNameAndOthersAreNot() {
+        assertTrue(Highlights.isPremiumScreenChannel(cinema))
+        assertTrue(Highlights.isPremiumScreenChannel(atlantic))
+        assertTrue(Highlights.isPremiumScreenChannel(skyUno))
+        assertTrue(!Highlights.isPremiumScreenChannel(Channel("Sky Sport Uno", "http://x/23", "Sport")))
+        assertTrue(!Highlights.isPremiumScreenChannel(irisCh))
+        assertTrue(Highlights.isGoodScreenChannel(irisCh))
+        assertTrue(Highlights.isGoodScreenChannel(rai))
+    }
+
+    @Test
+    fun aSeriesEpisodeOnSkyAtlanticCountsButNotOnAnOrdinaryChannel() {
+        val data = build(mapOf("a1" to listOf(programme("The Last of Us", -0.5, 55)), "r1" to listOf(programme("Un episodio", -0.5, 55))), atlantic, rai)
+        assertEquals(listOf("The Last of Us"), data.events(HighlightKind.FILM).map { it.title })
+    }
+
+    @Test
+    fun liveFilmOnSkyCinemaGoesBeforeAnotherLiveFilmEvenWithLowerScore() {
+        val other = HighlightEvent(HighlightKind.FILM, "Heat", null, at(-1.0), at(1.0), 90, listOf(irisCh))
+        val onSky = HighlightEvent(HighlightKind.FILM, "Dune", null, at(-1.0), at(1.0), 10, listOf(cinema))
+        assertTrue(Highlights.isPriority(onSky))
+        assertTrue(!Highlights.isPriority(other))
+        val rows = Highlights.rows(listOf(other, onSky), now, utc)
+        assertEquals(listOf("Dune", "Heat"), rows.first().events.map { it.title })
+    }
+
+    @Test
+    fun premiumPlatformAddsToTheScoreAndASkyUnoShowIsPriority() {
+        val onSky = build(mapOf("f1" to listOf(programme("Dune", 1.0, 120))), cinema)
+        val onIris = build(mapOf("i1" to listOf(programme("Dune", 1.0, 120))), Channel("Cine34", "http://x/24", "Cinema", tvgId = "i1"))
+        assertTrue(onSky.events(HighlightKind.FILM).single().score > onIris.events(HighlightKind.FILM).single().score)
+        val show = build(mapOf("u1" to listOf(programme("X Factor", -0.5, 120))), skyUno)
+        assertTrue(Highlights.isPriority(show.events(HighlightKind.ENTERTAINMENT).single()))
+    }
 }
