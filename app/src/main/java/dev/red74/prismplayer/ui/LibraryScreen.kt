@@ -253,8 +253,7 @@ private fun LibraryContent(
             else -> emptyList()
         }
     }
-    val onDemandTab = nav.tab == LibraryTab.MOVIES || nav.tab == LibraryTab.SERIES
-    val groupTree = remember(groupNames, groupCounts, onDemandTab) { GroupTree.build(groupNames, groupCounts, onDemand = onDemandTab) }
+    val groupTree = remember(groupNames, groupCounts) { GroupTree.build(groupNames, groupCounts) }
     val currentMain = groupTree.getOrNull(nav.category)
     val levelUp = GroupTree.levelUp(nav.level, currentMain?.hasSubLevel == true)
     BackHandler(enabled = contentFocused && levelUp >= 0 && nav.query.isEmpty() && nav.tab != LibraryTab.FAVORITES &&
@@ -488,14 +487,14 @@ private fun LibraryBody(
             }
             val results by produceState(emptyList<Channel>(), catalog, query) {
                 value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.IO) {
-                    catalog.search(ContentType.MOVIE, query, SEARCH_LIMIT).filterNot { GroupTree.isLiveGroup(it.group) }
+                    catalog.search(ContentType.MOVIE, query, SEARCH_LIMIT)
                 }
             }
             when {
                 movie != null -> MovieDetail(movie, favorites, onNav, onPlay, onToggleFavorite)
                 catalog.movies.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
-                query.isEmpty() -> GroupBrowser(names, counts, nav, onNav, onDemand = true) { cats ->
+                query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
                     val all = remember(cats, catalog) { catalog.channels(ContentType.MOVIE, cats) }
                     val items = sortedAsync(all, nav.sort, catalog::sorted)
                     val groups = remember(cats, names) { VariantTags.distinctGroupBadges(cats.map { names[it] }) }
@@ -522,7 +521,7 @@ private fun LibraryBody(
             }
             val results by produceState(emptyList<Show>(), catalog, query) {
                 value = if (query.isEmpty()) emptyList() else withContext(Dispatchers.IO) {
-                    catalog.searchShows(query, SEARCH_LIMIT).filterNot { GroupTree.isLiveGroup(it.group) }
+                    catalog.searchShows(query, SEARCH_LIMIT)
                 }
             }
             when {
@@ -530,7 +529,7 @@ private fun LibraryBody(
                 show != null -> ShowDetail(show, nav, favorites, onNav, onPlay, onToggleFavorite)
                 catalog.series.isEmpty() -> EmptyNote(R.string.library_empty)
                 query.isNotEmpty() && results.isEmpty() -> EmptyNote(R.string.search_none)
-                query.isEmpty() -> GroupBrowser(names, counts, nav, onNav, onDemand = true) { cats ->
+                query.isEmpty() -> GroupBrowser(names, counts, nav, onNav) { cats ->
                     val all = remember(cats, catalog) { catalog.shows(cats) }
                     val items = sortedAsync(all, nav.sort, catalog::sortedShows)
                     val groups = remember(cats, names) { VariantTags.distinctGroupBadges(cats.map { names[it] }) }
@@ -713,10 +712,9 @@ private fun GroupBrowser(
     counts: List<Int>,
     nav: LibraryNav,
     onNav: NavChange,
-    onDemand: Boolean = false,
     content: @Composable (cats: List<Int>) -> Unit,
 ) {
-    val tree = remember(names, counts, onDemand) { GroupTree.build(names, counts, onDemand) }
+    val tree = remember(names, counts) { GroupTree.build(names, counts) }
     if (tree.isEmpty()) return
     val other = stringResource(R.string.category_other)
     val all = stringResource(R.string.group_all)

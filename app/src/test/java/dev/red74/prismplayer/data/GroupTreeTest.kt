@@ -77,15 +77,4 @@ class GroupTreeTest {
     fun withoutCountsNothingIsHidden() {
         assertEquals(3, GroupTree.build(names).first().subs.size)
     }
-
-    @Test
-    fun onDemandListsNeverShowLiveGroups() {
-        val groups = listOf("FILM | AZIONE", "LIVE | Primafila", "Live", "PRIMAFILA", "Live Action", "NETFLIX")
-        assertEquals(listOf("FILM", "Live Action", "NETFLIX"), GroupTree.build(groups, onDemand = true).map { it.name })
-        // the Live list keeps all of its groups
-        assertEquals(6, GroupTree.build(groups).size)
-        assertTrue(GroupTree.isLiveGroup("LIVE | Primafila"))
-        assertFalse(GroupTree.isLiveGroup("Live Action"))
-        assertFalse(GroupTree.isLiveGroup(null))
-    }
 }

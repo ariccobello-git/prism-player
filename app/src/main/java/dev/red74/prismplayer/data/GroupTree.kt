@@ -66,11 +66,9 @@ object GroupTree {
      * [counts] (items per category, same order as [names]) hides the sub-groups with nothing in them; a group whose
      * sub-groups are all empty keeps them, so it never disappears or breaks.
      */
-    fun build(names: List<String>, counts: List<Int>? = null, onDemand: Boolean = false): List<Main> {
+    fun build(names: List<String>, counts: List<Int>? = null): List<Main> {
         val order = LinkedHashMap<String, MutableList<Sub>>()
         names.forEachIndexed { index, name ->
-            // The on-demand lists never show the "Live" groups (Primafila and the like): those are in the Live list already.
-            if (onDemand && isLiveGroup(name)) return@forEachIndexed
             val (main, sub) = split(name)
             order.getOrPut(main) { ArrayList() } += Sub(sub ?: name.trim().ifEmpty { main }, index)
         }
@@ -78,15 +76,5 @@ object GroupTree {
             val filled = if (counts == null) subs else subs.filter { (counts.getOrNull(it.category) ?: 0) > 0 }
             Main(main, if (filled.isEmpty()) subs else filled)
         }
-    }
-
-    private val liveMains = setOf("live", "live tv", "live event", "live events", "eventi live", "diretta", "dirette")
-
-    /** True for a group of live events inside an on-demand list: "LIVE", "LIVE | Primafila", anything called Primafila. */
-    fun isLiveGroup(name: String?): Boolean {
-        if (name.isNullOrBlank()) return false
-        val text = name.lowercase()
-        if ("primafila" in text || "prima fila" in text) return true
-        return split(name).first.lowercase().trim() in liveMains
     }
 }

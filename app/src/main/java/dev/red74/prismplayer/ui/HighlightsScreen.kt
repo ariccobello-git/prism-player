@@ -66,7 +66,6 @@ import dev.red74.prismplayer.data.Catalog
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.FavoriteKey
-import dev.red74.prismplayer.data.GroupTree
 import dev.red74.prismplayer.data.HighlightEvent
 import dev.red74.prismplayer.data.HighlightKind
 import dev.red74.prismplayer.data.HighlightRow
@@ -720,9 +719,9 @@ private const val RESUME_LIMIT = 12
 private fun arrivalsFor(catalog: Catalog, movies: Boolean): List<Arrival> {
     val since = System.currentTimeMillis() - Novelty.WINDOW_MS
     return if (movies) {
-        catalog.recentMovies(since, ARRIVALS_LIMIT).filter { it.url.isNotEmpty() && !GroupTree.isLiveGroup(it.group) }.distinctBy { it.url }.sortedBy { VodPlatforms.rank(it.group) }.map(::filmArrival)
+        catalog.recentMovies(since, ARRIVALS_LIMIT).filter { it.url.isNotEmpty() }.distinctBy { it.url }.sortedBy { VodPlatforms.rank(it.group) }.map(::filmArrival)
     } else {
-        catalog.recentShows(since, ARRIVALS_LIMIT).filterNot { GroupTree.isLiveGroup(it.group) }.distinctBy { FavoriteKey.ofShow(it) }.sortedBy { VodPlatforms.rank(it.group) }.map { show ->
+        catalog.recentShows(since, ARRIVALS_LIMIT).distinctBy { FavoriteKey.ofShow(it) }.sortedBy { VodPlatforms.rank(it.group) }.map { show ->
             Arrival(VariantTags.of(show.title).title, show.group, show.logo, FavoriteKey.ofShow(show)) { nav ->
                 nav.copy(tab = LibraryTab.SERIES, showTitle = show.title, showGroup = show.group, season = -1, query = "", origin = nav.copy(resume = true, origin = null))
             }
