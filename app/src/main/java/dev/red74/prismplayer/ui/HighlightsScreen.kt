@@ -160,10 +160,24 @@ fun HighlightsView(
     // The entry the cursor has rested on for a moment: the page on the right follows it by itself (OK is not needed),
     // as the large card follows a live card. A quick pass over the menu changes nothing.
     var menuFocus by remember { mutableIntStateOf(-1) }
+    var pendingEnter by remember { mutableIntStateOf(-1) }
+    var enterHero by remember { mutableIntStateOf(0) }
     LaunchedEffect(menuFocus, tabIndex) {
         if (menuFocus in tabs.indices && menuFocus != tabIndex) {
             delay(MENU_DWELL_MS)
             onNav { it.copy(highlightKind = menuFocus) }
+            pendingEnter = menuFocus
+        }
+    }
+    // After the page followed the cursor by itself and the cursor still rests on that entry, it goes on to the large
+    // card so its preview starts. Never when the viewer just came back to the menu or keeps moving along it.
+    LaunchedEffect(pendingEnter, menuFocus) {
+        if (pendingEnter >= 0 && menuFocus == pendingEnter && pendingEnter == tabIndex) {
+            delay(HERO_ENTER_MS)
+            enterHero++
+            pendingEnter = -1
+        } else if (menuFocus != pendingEnter) {
+            pendingEnter = -1
         }
     }
     // A side menu on the left (the kinds of page), the content on the right. Going back into the menu always lands on
@@ -189,8 +203,8 @@ fun HighlightsView(
         }
         Column(Modifier.weight(1f).fillMaxSize()) {
             when {
-                tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups)
-                tab == HighlightTab.Following -> FollowedRows(kinds.flatMap { data.events(it) }, prefs, nav, onNav, onPlay)
+                tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups, enterHero)
+                tab == HighlightTab.Following -> FollowedRows(kinds.flatMap { data.events(it) }, prefs, nav, onNav, onPlay, enterHero)
                 else -> NewArrivals(catalog, tab == HighlightTab.Movies, nav, onNav)
             }
         }
@@ -229,6 +243,9 @@ private sealed interface HighlightTab {
 /** Seconds the cursor rests on a menu entry before the page follows it. */
 internal const val MENU_DWELL_MS = 500L
 
+/** After the page changed, how long the cursor must still rest on the menu entry before it goes to the large card. */
+internal const val HERO_ENTER_MS = 600L
+
 /**
  * The events of the sports and teams the viewer follows, on air now or later, laid out like the Sport, Film and
  * Entertainment pages (same rows, same priority for DAZN and Sky). Nothing followed yet: a hint to the Favourites page.
@@ -240,6 +257,7 @@ private fun FollowedRows(
     nav: LibraryNav,
     onNav: ((LibraryNav) -> LibraryNav) -> Unit,
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
+    enter: Int,
 ) {
     val followed = remember(all, prefs) { if (prefs.isEmpty) emptyList() else all.filter { prefs.matches(it) } }
     if (followed.isEmpty()) {
@@ -252,7 +270,7 @@ private fun FollowedRows(
         return
     }
     // The followed events are the whole page, so no "For you" row is added on top of them.
-    EventRows(followed, nav, onNav, onPlay, SportPrefs(), emptySet())
+    EventRows(followed, nav, onNav, onPlay, SportPrefs(), emptySet(), enter)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -264,6 +282,7 @@ private fun EventRows(
     onPlay: (List<Channel>, Int, Boolean) -> Unit,
     prefs: SportPrefs,
     likedGroups: Set<String>,
+    enter: Int = 0,
 ) {
     val nowMs = rememberMinuteNow()
     val minute = nowMs / 60_000L
@@ -346,6 +365,17 @@ private fun EventRows(
     // The cursor follows the promoted card. It runs in its own effect: the promotion changes `hero`, which restarts the
     // effect above, and a focus move made there was cancelled half way (the cursor ended on "Indietro").
     var heroHasFocus by remember { mutableStateOf(false) }
+    // The menu asks to move on to the large card (the page followed the cursor and the cursor rested there).
+    LaunchedEffect(enter) {
+        if (enter == 0 || hero == null) return@LaunchedEffect
+        listState.scrollToItem(0)
+        repeat(60) {
+            withFrameNanos { }
+            if (heroHasFocus) return@LaunchedEffect
+            runCatching { heroFocus.requestFocus() }
+        }
+    }
+
     LaunchedEffect(refocus) {
         if (refocus == 0) return@LaunchedEffect
         listState.scrollToItem(0)

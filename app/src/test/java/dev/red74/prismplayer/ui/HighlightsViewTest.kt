@@ -273,10 +273,50 @@ class HighlightsViewTest {
         assertEquals(0, nav.highlightKind)
         rule.onNodeWithText("Roma - Lazio").assertIsDisplayed()
         // after the rest the film page comes by itself, and the cursor is still on the menu
-        rule.mainClock.advanceTimeBy(MENU_DWELL_MS + 500)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS)
         rule.waitForIdle()
         assertEquals(1, nav.highlightKind)
         rule.onNodeWithText("Heat").assertIsDisplayed()
+        rule.onNodeWithText("Films").assertIsFocused()
+    }
+
+    @Test
+    fun afterThePageFollowedTheCursorItGoesOnToTheLargeCard() {
+        show()
+        rule.waitForIdle()
+        rule.onNodeWithText("Films").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS + 100)
+        rule.waitForIdle()
+        assertEquals(1, nav.highlightKind)
+        rule.mainClock.advanceTimeBy(HERO_ENTER_MS + 500)
+        rule.waitForIdle()
+        rule.onNodeWithText("Heat").assertIsFocused()
+    }
+
+    @Test
+    fun keepingMovingAlongTheMenuNeverStealsTheCursor() {
+        show()
+        rule.waitForIdle()
+        rule.onNodeWithText("Films").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS + 100)
+        rule.waitForIdle()
+        assertEquals(1, nav.highlightKind)
+        // the viewer goes on to the next entry before the cursor would move to the large card
+        rule.mainClock.advanceTimeBy(HERO_ENTER_MS / 2)
+        rule.onNodeWithText("Sport").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(HERO_ENTER_MS * 3)
+        rule.waitForIdle()
+        rule.onNodeWithText("Sport").assertIsFocused()
+    }
+
+    @Test
+    fun comingBackToTheMenuOnTheCurrentPageDoesNotPushTheCursorAway() {
+        nav = nav.copy(highlightKind = 1)
+        show()
+        rule.waitForIdle()
+        rule.onNodeWithText("Films").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.mainClock.advanceTimeBy(MENU_DWELL_MS + HERO_ENTER_MS * 3)
+        rule.waitForIdle()
         rule.onNodeWithText("Films").assertIsFocused()
     }
 
