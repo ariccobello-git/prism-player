@@ -71,6 +71,7 @@ import dev.red74.prismplayer.LibraryNav
 import dev.red74.prismplayer.LibraryState
 import dev.red74.prismplayer.LibraryTab
 import dev.red74.prismplayer.R
+import dev.red74.prismplayer.data.ParentalPin
 import dev.red74.prismplayer.data.Catalog
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentInfo
@@ -763,6 +764,10 @@ private fun GroupBrowser(
             (widest.toDp() + 28.dp).coerceAtMost(220.dp)
         }
     }
+    // An adult group asks for the PIN first (when one is set); the pick waits here until it is right.
+    var waiting by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun guarded(locked: Boolean, open: () -> Unit) { if (locked) waiting = open else open() }
+    waiting?.let { open -> PinUnlockDialog(onOpen = { waiting = null; open() }, onDismiss = { waiting = null }) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val subFit = (subNeed / (maxWidth - 28.dp).coerceAtLeast(1.dp)).coerceIn(0.05f, 0.3f)
     val subWeight by animateFloatAsState(
@@ -782,8 +787,10 @@ private fun GroupBrowser(
             onLeft = null,
             onPick = { position ->
                 val i = mainOrder[position]
-                onNav {
-                    it.copy(category = i, sub = 0, itemIndex = 0, level = if (tree[i].hasSubLevel) 1 else 2, resume = true)
+                guarded(ParentalPin.locks(tree[i].name)) {
+                    onNav {
+                        it.copy(category = i, sub = 0, itemIndex = 0, level = if (tree[i].hasSubLevel) 1 else 2, resume = true)
+                    }
                 }
             },
         )
@@ -799,7 +806,12 @@ private fun GroupBrowser(
                 modifier = Modifier.weight(subWeight).fillMaxHeight(),
                 compact = level >= 2,
                 onLeft = { onNav { it.copy(level = 0, resume = true) } },
-                onPick = { position -> onNav { it.copy(sub = subOrder[position], itemIndex = 0, level = 2, resume = true) } },
+                onPick = { position ->
+                    val sub = subOrder[position]
+                    // "All" also shows the adult sub-groups, so it asks for the PIN as well.
+                    val adult = if (sub == 0) main.subs.any { ParentalPin.locks(it.name) } else ParentalPin.locks(main.subs[sub - 1].name)
+                    guarded(adult) { onNav { it.copy(sub = sub, itemIndex = 0, level = 2, resume = true) } }
+                },
             )
         }
         if (level >= 2) {

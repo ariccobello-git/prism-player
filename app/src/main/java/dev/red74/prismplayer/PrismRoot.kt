@@ -55,6 +55,7 @@ private sealed interface Screen {
     data object AppUpdate : Screen
     data object Shortcuts : Screen
     data object Removed : Screen
+    data object Pin : Screen
     data object VerifyLists : Screen
     data object Appearance : Screen
     data object SearchAll : Screen
@@ -242,6 +243,7 @@ private fun PrismNavigation(
                 },
                 onShortcuts = { push(Screen.Shortcuts) },
                 onRemoved = { push(Screen.Removed) },
+                onPin = { push(Screen.Pin) },
                 onAppearance = { push(Screen.Appearance) },
                 onNoticeShown = viewModel::clearNotice,
             )
@@ -285,6 +287,7 @@ private fun PrismNavigation(
                 onBack = ::pop,
             )
             Screen.Removed -> dev.red74.prismplayer.ui.RemovedScreen(load = viewModel::removedContents, onBack = ::pop)
+            Screen.Pin -> dev.red74.prismplayer.ui.PinSettingsScreen(onBack = ::pop)
 
             Screen.Pair -> {
                 val pairState by pairViewModel.state.collectAsStateWithLifecycle()
@@ -411,6 +414,7 @@ private fun screenKey(screen: Screen): String = when (screen) {
     Screen.AppUpdate -> "app_update"
     Screen.Shortcuts -> "shortcuts"
     Screen.Removed -> "removed"
+    Screen.Pin -> "pin"
     Screen.VerifyLists -> "verify_lists"
     Screen.Appearance -> "appearance"
     Screen.SearchAll -> "search_all"

@@ -335,4 +335,18 @@
     <string name="sleep_button">Minuterie</string>
     <string name="sleep_off">Désactivée</string>
     <string name="sleep_in">Arrêt dans %1$d min</string>
+    <string name="action_pin">Code parental</string>
+    <string name="pin_on">Activé</string>
+    <string name="pin_off">Désactivé</string>
+    <string name="pin_title">Code parental</string>
+    <string name="pin_hint">Un code à quatre chiffres garde fermés les groupes pour adultes. Après le bon code, ils restent ouverts 15 minutes.</string>
+    <string name="pin_set">Définir un code</string>
+    <string name="pin_change">Changer le code</string>
+    <string name="pin_remove">Supprimer le code</string>
+    <string name="pin_enter">Saisissez le code</string>
+    <string name="pin_enter_current">Saisissez le code actuel</string>
+    <string name="pin_enter_new">Choisissez un nouveau code</string>
+    <string name="pin_confirm_new">Saisissez-le à nouveau</string>
+    <string name="pin_wrong">Code erroné</string>
+    <string name="pin_mismatch">Les deux codes diffèrent, réessayez</string>
 </resources>

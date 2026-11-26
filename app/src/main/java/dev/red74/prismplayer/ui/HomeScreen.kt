@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.red74.prismplayer.Notice
 import dev.red74.prismplayer.R
+import dev.red74.prismplayer.data.ParentalPin
 import dev.red74.prismplayer.data.PlaylistStatus
 import dev.red74.prismplayer.data.SavedPlaylist
 import kotlinx.coroutines.delay
@@ -70,6 +71,7 @@ fun HomeScreen(
     onCheckUpdates: () -> Unit,
     onShortcuts: () -> Unit,
     onRemoved: () -> Unit,
+    onPin: () -> Unit,
     onAppearance: () -> Unit,
     onNoticeShown: () -> Unit,
 ) {
@@ -223,13 +225,19 @@ fun HomeScreen(
                         modifier = Modifier.fillMaxWidth().focusMemory("shortcuts").returnItem(menuMemory, 9),
                     )
                     GlassButton(
+                        text = stringResource(R.string.action_pin),
+                        subtitle = stringResource(if (ParentalPin.isSet) R.string.pin_on else R.string.pin_off),
+                        onClick = onPin,
+                        modifier = Modifier.fillMaxWidth().focusMemory("pin").returnItem(menuMemory, 10),
+                    )
+                    GlassButton(
                         text = stringResource(if (muted) R.string.sound_off else R.string.sound_on),
                         onClick = {
                             muted = !muted
                             UiSounds.setMuted(muted)
                             if (!muted) UiSounds.play(UiSounds.Kind.SELECT)
                         },
-                        modifier = Modifier.fillMaxWidth().focusMemory("sound").returnItem(menuMemory, 10),
+                        modifier = Modifier.fillMaxWidth().focusMemory("sound").returnItem(menuMemory, 11),
                     )
                 }
             }

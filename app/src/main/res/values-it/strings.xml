@@ -335,4 +335,18 @@
     <string name="sleep_button">Timer di spegnimento</string>
     <string name="sleep_off">Spento</string>
     <string name="sleep_in">Si ferma tra %1$d min</string>
+    <string name="action_pin">PIN genitori</string>
+    <string name="pin_on">Attivo</string>
+    <string name="pin_off">Non attivo</string>
+    <string name="pin_title">PIN genitori</string>
+    <string name="pin_hint">Un PIN di quattro cifre tiene chiusi i gruppi per adulti. Dopo il PIN giusto restano aperti 15 minuti.</string>
+    <string name="pin_set">Imposta un PIN</string>
+    <string name="pin_change">Cambia PIN</string>
+    <string name="pin_remove">Rimuovi PIN</string>
+    <string name="pin_enter">Inserisci il PIN</string>
+    <string name="pin_enter_current">Inserisci il PIN attuale</string>
+    <string name="pin_enter_new">Scegli un nuovo PIN</string>
+    <string name="pin_confirm_new">Inseriscilo di nuovo</string>
+    <string name="pin_wrong">PIN errato</string>
+    <string name="pin_mismatch">I due PIN sono diversi, riprova</string>
 </resources>
