@@ -27,6 +27,7 @@ import dev.red74.prismplayer.BuildConfig
 import dev.red74.prismplayer.R
 import dev.red74.prismplayer.data.UpdateCheck
 import dev.red74.prismplayer.device.CodecScan
+import dev.red74.prismplayer.player.BufferPref
 import dev.red74.prismplayer.player.FrameRatePref
 
 /**
@@ -134,6 +135,16 @@ fun UpdatesScreen(onBack: () -> Unit) {
                             body = stringResource(if (on) R.string.frame_rate_on else R.string.frame_rate_off),
                             highlight = on,
                             onClick = { FrameRatePref.set(!on) },
+                        )
+                    }
+                    item {
+                        val steady = BufferPref.steady
+                        InfoRow(
+                            modifier = Modifier.returnItem(rows, 4 + codecs.size),
+                            title = stringResource(R.string.buffer_title),
+                            body = stringResource(if (steady) R.string.buffer_on else R.string.buffer_off),
+                            highlight = steady,
+                            onClick = { BufferPref.set(!steady) },
                         )
                     }
                     item {

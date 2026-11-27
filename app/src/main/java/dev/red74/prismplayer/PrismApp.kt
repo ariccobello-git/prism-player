@@ -19,6 +19,7 @@ import dev.red74.prismplayer.data.TextCleaner
 import dev.red74.prismplayer.data.SportPrefsStore
 import dev.red74.prismplayer.data.Taste
 import dev.red74.prismplayer.data.WatchProgress
+import dev.red74.prismplayer.player.BufferPref
 import dev.red74.prismplayer.player.FrameRatePref
 import dev.red74.prismplayer.reminders.ReminderStore
 import dev.red74.prismplayer.pairing.PairingManager
@@ -47,6 +48,7 @@ class PrismApp : Application(), ImageLoaderFactory {
         dev.red74.prismplayer.data.ParentalPin.init(this)
         Taste.init(this)
         FrameRatePref.init(this)
+        BufferPref.init(this)
         ContentInfo.init(this)
         CatchUpMarks.init(this)
         ReminderStore.init(this)

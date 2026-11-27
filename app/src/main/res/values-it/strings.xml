@@ -353,4 +353,8 @@
     <string name="player_hint_seek_hold">Tieni premuto ◀ ▶ per scorrere più veloce · ◀◀ ▶▶ 2× → 48× (pulsanti)</string>
     <string name="player_hint_zap">▲ ▼ cambia canale</string>
     <string name="player_hint_base">OK comandi · Indietro chiude</string>
+    <string name="np_channels">Canali</string>
+    <string name="buffer_title">Riproduzione più stabile</string>
+    <string name="buffer_on">Attivo: il lettore aspetta più a lungo prima di partire e dopo un arresto, così l\'immagine si ferma meno. Premi OK per disattivare.</string>
+    <string name="buffer_off">Disattivo (automatico: aspetta di più solo dopo vari arresti). Premi OK per aspettare sempre di più: meno interruzioni con una linea debole.</string>
 </resources>

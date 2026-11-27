@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -118,7 +119,7 @@ private fun planFor(channel: Channel, catchUp: CatchUpRun?): List<StreamAttempt>
     val other = StreamIdentity.CANDIDATES.firstOrNull { it != agent }
     return catchUp.addresses.mapIndexed { i, url -> StreamAttempt(agent, url, i + 1) } + StreamAttempt(other, catchUp.addresses.first(), 1)
 }
-private enum class Panel { None, Tracks, Episodes, Info }
+private enum class Panel { None, Tracks, Episodes, Channels, Info }
 
 private const val SKIP_MS = 10_000L
 
@@ -1055,7 +1056,7 @@ fun PlayerScreen(
                         }
                     }
                     // The actions of the content, only the ones that apply right now.
-                    if (shown.episodes || shown.catchUp || shown.lastChannel) {
+                    if (shown.episodes || shown.catchUp || shown.lastChannel || shown.zap) {
                         Row(
                             Modifier.align(Alignment.CenterHorizontally),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -1063,6 +1064,10 @@ fun PlayerScreen(
                         ) {
                             if (shown.episodes) {
                                 GlassButton(text = stringResource(R.string.np_episodes), onClick = { panel = Panel.Episodes })
+                            }
+                            // The list of the channels around this one, each with what is on now (like a mini guide).
+                            if (shown.zap) {
+                                GlassButton(text = stringResource(R.string.np_channels), onClick = { panel = Panel.Channels })
                             }
                             if (catchUp != null) {
                                 GlassButton(
@@ -1101,6 +1106,12 @@ fun PlayerScreen(
                             Panel.Episodes -> EpisodesPanel(channels, index, panelFocus) {
                                 goTo(it)
                                 panel = Panel.None
+                            }
+                            Panel.Channels -> ChannelsPanel(channels, index, panelFocus, nowTitle) {
+                                goTo(it)
+                                bannerRequest++
+                                panel = Panel.None
+                                overlayVisible = false
                             }
                             Panel.Info -> InfoPanel(player, panelFocus) { panel = Panel.None }
                             Panel.None -> Unit
@@ -1216,6 +1227,18 @@ private fun Timeline(
                     },
                 contentAlignment = Alignment.Center,
             ) {
+                if (focused) {
+                    // The time under the knob, as on YouTube: it follows the bar while it is being moved.
+                    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().align(Alignment.TopStart)) {
+                        val x = (maxWidth * fraction - 28.dp).coerceIn(0.dp, (maxWidth - 56.dp).coerceAtLeast(0.dp))
+                        PrismText(
+                            text = formatTime(positionMs),
+                            size = 15.sp,
+                            weight = FontWeight.Bold,
+                            modifier = Modifier.offset(x = x, y = (-22).dp).width(56.dp),
+                        )
+                    }
+                }
                 Box(
                     Modifier
                         .fillMaxWidth()
@@ -1412,7 +1435,9 @@ private fun TrackRow(choice: TrackChoice, focus: FocusRequester?, onClose: () ->
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.EpisodesPanel(channels: List<Channel>, current: Int, focus: FocusRequester, onPick: (Int) -> Unit) {
     PrismText(text = stringResource(R.string.np_episodes), size = 24.sp, weight = FontWeight.Bold)
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+    // Opens on the episode being watched (an item that is not on screen cannot take the cursor).
+    val state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (current - 2).coerceAtLeast(0))
+    LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
         itemsIndexed(channels) { i, episode ->
             GlassSurface(
                 onClick = { onPick(i) },
@@ -1426,6 +1451,39 @@ private fun androidx.compose.foundation.layout.ColumnScope.EpisodesPanel(channel
                     size = 18.sp,
                     maxLines = 1,
                 )
+            }
+        }
+    }
+}
+
+/** The channels of the list, opened on the one being watched, each with the programme on air (the mini guide). */
+@Composable
+private fun androidx.compose.foundation.layout.ColumnScope.ChannelsPanel(
+    channels: List<Channel>,
+    current: Int,
+    focus: FocusRequester,
+    nowTitle: (Channel) -> String?,
+    onPick: (Int) -> Unit,
+) {
+    PrismText(text = stringResource(R.string.np_channels), size = 24.sp, weight = FontWeight.Bold)
+    val state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = (current - 2).coerceAtLeast(0))
+    LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
+        itemsIndexed(channels) { i, channel ->
+            GlassSurface(
+                onClick = { onPick(i) },
+                modifier = Modifier.fillMaxWidth(),
+                selected = i == current,
+                focusRequester = if (i == current) focus else null,
+                focusScale = 1.02f,
+            ) {
+                Column {
+                    PrismText(text = "%d  %s".format(i + 1, channel.name), size = 18.sp, maxLines = 1)
+                    // Only the rows on screen ask for the programme, so a list of thousands costs nothing.
+                    val now = remember(channel) { nowTitle(channel) }
+                    if (!now.isNullOrBlank()) {
+                        PrismText(text = now, size = 15.sp, color = PrismColors.TextSecondary, maxLines = 1)
+                    }
+                }
             }
         }
     }
