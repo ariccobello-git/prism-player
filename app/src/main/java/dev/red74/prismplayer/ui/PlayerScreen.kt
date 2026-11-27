@@ -93,6 +93,7 @@ import dev.red74.prismplayer.player.StallStats
 import dev.red74.prismplayer.player.createPlayer
 import dev.red74.prismplayer.player.playbackItem
 import dev.red74.prismplayer.player.AudioSafety
+import dev.red74.prismplayer.player.SleepTimer
 import dev.red74.prismplayer.data.ProviderHosts
 import dev.red74.prismplayer.data.StreamHold
 import kotlinx.coroutines.delay
@@ -178,6 +179,18 @@ fun PlayerScreen(
     /** The programme being watched from its start (catch-up), or null while the channel plays live. */
     var catchUp by remember { mutableStateOf<CatchUpRun?>(null) }
     var retryRequest by remember { mutableIntStateOf(0) }
+    // The sleep timer: when it runs out the player closes (the same as Back). It keeps running with the overlay hidden.
+    var sleepMinutes by remember { mutableIntStateOf(0) }
+    var sleepEndsAt by remember { mutableLongStateOf(0L) }
+    var sleepNow by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(sleepEndsAt) {
+        if (sleepEndsAt <= 0L) return@LaunchedEffect
+        while (System.currentTimeMillis() < sleepEndsAt) {
+            sleepNow = System.currentTimeMillis()
+            kotlinx.coroutines.delay(minOf(15_000L, (sleepEndsAt - System.currentTimeMillis()).coerceAtLeast(50L)))
+        }
+        onExit()
+    }
     var startedOk by remember { mutableStateOf(false) }
     /** Audio and subtitles follow [TrackPolicy] until the viewer picks them in the panel. */
     var autoTracks by remember { mutableStateOf(true) }
@@ -948,6 +961,16 @@ fun PlayerScreen(
                         GlassButton(
                             text = stringResource(R.string.np_format),
                             onClick = { changeAspect(aspect.next()) },
+                        )
+                        GlassButton(
+                            text = stringResource(R.string.sleep_button),
+                            subtitle = if (sleepEndsAt <= 0L) stringResource(R.string.sleep_off)
+                            else stringResource(R.string.sleep_in, SleepTimer.remainingMinutes(sleepEndsAt, sleepNow)),
+                            onClick = {
+                                sleepMinutes = SleepTimer.next(sleepMinutes)
+                                sleepNow = System.currentTimeMillis()
+                                sleepEndsAt = SleepTimer.endsAt(sleepMinutes, sleepNow)
+                            },
                         )
                         InfoButton(onClick = { panel = Panel.Info })
                     }

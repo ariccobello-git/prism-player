@@ -23,6 +23,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.runtime.Composable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -67,6 +77,7 @@ import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.data.FavoriteKey
 import dev.red74.prismplayer.data.HighlightEvent
+import dev.red74.prismplayer.data.Show
 import dev.red74.prismplayer.data.HighlightKind
 import dev.red74.prismplayer.data.HighlightRow
 import dev.red74.prismplayer.data.Highlights
@@ -558,9 +569,9 @@ private fun NewArrivals(
     val rowState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val progressVersion = WatchProgress.version
-    // The films left half way, the latest first (series keep their own "resume" inside the show page).
+    // The films (or the series) left half way, the latest first.
     val resumes by produceState(emptyList<Resume>(), catalog, movies, progressVersion) {
-        value = if (!movies) emptyList() else withContext(Dispatchers.IO) { resumesFor(catalog) }
+        value = withContext(Dispatchers.IO) { resumesFor(catalog, movies) }
     }
     val list = items
     LaunchedEffect(nav.resume, list) {
@@ -613,11 +624,13 @@ private fun NewArrivals(
                                 modifier = Modifier.width(CardWidth).height(ResumeHeight),
                                 focusRequester = if (index == 0) rowFirst else null,
                                 focusScale = 1.04f,
+                                glass = false,
                             ) {
                                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Poster(r.arrival.logo, Modifier.width(48.dp).height(70.dp))
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                         PrismText(text = r.arrival.title, size = 16.sp, weight = FontWeight.SemiBold, maxLines = 2)
+                                        r.note?.let { PrismText(text = it, size = 13.sp, color = PrismColors.TextSecondary, maxLines = 1) }
                                         ProgressLine(r.fraction, Modifier.fillMaxWidth())
                                     }
                                 }
@@ -640,6 +653,7 @@ private fun NewArrivals(
                                 modifier = Modifier.height(CardHeight),
                                 focusRequester = if (index == 0) gridFirst else null,
                                 focusScale = 1.04f,
+                                glass = false,
                             ) {
                                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Poster(a.logo, Modifier.width(72.dp).height(104.dp))
@@ -673,7 +687,7 @@ private fun KindPill(text: String, strong: Boolean = false) {
     }
 }
 
-private class Resume(val arrival: Arrival, val fraction: Float)
+private class Resume(val arrival: Arrival, val fraction: Float, val note: String? = null)
 
 /** The large card at the top of the Films and Series pages: the first arrival, with its poster glowing behind it. */
 @Composable
@@ -700,16 +714,33 @@ private fun ArrivalHero(arrival: Arrival, movies: Boolean, focusRequester: Focus
     }
 }
 
-/** Films with a saved resume point, the most recently watched first. */
-private fun resumesFor(catalog: Catalog): List<Resume> {
+/** Films (or series, by their latest episode) with a saved resume point, the most recently watched first. */
+private fun resumesFor(catalog: Catalog, movies: Boolean): List<Resume> {
     val keys = WatchProgress.keys()
     if (keys.isEmpty()) return emptyList()
-    return catalog.favorites(keys).filter { it.type == ContentType.MOVIE && it.url.isNotEmpty() }
-        .mapNotNull { film -> WatchProgress.get(film.url)?.let { film to it } }
+    if (movies) {
+        return catalog.favorites(keys).filter { it.type == ContentType.MOVIE && it.url.isNotEmpty() }
+            .mapNotNull { film -> WatchProgress.get(film.url)?.let { film to it } }
+            .sortedByDescending { it.second.savedAt }
+            .take(RESUME_LIMIT)
+            .map { (film, point) -> Resume(filmArrival(film), point.fraction) }
+    }
+    val latest = LinkedHashMap<Pair<String?, String>, Pair<Channel, WatchProgress.Point>>()
+    catalog.episodesWithKeys(keys).filter { it.url.isNotEmpty() && it.seriesTitle != null }
+        .mapNotNull { e -> WatchProgress.get(e.url)?.let { e to it } }
         .sortedByDescending { it.second.savedAt }
-        .take(RESUME_LIMIT)
-        .map { (film, point) -> Resume(filmArrival(film), point.fraction) }
+        .forEach { latest.putIfAbsent(it.first.group to it.first.seriesTitle!!, it) }
+    return latest.entries.take(RESUME_LIMIT).mapNotNull { (id, pair) ->
+        val show = catalog.findShow(id.first, id.second) ?: return@mapNotNull null
+        val (episode, point) = pair
+        Resume(showArrival(show), point.fraction, "S${episode.season} E${episode.episode}")
+    }
 }
+
+private fun showArrival(show: Show): Arrival =
+    Arrival(VariantTags.of(show.title).title, show.group, show.logo, FavoriteKey.ofShow(show)) { nav ->
+        nav.copy(tab = LibraryTab.SERIES, showTitle = show.title, showGroup = show.group, season = -1, query = "", origin = nav.copy(resume = true, origin = null))
+    }
 
 private fun filmArrival(film: Channel): Arrival =
     Arrival(VariantTags.of(film.name).title, film.group.orEmpty(), film.logo, film.url) { nav ->
@@ -927,9 +958,33 @@ private fun EventAction(event: HighlightEvent, reminder: Boolean?, size: android
 @Composable
 private fun TimeBadge(text: String, live: Boolean) {
     val color = if (live) PrismColors.Danger else PrismColors.Accent
-    Box(Modifier.background(color.copy(alpha = 0.45f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 4.dp)) {
+    Row(
+        Modifier.background(color.copy(alpha = 0.45f), RoundedCornerShape(10.dp)).padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (live) {
+            OnAirDot()
+            Spacer(Modifier.width(8.dp))
+        }
         PrismText(text = text, size = 17.sp, weight = FontWeight.Bold, maxLines = 1)
     }
+}
+
+/**
+ * A white dot that pulses slowly: "this is on right now". Only the alpha changes (graphics layer, no recomposition).
+ * Under the test runner it stays still, because an endless animation keeps a UI test from ever being idle.
+ */
+@Composable
+private fun OnAirDot() {
+    val still = android.os.Build.FINGERPRINT == "robolectric"
+    val pulse = if (still) 1f else {
+        val value by rememberInfiniteTransition(label = "onAir").animateFloat(
+            initialValue = 1f, targetValue = 0.3f,
+            animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "onAirDot",
+        )
+        value
+    }
+    Box(Modifier.size(9.dp).graphicsLayer { alpha = pulse }.background(Color.White, CircleShape).testTag("onAirDot"))
 }
 
 @Composable

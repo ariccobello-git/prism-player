@@ -71,6 +71,7 @@ import dev.red74.prismplayer.LibraryNav
 import dev.red74.prismplayer.LibraryState
 import dev.red74.prismplayer.LibraryTab
 import dev.red74.prismplayer.R
+import dev.red74.prismplayer.data.ParentalPin
 import dev.red74.prismplayer.data.Catalog
 import dev.red74.prismplayer.data.Channel
 import dev.red74.prismplayer.data.ContentInfo
@@ -763,6 +764,10 @@ private fun GroupBrowser(
             (widest.toDp() + 28.dp).coerceAtMost(220.dp)
         }
     }
+    // An adult group asks for the PIN first (when one is set); the pick waits here until it is right.
+    var waiting by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun guarded(locked: Boolean, open: () -> Unit) { if (locked) waiting = open else open() }
+    waiting?.let { open -> PinUnlockDialog(onOpen = { waiting = null; open() }, onDismiss = { waiting = null }) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val subFit = (subNeed / (maxWidth - 28.dp).coerceAtLeast(1.dp)).coerceIn(0.05f, 0.3f)
     val subWeight by animateFloatAsState(
@@ -782,8 +787,10 @@ private fun GroupBrowser(
             onLeft = null,
             onPick = { position ->
                 val i = mainOrder[position]
-                onNav {
-                    it.copy(category = i, sub = 0, itemIndex = 0, level = if (tree[i].hasSubLevel) 1 else 2, resume = true)
+                guarded(ParentalPin.locks(tree[i].name)) {
+                    onNav {
+                        it.copy(category = i, sub = 0, itemIndex = 0, level = if (tree[i].hasSubLevel) 1 else 2, resume = true)
+                    }
                 }
             },
         )
@@ -799,7 +806,12 @@ private fun GroupBrowser(
                 modifier = Modifier.weight(subWeight).fillMaxHeight(),
                 compact = level >= 2,
                 onLeft = { onNav { it.copy(level = 0, resume = true) } },
-                onPick = { position -> onNav { it.copy(sub = subOrder[position], itemIndex = 0, level = 2, resume = true) } },
+                onPick = { position ->
+                    val sub = subOrder[position]
+                    // "All" also shows the adult sub-groups, so it asks for the PIN as well.
+                    val adult = if (sub == 0) main.subs.any { ParentalPin.locks(it.name) } else ParentalPin.locks(main.subs[sub - 1].name)
+                    guarded(adult) { onNav { it.copy(sub = sub, itemIndex = 0, level = 2, resume = true) } }
+                },
             )
         }
         if (level >= 2) {
@@ -1004,9 +1016,45 @@ private fun LiveView(
         }
     }
 
+    // The programme guide (channels down, time across) replaces the list and the preview until Back.
+    var guide by remember { mutableStateOf(false) }
+    val guideFocus = remember { FocusRequester() }
+    val guideEntry = remember { FocusRequester() }
+    val toggleReminder = rememberReminderToggle()
+    BackHandler(enabled = guide) {
+        UiSounds.play(UiSounds.Kind.BACK)
+        guide = false
+    }
+    var guideWasOpen by remember { mutableStateOf(false) }
+    LaunchedEffect(guide) {
+        if (guide) {
+            guideWasOpen = true
+            guideEntry.requestWhenReady()
+        } else if (guideWasOpen) {
+            guideWasOpen = false
+            guideFocus.requestWhenReady()
+        }
+    }
+    if (guide) {
+        GuideGrid(
+            channels = list,
+            epg = epg,
+            onPlay = { index ->
+                fullscreen = true
+                onNav { it.copy(itemIndex = if (restorable) index else 0, resume = restorable) }
+                onPlay(list, index, restorable)
+            },
+            onReminder = { channel, programme -> toggleReminder(reminderFor(programme.title, programme.startMs, channel)) },
+            firstFocus = guideEntry,
+        )
+        return
+    }
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Column(Modifier.weight(0.58f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.returnSection(androidx.compose.ui.focus.FocusDirection.Down to rowMemory)) { SortBar(nav, onNav, sortFocus) }
+        if (!epg.isEmpty) GlassButton(text = stringResource(R.string.guide_button), onClick = { guide = true }, focusRequester = guideFocus)
+        }
         LazyColumn(
             Modifier
                 .weight(1f)
@@ -1379,6 +1427,7 @@ private fun ItemGrid(
                     modifier = Modifier.returnItem(itemMemory, index),
                     tint = if (item.favorite) PrismColors.Favorite else null,
                     contentPadding = PaddingValues(6.dp),
+                    glass = false,
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Box {
@@ -1412,7 +1461,7 @@ private fun MovieDetail(
     Box(Modifier.fillMaxSize()) {
     AmbientBackdrop(movie.logo)
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        Poster(movie.logo, Modifier.width(240.dp).aspectRatio(2f / 3f))
+        Poster(movie.logo, Modifier.width(240.dp).aspectRatio(2f / 3f).expandsIn())
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PrismText(text = tags.title, size = 40.sp, weight = FontWeight.Bold, maxLines = 3)
             info.second?.meta?.takeIf { it.isNotEmpty() }?.let {
@@ -1501,7 +1550,7 @@ private fun EpisodeDetail(
         value = true to ContentInfo.episodeInfo(episode.url, show.title)
     }
     Row(Modifier.fillMaxSize().confineFocus(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        Poster(episode.logo ?: show.logo, Modifier.width(240.dp).aspectRatio(2f / 3f))
+        Poster(episode.logo ?: show.logo, Modifier.width(240.dp).aspectRatio(2f / 3f).expandsIn())
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             PrismText(text = VariantTags.of(show.title).title, size = 32.sp, weight = FontWeight.Bold, maxLines = 2)
             val where = listOfNotNull(
@@ -1593,7 +1642,7 @@ private fun ShowDetail(
     AmbientBackdrop(show.logo)
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(24.dp)) {
         Column(Modifier.width(240.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Poster(show.logo, Modifier.fillMaxWidth().aspectRatio(2f / 3f))
+            Poster(show.logo, Modifier.fillMaxWidth().aspectRatio(2f / 3f).expandsIn())
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val tags = remember(show.title) { VariantTags.of(show.title) }

@@ -31,7 +31,7 @@ class HomeDeleteTest {
             HomeScreen(
                 playlists = listOf(list), verifying = emptySet(), removedCount = 0, notice = null,
                 onOpen = {}, onVerify = {}, onVerifyLists = {}, onDelete = { deleted += it }, onAddUrl = {}, onPair = {},
-                onUpdates = {}, onCheckUpdates = {}, onShortcuts = {}, onRemoved = {}, onAppearance = {}, onNoticeShown = {},
+                onUpdates = {}, onCheckUpdates = {}, onShortcuts = {}, onRemoved = {}, onPin = {}, onAppearance = {}, onNoticeShown = {},
             )
         }
         rule.waitForIdle()

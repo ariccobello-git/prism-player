@@ -6,6 +6,7 @@ import android.view.KeyEvent
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import dev.red74.prismplayer.data.WatchNext
 import dev.red74.prismplayer.ui.IdleExit
 import dev.red74.prismplayer.ui.PrismTheme
 import dev.red74.prismplayer.ui.UiSounds
@@ -33,11 +34,23 @@ class MainActivity : ComponentActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         UiSounds.init(this)
         dev.red74.prismplayer.ui.Appearance.init(this)
+        if (savedInstanceState == null) takeLink(intent)
         setContent {
             PrismTheme {
                 PrismRoot()
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        takeLink(intent)
+    }
+
+    /** A card of the "Play next" row of the TV home screen opens the film or series it names (see PrismRoot). */
+    private fun takeLink(intent: Intent?) {
+        WatchNext.parse(intent?.data)?.let { link.value = it }
     }
 
     override fun onResume() {
@@ -96,6 +109,9 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        /** The "Play next" card that started the app and has not been opened yet. */
+        val link = androidx.compose.runtime.mutableStateOf<WatchNext.Link?>(null)
+
         private var current: java.lang.ref.WeakReference<MainActivity>? = null
 
         /** True while the app is in front (reminders then show their banner inside it instead of a notification). */

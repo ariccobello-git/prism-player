@@ -44,6 +44,7 @@ class PrismApp : Application(), ImageLoaderFactory {
         container = AppContainer(this)
         WatchProgress.init(this)
         SportPrefsStore.init(this)
+        dev.red74.prismplayer.data.ParentalPin.init(this)
         Taste.init(this)
         FrameRatePref.init(this)
         ContentInfo.init(this)
