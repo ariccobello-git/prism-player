@@ -36,7 +36,8 @@ class PlayerTitleScreenTest {
             val node = rule.onNode(hasText(text, substring = true), useUnmergedTree = true).fetchSemanticsNode()
             val b = node.boundsInRoot
             assertTrue("'$text' not inside the screen: $b", b.top >= 0f && b.bottom <= height && b.left >= 0f && b.right <= width)
-            assertTrue("'$text' has no size: $b", b.width > 20f && b.height > 10f)
+            // Robolectric measures text one pixel per letter, so only the height says the line really took its place.
+            assertTrue("'$text' has no height: $b", b.height > 10f)
         }
     }
 
