@@ -1,7 +1,6 @@
 package dev.red74.prismplayer.ui
 
 import android.text.format.DateFormat
-import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
@@ -185,9 +184,11 @@ fun HighlightsView(
     // The cursor came down onto the menu from the row of tabs above: it lands on the page already shown, which never
     // changes, so the dwell above has nothing to do. It still goes on to the large card (and its preview) after a rest.
     var arrivedFromAbove by remember { mutableStateOf(false) }
+    // The cursor was on the page (the cards) a moment ago: coming back to the menu from there is not "from above".
+    var contentHadFocus by remember { mutableStateOf(false) }
     LaunchedEffect(arrivedFromAbove, menuFocus, tabIndex) {
-        if (arrivedFromAbove && menuFocus == tabIndex) {
-            pendingEnter = tabIndex
+        if (arrivedFromAbove && menuFocus >= 0) {
+            if (menuFocus == tabIndex) pendingEnter = tabIndex
             arrivedFromAbove = false
         }
     }
@@ -204,25 +205,24 @@ fun HighlightsView(
     }
     // A side menu on the left (the kinds of page), the content on the right. Going back into the menu always lands on
     // the page being shown.
-    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    Row(
+        Modifier.fillMaxSize().onFocusChanged { if (!it.hasFocus) contentHadFocus = false },
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
         Column(
             Modifier
                 .width(MenuWidth)
                 .onFocusChanged {
-                    if (!it.hasFocus) {
+                    if (it.hasFocus) {
+                        if (!contentHadFocus) arrivedFromAbove = true
+                        contentHadFocus = false
+                    } else {
                         menuFocus = -1
                         arrivedFromAbove = false
                     }
                 }
-                .focusProperties {
-                    enter = { direction ->
-                        if (direction == androidx.compose.ui.focus.FocusDirection.Down) arrivedFromAbove = true
-                        selectedFocus
-                    }
-                }
-                // The entry rule above belongs to a focus group: without one the menu is never "entered" as a whole.
-                .focusGroup(),
+                .focusProperties { enter = { selectedFocus } },
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             tabs.forEachIndexed { index, item ->
@@ -235,7 +235,7 @@ fun HighlightsView(
                 )
             }
         }
-        Column(Modifier.weight(1f).fillMaxSize()) {
+        Column(Modifier.weight(1f).fillMaxSize().onFocusChanged { if (it.hasFocus) contentHadFocus = true }) {
             when {
                 tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups, enterHero)
                 tab == HighlightTab.Following -> FollowedRows(kinds.flatMap { data.events(it) }, prefs, nav, onNav, onPlay, enterHero)
