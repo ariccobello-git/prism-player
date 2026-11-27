@@ -265,7 +265,22 @@ class HighlightsTest {
     @Test
     fun aSeriesEpisodeOnSkyAtlanticCountsButNotOnAnOrdinaryChannel() {
         val data = build(mapOf("a1" to listOf(programme("The Last of Us", -0.5, 55)), "r1" to listOf(programme("Un episodio", -0.5, 55))), atlantic, rai)
-        assertEquals(listOf("The Last of Us"), data.events(HighlightKind.FILM).map { it.title })
+        assertEquals(listOf("The Last of Us"), data.events(HighlightKind.SERIES).map { it.title })
+        assertEquals(emptyList<String>(), data.events(HighlightKind.FILM).map { it.title })
+    }
+
+    @Test
+    fun anEpisodeGetsItsOwnPageAndAFilmStaysWithTheFilms() {
+        val episodes = build(
+            mapOf(
+                "a1" to listOf(programme("The Last of Us", -0.5, 55), programme("Dune", 1.0, 150)),
+                "f1" to listOf(programme("Serie Noir stagione 2", 1.0, 100), programme("Heat", 1.0, 120)),
+            ),
+            atlantic, cinema,
+        )
+        assertEquals(setOf("The Last of Us", "Serie Noir stagione 2"), episodes.events(HighlightKind.SERIES).map { it.title }.toSet())
+        assertEquals(setOf("Dune", "Heat"), episodes.events(HighlightKind.FILM).map { it.title }.toSet())
+        assertEquals(listOf(HighlightKind.FILM, HighlightKind.SERIES), episodes.kinds())
     }
 
     @Test

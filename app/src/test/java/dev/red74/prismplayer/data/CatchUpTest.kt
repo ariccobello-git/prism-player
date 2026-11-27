@@ -107,3 +107,34 @@ class CatchUpTest {
         assertNull(CatchUp.clockAddress("http://h/x.ts"))
     }
 }
+
+/** The "from the start" button is not offered on a provider that has shown no archive. */
+class CatchUpProviderTest {
+    private val a = "http://panel.example:8080/live/user/pass/1.ts"
+    private val b = "http://panel.example:8080/live/user/pass/2.ts"
+    private val c = "http://panel.example:8080/live/user/pass/3.ts"
+    private val other = "http://other.example:80/live/u/p/9.ts"
+
+    private fun failed(vararg urls: String): Map<String, Long> =
+        urls.flatMap { listOf(CatchUp.markKey(it) to 1L, CatchUp.failureKey(it)!! to 1L) }.toMap()
+
+    @Test
+    fun oneFailureHidesOnlyThatChannelTwoHideTheWholeProvider() {
+        val one = failed(a)
+        assertFalse(CatchUp.providerHasNoArchive(one, b))
+        val two = failed(a, b)
+        assertTrue(CatchUp.providerHasNoArchive(two, c))
+        assertFalse(CatchUp.providerHasNoArchive(two, other))
+    }
+
+    @Test
+    fun aProviderWhoseArchiveWorkedOnceIsNeverHidden() {
+        val marks = failed(a, b) + (CatchUp.workedKey(a)!! to 1L)
+        assertFalse(CatchUp.providerHasNoArchive(marks, c))
+    }
+
+    @Test
+    fun addressesThatAreNotXtreamAreNeverHiddenByTheProviderRule() {
+        assertFalse(CatchUp.providerHasNoArchive(failed(a, b), "http://x/stream.m3u8"))
+    }
+}

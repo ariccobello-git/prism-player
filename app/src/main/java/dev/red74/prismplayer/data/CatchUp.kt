@@ -87,6 +87,28 @@ object CatchUp {
     /** The key under which a channel is marked without archive (a hash, never the address). */
     fun markKey(url: String): String = "c:" + FavoriteKey.ofUrl(url)
 
+    /** The provider of a channel (its server and path prefix, hashed), or null for an address that is not Xtream style. */
+    fun hostKey(url: String): String? = parts(url)?.let { FavoriteKey.ofUrl(it.base) }
+
+    /** The mark of one channel that failed, grouped under its provider. */
+    fun failureKey(url: String): String? = hostKey(url)?.let { "f:$it:" + FavoriteKey.ofUrl(url) }
+
+    /** The mark of a provider whose archive answered at least once. */
+    fun workedKey(url: String): String? = hostKey(url)?.let { "ok:$it" }
+
+    /** Distinct channels of a provider that must fail, with no success, before the whole provider counts as having no archive. */
+    const val PROVIDER_FAILURES = 2
+
+    /**
+     * True when the provider of [url] has shown no archive: [PROVIDER_FAILURES] different channels failed and none
+     * ever worked (all within the week the marks live). The button is then not offered on any of its channels.
+     */
+    fun providerHasNoArchive(marks: Map<String, Long>, url: String): Boolean {
+        val host = hostKey(url) ?: return false
+        if ("ok:$host" in marks) return false
+        return marks.keys.count { it.startsWith("f:$host:") } >= PROVIDER_FAILURES
+    }
+
     // --- the panel's clock -------------------------------------------------------------------------------------
 
     /**

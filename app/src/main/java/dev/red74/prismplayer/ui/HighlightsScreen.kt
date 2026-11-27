@@ -2,6 +2,7 @@ package dev.red74.prismplayer.ui
 
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -180,6 +181,15 @@ fun HighlightsView(
             pendingEnter = menuFocus
         }
     }
+    // The cursor came down onto the menu from the row of tabs above: it lands on the page already shown, which never
+    // changes, so the dwell above has nothing to do. It still goes on to the large card (and its preview) after a rest.
+    var arrivedFromAbove by remember { mutableStateOf(false) }
+    LaunchedEffect(arrivedFromAbove, menuFocus, tabIndex) {
+        if (arrivedFromAbove && menuFocus == tabIndex) {
+            pendingEnter = tabIndex
+            arrivedFromAbove = false
+        }
+    }
     // After the page followed the cursor by itself and the cursor still rests on that entry, it goes on to the large
     // card so its preview starts. Never when the viewer just came back to the menu or keeps moving along it.
     LaunchedEffect(pendingEnter, menuFocus) {
@@ -198,8 +208,18 @@ fun HighlightsView(
         Column(
             Modifier
                 .width(MenuWidth)
-                .onFocusChanged { if (!it.hasFocus) menuFocus = -1 }
-                .focusProperties { enter = { selectedFocus } },
+                .onFocusChanged {
+                    if (!it.hasFocus) {
+                        menuFocus = -1
+                        arrivedFromAbove = false
+                    }
+                }
+                .focusProperties {
+                    enter = { direction ->
+                        if (direction == androidx.compose.ui.focus.FocusDirection.Down) arrivedFromAbove = true
+                        selectedFocus
+                    }
+                },
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             tabs.forEachIndexed { index, item ->
@@ -216,9 +236,33 @@ fun HighlightsView(
             when {
                 tab is HighlightTab.Events -> EventRows(data.events(tab.kind), nav, onNav, onPlay, prefs, likedGroups, enterHero)
                 tab == HighlightTab.Following -> FollowedRows(kinds.flatMap { data.events(it) }, prefs, nav, onNav, onPlay, enterHero)
-                else -> NewArrivals(catalog, tab == HighlightTab.Movies, nav, onNav)
+                // Keyed by the page: Movies and Series never share the cards worked out for the other one.
+                else -> androidx.compose.runtime.key(tab) { NewArrivals(catalog, tab == HighlightTab.Movies, nav, onNav) }
             }
         }
+    }
+}
+
+/**
+ * The line between the part of the page above (the tabs: every channel, film and series of the list) and the showcase
+ * below (what is on and what is new). Apple TV and Netflix set a showcase off the same way: a small caption and a
+ * hairline that fades out, no box, so it separates without taking height or drawing attention.
+ */
+@Composable
+fun ShowcaseDivider(modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().testTag("showcaseDivider"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        PrismText(
+            text = stringResource(R.string.showcase_title).uppercase(),
+            size = 14.sp,
+            weight = FontWeight.Bold,
+            color = PrismColors.TextSecondary,
+            maxLines = 1,
+        )
+        Box(
+            Modifier.weight(1f).height(1.dp).background(
+                Brush.horizontalGradient(listOf(Color.White.copy(alpha = 0.28f), PrismColors.Accent.copy(alpha = 0.12f), Color.Transparent)),
+            ),
+        )
     }
 }
 
@@ -1011,6 +1055,7 @@ private fun tabLabel(tab: HighlightTab): String = stringResource(
         is HighlightTab.Events -> when (tab.kind) {
             HighlightKind.SPORT -> R.string.highlights_sport
             HighlightKind.FILM -> R.string.highlights_film
+            HighlightKind.SERIES -> R.string.highlights_series
             HighlightKind.ENTERTAINMENT -> R.string.highlights_entertainment
         }
         HighlightTab.Following -> R.string.highlights_following

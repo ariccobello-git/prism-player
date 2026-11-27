@@ -237,7 +237,7 @@ fun PlayerScreen(
     /** The programme on air, when catch-up can restart it (see [CatchUp.offered]); looked at again whenever the controls open. */
     val onAirNow = remember(index, overlayVisible, catchUp) {
         if (current.type != ContentType.LIVE || catchUp != null || !overlayVisible) null
-        else nowProgramme(current)?.takeIf { CatchUp.offered(current.url, it, System.currentTimeMillis(), CatchUpMarks.isMarked(current.url)) }
+        else nowProgramme(current)?.takeIf { CatchUp.offered(current.url, it, System.currentTimeMillis(), CatchUpMarks.noArchive(current.url)) }
     }
     val isSeries = current.type == ContentType.SERIES
     val hasNext = isSeries && index < channels.lastIndex
@@ -269,6 +269,8 @@ fun PlayerScreen(
                                 plan.getOrNull(attempt)?.let { StreamFallback.remember(playing.url, it.url) }
                             }
                             playing?.let(worked)
+                            // A programme that opened from its start: this provider has an archive.
+                            if (playing != null && catchUp != null) CatchUpMarks.worked(playing.url)
                         }
                     }
                     // The programme watched from its start is over: the channel goes on live.
@@ -954,10 +956,13 @@ fun PlayerScreen(
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        GlassButton(
-                            text = stringResource(R.string.np_audio_subs),
-                            onClick = { panel = Panel.Tracks },
-                        )
+                        // Only when there is something to choose: another audio language or any subtitles.
+                        if (hasTrackChoice(tracks)) {
+                            GlassButton(
+                                text = stringResource(R.string.np_audio_subs),
+                                onClick = { panel = Panel.Tracks },
+                            )
+                        }
                         GlassButton(
                             text = stringResource(R.string.np_format),
                             onClick = { changeAspect(aspect.next()) },
@@ -1053,7 +1058,13 @@ fun PlayerScreen(
                         }
                     }
                     PrismText(
-                        text = stringResource(if (remote.minimalRemote) R.string.player_hint_hold else R.string.player_hint),
+                        text = playerHint(
+                            seek = canSeek,
+                            zap = isLiveStream && channels.size > 1,
+                            seekText = stringResource(if (remote.minimalRemote) R.string.player_hint_seek_hold else R.string.player_hint_seek),
+                            zapText = stringResource(R.string.player_hint_zap),
+                            baseText = stringResource(R.string.player_hint_base),
+                        ),
                         size = 15.sp,
                         color = PrismColors.TextSecondary,
                     )
@@ -1089,6 +1100,26 @@ private fun saveProgress(player: Player, url: String) {
     val duration = player.duration
     WatchProgress.save(url, player.currentPosition, if (duration == C.TIME_UNSET) 0L else duration)
 }
+
+/** True when the content offers a choice in the audio and subtitles panel: another audio track, or any subtitles. */
+internal fun hasTrackChoice(tracks: Tracks): Boolean {
+    var audio = 0
+    var text = 0
+    for (group in tracks.groups) {
+        for (i in 0 until group.length) {
+            if (!group.isTrackSupported(i)) continue
+            when (group.type) {
+                C.TRACK_TYPE_AUDIO -> audio++
+                C.TRACK_TYPE_TEXT -> text++
+            }
+        }
+    }
+    return audio > 1 || text > 0
+}
+
+/** The line of key hints under the controls: only what works on this content (no seeking on a live channel, no zapping on a film). */
+internal fun playerHint(seek: Boolean, zap: Boolean, seekText: String, zapText: String, baseText: String): String =
+    listOfNotNull(seekText.takeIf { seek }, zapText.takeIf { zap }, baseText).joinToString(" · ")
 
 internal fun formatTime(ms: Long): String {
     val total = (ms.coerceAtLeast(0L) / 1000)
@@ -1150,11 +1181,13 @@ private fun Timeline(
             Box(Modifier.weight(1f))
         }
         if (live) {
-            GlassButton(
-                text = "● " + stringResource(R.string.np_live),
-                onClick = onGoLive,
-                tint = if (atEdge) PrismColors.Danger else null,
-            )
+            if (canSeek && !atEdge) {
+                // Behind the live edge: the button goes back to it.
+                GlassButton(text = "● " + stringResource(R.string.np_live), onClick = onGoLive)
+            } else {
+                // At the live edge (or a stream that cannot go back): only a sign, nothing to press.
+                PrismText(text = "● " + stringResource(R.string.np_live), size = 20.sp, weight = FontWeight.Bold, color = PrismColors.Danger)
+            }
         }
     }
 }

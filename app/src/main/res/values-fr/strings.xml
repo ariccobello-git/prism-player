@@ -71,7 +71,6 @@
     <string name="player_trouble_no_answer">Le serveur ne répond pas. Vérifiez le VPN et la connexion.</string>
     <string name="player_trouble_bad_stream">Le fournisseur n’envoie pas de vidéo lisible.</string>
     <string name="unavailable_note">⊘ Indisponible : le fournisseur ne l’a pas diffusé ces dernières heures</string>
-    <string name="player_hint">◀ ▶ saut de 10 s · ◀◀ ▶▶ 2× → 48× · ▲ ▼ changer de chaîne · OK commandes · Retour fermer</string>
     <string name="status_unverified">Non vérifiée</string>
     <string name="status_ok">%1$d éléments</string>
     <string name="status_failed">Injoignable</string>
@@ -145,7 +144,6 @@
     <string name="np_close">Fermer</string>
     <string name="version_label">Version %1$s</string>
     <string name="np_format">Format</string>
-    <string name="player_hint_hold">Maintenez ◀ ▶ pour aller plus vite · ◀◀ ▶▶ 2× → 48× (boutons) · ▲ ▼ changer de chaîne · OK commandes · Retour fermer</string>
     <string name="sound_on">Sons des touches : activés</string>
     <string name="sound_off">Sons des touches : coupés</string>
     <string name="channels_loading_count">Chargement de la liste… %1$d entrées lues</string>
@@ -245,6 +243,7 @@
     <string name="palette_roma">AS Roma</string>
     <string name="highlights_sport">Sport</string>
     <string name="highlights_film">Films</string>
+    <string name="highlights_series">Séries</string>
     <string name="highlights_entertainment">Divertissement</string>
     <string name="highlights_now">En direct maintenant</string>
     <string name="highlights_today">Plus tard aujourd’hui</string>
@@ -349,4 +348,9 @@
     <string name="pin_confirm_new">Saisissez-le à nouveau</string>
     <string name="pin_wrong">Code erroné</string>
     <string name="pin_mismatch">Les deux codes diffèrent, réessayez</string>
+    <string name="showcase_title">À l’affiche</string>
+    <string name="player_hint_seek">◀ ▶ saute 10 s · ◀◀ ▶▶ 2× → 48×</string>
+    <string name="player_hint_seek_hold">Maintenez ◀ ▶ pour défiler plus vite · ◀◀ ▶▶ 2× → 48× (boutons)</string>
+    <string name="player_hint_zap">▲ ▼ change de chaîne</string>
+    <string name="player_hint_base">OK commandes · Retour ferme</string>
 </resources>

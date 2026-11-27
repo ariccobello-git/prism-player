@@ -4,7 +4,8 @@ import java.util.IdentityHashMap
 import java.util.TimeZone
 
 /** The three kinds of featured events, as streaming platforms group them. */
-enum class HighlightKind { SPORT, FILM, ENTERTAINMENT }
+/** The pages of "In evidenza", in this order: Sport, Film, Serie, Entertainment. */
+enum class HighlightKind { SPORT, FILM, SERIES, ENTERTAINMENT }
 
 /** The sport of a featured event (a label under the title). */
 enum class SportTopic { FOOTBALL, TENNIS, MOTORS, BASKETBALL, RUGBY, CYCLING, VOLLEYBALL, GOLF, COMBAT, AMERICAN_FOOTBALL, HOCKEY, OLYMPICS }
@@ -39,7 +40,7 @@ class HighlightsData(private val byKind: Map<HighlightKind, List<HighlightEvent>
 
     fun events(kind: HighlightKind): List<HighlightEvent> = byKind[kind].orEmpty()
 
-    /** Kinds that have at least one event, in the fixed order Sport, Film, Entertainment. */
+    /** Kinds that have at least one event, in the fixed order Sport, Film, Series, Entertainment. */
     fun kinds(): List<HighlightKind> = HighlightKind.entries.filter { events(it).isNotEmpty() }
 
     companion object {
@@ -219,7 +220,9 @@ object Highlights {
             if (primeTime) score += 25
             if (hasAny(text, PREMIERE)) score += 15
             if (!programme.description.isNullOrBlank()) score += 3
-            return Found(HighlightKind.FILM, null, score)
+            // A series episode (short, or named as one) has a page of its own, apart from the films.
+            val episode = seriesChannel && minutes <= 90 || hasAny(text, EPISODE_WORDS)
+            return Found(if (episode) HighlightKind.SERIES else HighlightKind.FILM, null, score)
         }
         if (!sportChannel && minutes in 45..300 && hasAny(padded, ENTERTAINMENT)) {
             var score = 15
@@ -272,6 +275,7 @@ object Highlights {
         "news", "prepartita", "postpartita", "pre partita", "post partita", "moviola", "processo", "best of", "classic",
     )
     private val EXCLUDE_FILM = listOf("tg", "notiziario", "televendita", "telegiornale", "documentario", "cartoni", "cartoon")
+    private val EPISODE_WORDS = listOf("stagione", "episodio", "puntata", "season", "episode", "saison", "episodes")
     private val PREMIERE = listOf("prima tv", "anteprima", "prima visione", "in prima", "premiere", "prima serata")
     private val BIG_EVENTS = listOf(
         "derby", "finale", "final", "champions league", "europa league", "supercoppa", "clasico", "el clasico",
