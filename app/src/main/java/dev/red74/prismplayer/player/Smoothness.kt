@@ -59,6 +59,26 @@ object FrameRatePref {
     }
 }
 
+/** The viewer's choice of a steadier playback: always the longer cushion of [BufferPlan.STEADY] (off = automatic). */
+object BufferPref {
+    private var prefs: SharedPreferences? = null
+
+    var steady by mutableStateOf(false)
+        private set
+
+    fun init(context: Context) {
+        if (prefs != null) return
+        val store = context.applicationContext.getSharedPreferences("playback_prefs", Context.MODE_PRIVATE)
+        prefs = store
+        steady = store.getBoolean("steady_buffer", false)
+    }
+
+    fun set(value: Boolean) {
+        steady = value
+        prefs?.edit()?.putBoolean("steady_buffer", value)?.apply()
+    }
+}
+
 /** Asks the screen for the rate that suits the playing video, and gives the choice back when playback ends. */
 object DisplayRate {
     private var changed = false

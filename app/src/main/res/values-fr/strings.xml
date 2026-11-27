@@ -353,4 +353,8 @@
     <string name="player_hint_seek_hold">Maintenez ◀ ▶ pour défiler plus vite · ◀◀ ▶▶ 2× → 48× (boutons)</string>
     <string name="player_hint_zap">▲ ▼ change de chaîne</string>
     <string name="player_hint_base">OK commandes · Retour ferme</string>
+    <string name="np_channels">Chaînes</string>
+    <string name="buffer_title">Lecture plus stable</string>
+    <string name="buffer_on">Activé : le lecteur attend plus longtemps au démarrage et après un arrêt, l’image s’arrête moins. OK pour désactiver.</string>
+    <string name="buffer_off">Désactivé (automatique : il attend plus seulement après plusieurs arrêts). OK pour toujours attendre plus : moins de coupures sur une ligne faible.</string>
 </resources>

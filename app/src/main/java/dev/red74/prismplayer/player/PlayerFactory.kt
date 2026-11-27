@@ -257,7 +257,7 @@ fun createPlayer(context: Context, preview: Boolean = false, silent: Boolean = f
         .setLoadErrorHandlingPolicy(DefaultLoadErrorHandlingPolicy(8))
     val plan = when {
         preview -> BufferPlan.PREVIEW
-        StallStats.log.struggling(System.currentTimeMillis()) -> BufferPlan.STEADY
+        BufferPref.steady || StallStats.log.struggling(System.currentTimeMillis()) -> BufferPlan.STEADY
         else -> BufferPlan.FULL
     }
     val loadControl = DefaultLoadControl.Builder()

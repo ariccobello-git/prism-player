@@ -353,4 +353,8 @@
     <string name="player_hint_seek_hold">Hold ◀ ▶ to scrub faster · ◀◀ ▶▶ 2× → 48× (buttons)</string>
     <string name="player_hint_zap">▲ ▼ change channel</string>
     <string name="player_hint_base">OK controls · Back closes</string>
+    <string name="np_channels">Channels</string>
+    <string name="buffer_title">Steadier playback</string>
+    <string name="buffer_on">On: the player waits longer before starting and after a stop, so the picture stops less. Press OK to turn off.</string>
+    <string name="buffer_off">Off (automatic: it waits longer only after several stops). Press OK to always wait longer: fewer interruptions on a weak line.</string>
 </resources>
