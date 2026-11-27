@@ -1,6 +1,7 @@
 package dev.red74.prismplayer.ui
 
 import android.text.format.DateFormat
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.background
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.layout.Arrangement
@@ -219,7 +220,9 @@ fun HighlightsView(
                         if (direction == androidx.compose.ui.focus.FocusDirection.Down) arrivedFromAbove = true
                         selectedFocus
                     }
-                },
+                }
+                // The entry rule above belongs to a focus group: without one the menu is never "entered" as a whole.
+                .focusGroup(),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             tabs.forEachIndexed { index, item ->
