@@ -57,7 +57,9 @@ class GlassDepthShotTest {
         }
         rule.waitForIdle()
         rule.runOnIdle { focus.requestFocus() }
+        rule.waitForIdle()
         rule.mainClock.advanceTimeBy(800)
+        rule.waitForIdle()
         var bitmap: android.graphics.Bitmap? = null
         rule.runOnUiThread {
             val view = rule.activity.window.decorView
