@@ -114,6 +114,30 @@ class FilmsPageTest {
         override fun recentShows(sinceMs: Long, limit: Int): List<Show> = shows
     }
 
+    private class BothCatalog(private val films: List<Channel>, private val shows: List<Show>) :
+        Catalog(emptyList(), listOf(Category("Netflix", films)), listOf(SeriesCategory("Serie TV", shows)), null, false, films.size + shows.size) {
+        override fun recentMovies(sinceMs: Long, limit: Int): List<Channel> = films
+        override fun recentShows(sinceMs: Long, limit: Int): List<Show> = shows
+    }
+
+    @Test
+    fun theLargeCardChangesWhenThePageGoesFromFilmsToSeriesAndBack() {
+        WatchProgress.init(ApplicationProvider.getApplicationContext())
+        rule.setContent {
+            CompositionLocalProvider(LocalHighlights provides HighlightsData.Empty) {
+                HighlightsView(nav = nav, onNav = { change -> nav = change(nav) }, onPlay = { _, _, _ -> }, catalog = BothCatalog(films, shows))
+            }
+        }
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCountSafe("Film 1") >= 1 }
+        assertEquals(0, rule.onAllNodesWithTextCountSafe("Serie 1"))
+        nav = nav.copy(highlightKind = 1)
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCountSafe("Serie 1") >= 1 }
+        assertEquals("the film no longer leads the series page", 0, rule.onAllNodesWithTextCountSafe("Film 1"))
+        nav = nav.copy(highlightKind = 0)
+        rule.waitUntil(5_000) { rule.onAllNodesWithTextCountSafe("Film 1") >= 1 }
+        assertEquals(0, rule.onAllNodesWithTextCountSafe("Serie 1"))
+    }
+
     @Test
     fun theSeriesPageContinuesTheLatestEpisodeOfEachSeriesLeftHalfWay() {
         WatchProgress.init(ApplicationProvider.getApplicationContext())

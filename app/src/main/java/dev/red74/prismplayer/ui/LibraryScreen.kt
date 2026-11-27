@@ -477,7 +477,10 @@ private fun LibraryBody(
             }
         }
 
-        LibraryTab.HIGHLIGHTS -> HighlightsView(nav, onNav, onPlay, catalog)
+        LibraryTab.HIGHLIGHTS -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ShowcaseDivider()
+            Box(Modifier.weight(1f).fillMaxWidth()) { HighlightsView(nav, onNav, onPlay, catalog) }
+        }
 
         LibraryTab.MOVIES -> {
             val names = remember(catalog) { catalog.movies.map { it.name } }

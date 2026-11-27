@@ -1,5 +1,12 @@
 package dev.red74.prismplayer.ui
 
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -335,6 +342,37 @@ class HighlightsViewTest {
         rule.mainClock.advanceTimeBy(HERO_ENTER_MS + 500)
         rule.waitForIdle()
         rule.onNodeWithText("Heat").assertIsFocused()
+    }
+
+    @Test
+    fun comingDownFromTheTabsOntoTheShownPageStillGoesOnToTheLargeCard() {
+        rule.setContent {
+            CompositionLocalProvider(LocalHighlights provides data) {
+                Column {
+                    Box(Modifier.size(40.dp).testTag("above").focusable())
+                    Box(Modifier.weight(1f)) {
+                        HighlightsView(nav = nav, onNav = { change -> nav = change(nav) }, onPlay = { _, _, _ -> })
+                    }
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNodeWithTag("above").performSemanticsAction(SemanticsActions.RequestFocus)
+        rule.onNodeWithTag("above").performKeyInput { pressKey(Key.DirectionDown) }
+        rule.waitForIdle()
+        rule.onNodeWithText("Sport").assertIsFocused()
+        rule.mainClock.advanceTimeBy(HERO_ENTER_MS / 2)
+        rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(HERO_ENTER_MS + 500)
+        rule.waitForIdle()
+        rule.onNodeWithTag("hero").assertIsFocused()
+    }
+
+    @Test
+    fun theShowcaseDividerNamesTheStripBelow() {
+        rule.setContent { PrismTheme { ShowcaseDivider() } }
+        rule.onNodeWithTag("showcaseDivider").assertIsDisplayed()
+        rule.onNodeWithText("SHOWCASE").assertIsDisplayed()
     }
 
     @Test
