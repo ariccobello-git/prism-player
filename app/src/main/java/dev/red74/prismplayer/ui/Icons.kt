@@ -28,7 +28,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** The standard media-control symbols, drawn here so they never depend on a font having the glyph. */
-enum class TransportIcon { PLAY, PAUSE, FAST_FORWARD, REWIND }
+enum class TransportIcon { PLAY, PAUSE, FAST_FORWARD, REWIND, SKIP_PREVIOUS, SKIP_NEXT }
 
 @Composable
 fun TransportButton(
@@ -37,14 +37,17 @@ fun TransportButton(
     modifier: Modifier = Modifier,
     focusRequester: FocusRequester? = null,
     selected: Boolean = false,
+    description: String? = null,
 ) {
+    // The skip buttons are narrower than the main ones: play stays the largest target of the row.
+    val narrow = icon == TransportIcon.SKIP_PREVIOUS || icon == TransportIcon.SKIP_NEXT
     GlassSurface(
         onClick = onClick,
-        modifier = modifier,
+        modifier = if (description != null) modifier.semantics { contentDescription = description } else modifier,
         focusRequester = focusRequester,
         selected = selected,
         cornerRadius = 20.dp,
-        contentPadding = PaddingValues(horizontal = 26.dp, vertical = 14.dp),
+        contentPadding = PaddingValues(horizontal = if (narrow) 20.dp else 26.dp, vertical = 14.dp),
         focusScale = 1.08f,
     ) {
         Canvas(Modifier.size(32.dp)) {
@@ -75,6 +78,14 @@ fun TransportButton(
                 TransportIcon.REWIND -> {
                     triangle(0f, w * 0.52f, false)
                     triangle(w * 0.48f, w, false)
+                }
+                TransportIcon.SKIP_NEXT -> {
+                    triangle(0f, w * 0.72f, true)
+                    drawRect(white, Offset(w * 0.80f, 0f), Size(w * 0.16f, h))
+                }
+                TransportIcon.SKIP_PREVIOUS -> {
+                    triangle(w * 0.28f, w, false)
+                    drawRect(white, Offset(w * 0.04f, 0f), Size(w * 0.16f, h))
                 }
             }
         }

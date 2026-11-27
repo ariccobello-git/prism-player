@@ -5,7 +5,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +41,8 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -985,6 +986,7 @@ fun PlayerScreen(
                 Column(
                     Modifier
                         .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
                         .padding(horizontal = 48.dp, vertical = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
@@ -1008,10 +1010,30 @@ fun PlayerScreen(
                         onSkip = ::skip,
                         onGoLive = ::goLive,
                     )
+                    // What can be pressed is shown, nothing else. Transport, centred like on the other platforms:
+                    // previous, rewind, play/pause, fast forward, next.
+                    val shown = playerControls(
+                        live = current.type == ContentType.LIVE,
+                        series = isSeries,
+                        channelCount = channels.size,
+                        hasNext = hasNext,
+                        hasCatchUp = catchUp != null,
+                        hasOnAir = onAirNow != null,
+                        hasLastChannel = zaps.target(index, channels.size) != null,
+                    )
+                    val zapChannels = shown.zap
                     Row(
+                        Modifier.align(Alignment.CenterHorizontally),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
+                        if (zapChannels) {
+                            TransportButton(
+                                icon = TransportIcon.SKIP_PREVIOUS,
+                                onClick = { changeChannel(-1) },
+                                description = stringResource(R.string.player_previous),
+                            )
+                        }
                         if (canSeek) {
                             TransportButton(icon = TransportIcon.REWIND, onClick = { cycleScan(-1) })
                         }
@@ -1024,35 +1046,34 @@ fun PlayerScreen(
                         if (canSeek) {
                             TransportButton(icon = TransportIcon.FAST_FORWARD, onClick = { cycleScan(+1) })
                         }
-                        if (isSeries) {
-                            GlassButton(
-                                text = stringResource(R.string.np_episodes),
-                                onClick = { panel = Panel.Episodes },
-                            )
-                        }
-                        if (hasNext) {
-                            GlassButton(
-                                text = stringResource(R.string.np_next_episode),
+                        if (hasNext || zapChannels) {
+                            TransportButton(
+                                icon = TransportIcon.SKIP_NEXT,
                                 onClick = { changeChannel(+1) },
+                                description = stringResource(if (hasNext) R.string.np_next_episode else R.string.player_next),
                             )
-                        } else if (!isSeries && channels.size > 1) {
-                            GlassButton(text = stringResource(R.string.player_previous), onClick = { changeChannel(-1) })
-                            GlassButton(text = stringResource(R.string.player_next), onClick = { changeChannel(+1) })
                         }
-                        if (current.type == ContentType.LIVE) {
+                    }
+                    // The actions of the content, only the ones that apply right now.
+                    if (shown.episodes || shown.catchUp || shown.lastChannel) {
+                        Row(
+                            Modifier.align(Alignment.CenterHorizontally),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (shown.episodes) {
+                                GlassButton(text = stringResource(R.string.np_episodes), onClick = { panel = Panel.Episodes })
+                            }
                             if (catchUp != null) {
                                 GlassButton(
                                     text = stringResource(R.string.catchup_back_to_live),
                                     onClick = { catchUp = null; overlayVisible = false },
                                     emphasized = true,
                                 )
-                            } else if (onAirNow != null) {
-                                GlassButton(
-                                    text = stringResource(R.string.catchup_from_start),
-                                    onClick = { startCatchUp(onAirNow) },
-                                )
+                            } else if (onAirNow != null && shown.catchUp) {
+                                GlassButton(text = stringResource(R.string.catchup_from_start), onClick = { startCatchUp(onAirNow) })
                             }
-                            if (zaps.target(index, channels.size) != null) {
+                            if (shown.lastChannel) {
                                 GlassButton(text = stringResource(R.string.player_last_channel), onClick = ::lastChannel)
                             }
                         }
@@ -1067,6 +1088,7 @@ fun PlayerScreen(
                         ),
                         size = 15.sp,
                         color = PrismColors.TextSecondary,
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
                     )
                 }
 
@@ -1102,6 +1124,26 @@ private fun saveProgress(player: Player, url: String) {
 }
 
 /** True when the content offers a choice in the audio and subtitles panel: another audio track, or any subtitles. */
+/** Which of the contextual controls the player shows right now: only what can really be pressed. */
+internal data class ShownControls(val zap: Boolean, val episodes: Boolean, val catchUp: Boolean, val lastChannel: Boolean)
+
+internal fun playerControls(
+    live: Boolean,
+    series: Boolean,
+    channelCount: Int,
+    hasNext: Boolean,
+    hasCatchUp: Boolean,
+    hasOnAir: Boolean,
+    hasLastChannel: Boolean,
+): ShownControls = ShownControls(
+    // Previous / next channel only make sense when zapping a live list, never for a film or a single stream.
+    zap = live && channelCount > 1,
+    // The episode list is useless when the series has a single episode.
+    episodes = series && channelCount > 1,
+    catchUp = live && (hasCatchUp || hasOnAir),
+    lastChannel = live && hasLastChannel,
+)
+
 internal fun hasTrackChoice(tracks: Tracks): Boolean {
     var audio = 0
     var text = 0
@@ -1147,13 +1189,13 @@ private fun Timeline(
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
         if (hasDuration && canSeek) {
             PrismText(text = formatTime(positionMs), size = 16.sp, color = PrismColors.TextSecondary)
+            // A bar with a round knob that appears when the bar has the cursor (as on Apple TV and YouTube): thin at
+            // rest, thicker and with the knob when it is being moved. Drawn only, nothing here is blurred.
+            val fraction = (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
             Box(
                 Modifier
                     .weight(1f)
-                    .height(if (focused) 12.dp else 8.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.White.copy(alpha = 0.25f))
-                    .border(if (focused) 2.dp else 0.dp, Color.White, RoundedCornerShape(6.dp))
+                    .height(28.dp)
                     .onFocusChanged { focused = it.isFocused }
                     .onKeyEvent { event ->
                         if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
@@ -1163,14 +1205,31 @@ private fun Timeline(
                             else -> false
                         }
                     }
-                    .focusable(),
+                    .focusable()
+                    .drawWithContent {
+                        drawContent()
+                        if (focused) {
+                            val radius = 11.dp.toPx()
+                            val x = (size.width * fraction).coerceIn(radius, size.width - radius)
+                            drawCircle(Color.White, radius, Offset(x, size.height / 2))
+                        }
+                    },
+                contentAlignment = Alignment.Center,
             ) {
                 Box(
                     Modifier
-                        .fillMaxWidth((positionMs.toFloat() / durationMs).coerceIn(0f, 1f))
-                        .fillMaxHeight()
-                        .background(PrismColors.Danger),
-                )
+                        .fillMaxWidth()
+                        .height(if (focused) 10.dp else 6.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.White.copy(alpha = 0.25f)),
+                ) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth(fraction)
+                            .fillMaxHeight()
+                            .background(PrismColors.Danger),
+                    )
+                }
             }
             PrismText(
                 text = if (live) formatTime(durationMs) else "-" + formatTime(durationMs - positionMs),
