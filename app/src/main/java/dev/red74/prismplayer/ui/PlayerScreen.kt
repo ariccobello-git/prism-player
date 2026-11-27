@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -932,31 +933,7 @@ fun PlayerScreen(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
-                    Column(Modifier.weight(1f)) {
-                        PrismText(
-                            text = if (isSeries) (current.seriesTitle ?: current.name) else current.name,
-                            size = 34.sp,
-                            weight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
-                        if (isSeries && current.season > 0) {
-                            PrismText(
-                                text = stringResource(R.string.season_n, current.season) + " · " + current.episode,
-                                size = 20.sp,
-                                color = PrismColors.TextSecondary,
-                                maxLines = 1,
-                            )
-                        } else if (catchUp != null) {
-                            PrismText(
-                                text = "↺ " + stringResource(R.string.catchup_watching, catchUp?.programme?.title.orEmpty()),
-                                size = 20.sp, color = PrismColors.Accent, maxLines = 1,
-                            )
-                        } else {
-                            current.group?.let {
-                                PrismText(text = it, size = 20.sp, color = PrismColors.TextSecondary, maxLines = 1)
-                            }
-                        }
-                    }
+                    Spacer(Modifier.weight(1f))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         // Only when there is something to choose: another audio language or any subtitles.
                         if (hasTrackChoice(tracks)) {
@@ -991,6 +968,33 @@ fun PlayerScreen(
                         .padding(horizontal = 48.dp, vertical = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
+                    // What is playing, large and at the bottom left just above the bar (like the Apple TV player).
+                    val subtitleLine = playerSubtitle(
+                        series = isSeries,
+                        season = current.season,
+                        episode = current.episode,
+                        seasonText = stringResource(R.string.season_n, current.season),
+                        episodeText = stringResource(R.string.episode_n, current.episode),
+                        catchUpTitle = catchUp?.programme?.title,
+                        onAir = if (current.type == ContentType.LIVE) remember(current, overlayVisible) { nowTitle(current) } else null,
+                        group = current.group,
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        PrismText(
+                            text = playerTitle(isSeries, current.seriesTitle, current.name),
+                            size = 38.sp,
+                            weight = FontWeight.Bold,
+                            maxLines = 2,
+                        )
+                        if (subtitleLine != null) {
+                            PrismText(
+                                text = if (catchUp != null) "↺ $subtitleLine" else subtitleLine,
+                                size = 22.sp,
+                                color = if (catchUp != null) PrismColors.Accent else PrismColors.TextSecondary,
+                                maxLines = 1,
+                            )
+                        }
+                    }
                     errorName?.let {
                         PrismText(
                             // The code name is added for unreadable streams too: it tells what Media3 saw (never the URL).
@@ -1154,6 +1158,28 @@ internal fun playerControls(
     catchUp = live && (hasCatchUp || hasOnAir),
     lastChannel = live && hasLastChannel,
 )
+
+/** The big line of the player: the show for episodes, else the name of the film or channel (never empty when a name exists). */
+internal fun playerTitle(series: Boolean, seriesTitle: String?, name: String): String =
+    (if (series) seriesTitle?.takeIf { it.isNotBlank() } else null) ?: name
+
+/** The small line under the title: season and episode, the catch-up programme, the programme on air, or the group. */
+internal fun playerSubtitle(
+    series: Boolean,
+    season: Int,
+    episode: Int,
+    seasonText: String,
+    episodeText: String,
+    catchUpTitle: String?,
+    onAir: String?,
+    group: String?,
+): String? = when {
+    series && season > 0 && episode > 0 -> "$seasonText · $episodeText"
+    series && episode > 0 -> episodeText
+    catchUpTitle != null -> catchUpTitle.takeIf { it.isNotBlank() }
+    !onAir.isNullOrBlank() -> onAir
+    else -> group?.takeIf { it.isNotBlank() }
+}
 
 internal fun hasTrackChoice(tracks: Tracks): Boolean {
     var audio = 0
