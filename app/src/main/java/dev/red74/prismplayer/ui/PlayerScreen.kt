@@ -77,6 +77,7 @@ import dev.red74.prismplayer.data.Programme
 import dev.red74.prismplayer.data.StreamAttempt
 import dev.red74.prismplayer.data.StreamFallback
 import dev.red74.prismplayer.data.Channel
+import dev.red74.prismplayer.data.ChannelNames
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.device.DeviceProfile
 import dev.red74.prismplayer.data.TextCleaner
@@ -987,12 +988,12 @@ fun PlayerScreen(
                         episodeText = stringResource(R.string.episode_n, current.episode),
                         catchUpTitle = catchUp?.programme?.title,
                         onAir = onAirTitle,
-                        group = current.group,
-                        name = current.name,
+                        group = ChannelNames.cleanGroup(current.group),
+                        name = ChannelNames.clean(current.name),
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         PrismText(
-                            text = playerTitle(isSeries, current.seriesTitle, current.name, catchUp?.programme?.title, onAirTitle),
+                            text = playerTitle(isSeries, current.seriesTitle, if (current.type == ContentType.LIVE) ChannelNames.clean(current.name) else current.name, catchUp?.programme?.title, onAirTitle),
                             size = 38.sp,
                             weight = FontWeight.Bold,
                             maxLines = 2,
@@ -1580,7 +1581,7 @@ private fun ChannelBanner(number: Int, channel: Channel, programme: String?) {
             PrismText(text = number.toString(), size = 30.sp, weight = FontWeight.Bold, color = PrismColors.Accent)
             Poster(channel.logo, Modifier.width(64.dp).height(64.dp), fit = true)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                PrismText(text = channel.name, size = 26.sp, weight = FontWeight.Bold, maxLines = 1)
+                PrismText(text = ChannelNames.clean(channel.name), size = 26.sp, weight = FontWeight.Bold, maxLines = 1)
                 val second = programme ?: channel.group
                 if (!second.isNullOrBlank()) {
                     PrismText(text = second, size = 18.sp, color = PrismColors.TextSecondary, maxLines = 1)

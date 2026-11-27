@@ -27,6 +27,8 @@ class EpgData(
         if (direct != null) return direct
         val byName = normalize(channel.tvgName)?.let { idByName[it] }
             ?: normalize(channel.name)?.let { idByName[it] }
+            // "[S+] SKY CINEMA UNO FULL HD" is "Sky Cinema Uno" in the guide.
+            ?: ChannelNames.key(channel.name)?.let { idByName[it] }
         return byName?.let { byId[it] }.orEmpty()
     }
 
@@ -94,10 +96,17 @@ object XmltvParser {
             if (event == XmlPullParser.END_DOCUMENT) break
             if (event == XmlPullParser.END_TAG && parser.depth == depth) break
             if (event == XmlPullParser.START_TAG && parser.name == "display-name") {
-                val normalized = EpgData.normalize(runCatching { parser.nextText() }.getOrNull())
-                if (normalized != null && normalized in wantedNames) {
+                val text = runCatching { parser.nextText() }.getOrNull()
+                val exact = EpgData.normalize(text)
+                if (exact != null && exact in wantedNames) {
                     accepted = true
-                    idByName[normalized] = id
+                    idByName[exact] = id
+                }
+                // The plain name too ("Sky Cinema Uno HD" and "[S+] SKY CINEMA UNO" meet on "skycinemauno"); the first one wins.
+                val plain = ChannelNames.key(text)
+                if (plain != null && plain in wantedNames) {
+                    accepted = true
+                    idByName.putIfAbsent(plain, id)
                 }
             }
         }
