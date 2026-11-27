@@ -965,7 +965,16 @@ fun PlayerScreen(
                     Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .padding(horizontal = 48.dp, vertical = 32.dp),
+                        // A dark veil exactly behind the title and the controls: on live the stack is taller and the title
+                        // would otherwise sit in the clear middle of the picture, unreadable over a bright scene.
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.30f to Color.Black.copy(alpha = 0.55f),
+                                1f to Color.Black.copy(alpha = 0.85f),
+                            ),
+                        )
+                        .padding(start = 48.dp, end = 48.dp, top = 56.dp, bottom = 32.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     // What is playing, large and at the bottom left just above the bar (like the Apple TV player).
