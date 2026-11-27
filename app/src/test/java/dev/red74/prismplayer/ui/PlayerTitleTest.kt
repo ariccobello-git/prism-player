@@ -8,7 +8,7 @@ import org.junit.Test
 class PlayerTitleTest {
     private fun sub(
         series: Boolean = false, season: Int = 0, episode: Int = 0, catchUp: String? = null, onAir: String? = null, group: String? = null,
-    ) = playerSubtitle(series, season, episode, "Stagione $season", "Episodio $episode", catchUp, onAir, group)
+    ) = playerSubtitle(series, season, episode, "Stagione $season", "Episodio $episode", catchUp, onAir, group, "Rai Movie")
 
     @Test
     fun aFilmShowsItsName() {
@@ -30,15 +30,22 @@ class PlayerTitleTest {
     }
 
     @Test
-    fun liveShowsChannelThenProgrammeOnAirElseGroup() {
-        assertEquals("Rai 1", playerTitle(false, null, "Rai 1"))
-        assertEquals("TG1", sub(onAir = "TG1", group = "Italia"))
-        assertEquals("Italia", sub(group = "Italia"))
-        assertNull(sub(onAir = " ", group = " "))
+    fun liveTitleIsTheProgrammeOnAirWithTheChannelUnderIt() {
+        assertEquals("Il Padrino", playerTitle(false, null, "Rai Movie", null, "Il Padrino"))
+        assertEquals("Rai Movie", sub(onAir = "Il Padrino", group = "Film"))
     }
 
     @Test
-    fun catchUpShowsTheProgramme() {
-        assertEquals("Film sera", sub(catchUp = "Film sera", onAir = "TG1"))
+    fun liveWithoutGuideShowsTheChannelAndItsGroup() {
+        assertEquals("Rai Movie", playerTitle(false, null, "Rai Movie", null, null))
+        assertEquals("Rai Movie", playerTitle(false, null, "Rai Movie", null, " "))
+        assertEquals("Film", sub(group = "Film"))
+        assertNull(sub(group = " "))
+    }
+
+    @Test
+    fun catchUpShowsTheProgrammeThenTheChannel() {
+        assertEquals("Film sera", playerTitle(false, null, "Rai Movie", "Film sera", "TG1"))
+        assertEquals("Rai Movie", sub(catchUp = "Film sera", onAir = "TG1"))
     }
 }

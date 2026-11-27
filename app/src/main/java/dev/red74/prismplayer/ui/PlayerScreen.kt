@@ -77,6 +77,7 @@ import dev.red74.prismplayer.data.Programme
 import dev.red74.prismplayer.data.StreamAttempt
 import dev.red74.prismplayer.data.StreamFallback
 import dev.red74.prismplayer.data.Channel
+import dev.red74.prismplayer.data.ChannelNames
 import dev.red74.prismplayer.data.ContentType
 import dev.red74.prismplayer.device.DeviceProfile
 import dev.red74.prismplayer.data.TextCleaner
@@ -978,6 +979,7 @@ fun PlayerScreen(
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     // What is playing, large and at the bottom left just above the bar (like the Apple TV player).
+                    val onAirTitle = if (current.type == ContentType.LIVE) remember(current, overlayVisible) { nowTitle(current) } else null
                     val subtitleLine = playerSubtitle(
                         series = isSeries,
                         season = current.season,
@@ -985,12 +987,13 @@ fun PlayerScreen(
                         seasonText = stringResource(R.string.season_n, current.season),
                         episodeText = stringResource(R.string.episode_n, current.episode),
                         catchUpTitle = catchUp?.programme?.title,
-                        onAir = if (current.type == ContentType.LIVE) remember(current, overlayVisible) { nowTitle(current) } else null,
-                        group = current.group,
+                        onAir = onAirTitle,
+                        group = ChannelNames.cleanGroup(current.group),
+                        name = ChannelNames.clean(current.name),
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         PrismText(
-                            text = playerTitle(isSeries, current.seriesTitle, current.name),
+                            text = playerTitle(isSeries, current.seriesTitle, if (current.type == ContentType.LIVE) ChannelNames.clean(current.name) else current.name, catchUp?.programme?.title, onAirTitle),
                             size = 38.sp,
                             weight = FontWeight.Bold,
                             maxLines = 2,
@@ -1168,11 +1171,19 @@ internal fun playerControls(
     lastChannel = live && hasLastChannel,
 )
 
-/** The big line of the player: the show for episodes, else the name of the film or channel (never empty when a name exists). */
-internal fun playerTitle(series: Boolean, seriesTitle: String?, name: String): String =
-    (if (series) seriesTitle?.takeIf { it.isNotBlank() } else null) ?: name
+/**
+ * The big line of the player: the show for episodes; on live the programme on air (usually the film), or the programme
+ * watched from its start; else the name of the film or channel. Never empty when a name exists.
+ */
+internal fun playerTitle(series: Boolean, seriesTitle: String?, name: String, catchUpTitle: String? = null, onAir: String? = null): String =
+    when {
+        series -> seriesTitle?.takeIf { it.isNotBlank() } ?: name
+        !catchUpTitle.isNullOrBlank() -> catchUpTitle
+        !onAir.isNullOrBlank() -> onAir
+        else -> name
+    }
 
-/** The small line under the title: season and episode, the catch-up programme, the programme on air, or the group. */
+/** The small line under the title: season and episode; the channel when the title is its programme; else the group. */
 internal fun playerSubtitle(
     series: Boolean,
     season: Int,
@@ -1182,11 +1193,11 @@ internal fun playerSubtitle(
     catchUpTitle: String?,
     onAir: String?,
     group: String?,
+    name: String = "",
 ): String? = when {
     series && season > 0 && episode > 0 -> "$seasonText · $episodeText"
     series && episode > 0 -> episodeText
-    catchUpTitle != null -> catchUpTitle.takeIf { it.isNotBlank() }
-    !onAir.isNullOrBlank() -> onAir
+    !catchUpTitle.isNullOrBlank() || !onAir.isNullOrBlank() -> name.takeIf { it.isNotBlank() }
     else -> group?.takeIf { it.isNotBlank() }
 }
 
@@ -1570,7 +1581,7 @@ private fun ChannelBanner(number: Int, channel: Channel, programme: String?) {
             PrismText(text = number.toString(), size = 30.sp, weight = FontWeight.Bold, color = PrismColors.Accent)
             Poster(channel.logo, Modifier.width(64.dp).height(64.dp), fit = true)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                PrismText(text = channel.name, size = 26.sp, weight = FontWeight.Bold, maxLines = 1)
+                PrismText(text = ChannelNames.clean(channel.name), size = 26.sp, weight = FontWeight.Bold, maxLines = 1)
                 val second = programme ?: channel.group
                 if (!second.isNullOrBlank()) {
                     PrismText(text = second, size = 18.sp, color = PrismColors.TextSecondary, maxLines = 1)

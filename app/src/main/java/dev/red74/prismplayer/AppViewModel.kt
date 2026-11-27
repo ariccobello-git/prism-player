@@ -15,6 +15,7 @@ import dev.red74.prismplayer.data.SearchAllResult
 import dev.red74.prismplayer.data.UnifiedSearch
 import dev.red74.prismplayer.data.CatalogBuilder
 import dev.red74.prismplayer.data.Channel
+import dev.red74.prismplayer.data.ChannelNames
 import dev.red74.prismplayer.data.EpgData
 import dev.red74.prismplayer.data.EpgUrl
 import dev.red74.prismplayer.data.Highlights
@@ -561,6 +562,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     channel.tvgId?.lowercase()?.let(ids::add)
                     EpgData.normalize(channel.tvgName)?.let(names::add)
                     EpgData.normalize(channel.name)?.let(names::add)
+                    ChannelNames.key(channel.name)?.let(names::add)
                 }
             }
             val now = System.currentTimeMillis()

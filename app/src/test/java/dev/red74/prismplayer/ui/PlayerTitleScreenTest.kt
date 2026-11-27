@@ -22,11 +22,11 @@ class PlayerTitleScreenTest {
     @get:Rule
     val rule = createComposeRule()
 
-    private fun check(channels: List<Channel>, title: String, line: String?) {
+    private fun check(channels: List<Channel>, title: String, line: String?, guide: String? = line) {
         rule.setContent {
             PlayerScreen(
                 channels = channels, startIndex = 0, aspect = AspectMode.AUTO, onAspectChange = {}, onIndexChange = {}, onExit = {},
-                nowTitle = { line },
+                nowTitle = { guide },
             )
         }
         rule.waitForIdle()
@@ -44,11 +44,11 @@ class PlayerTitleScreenTest {
     @Test
     fun liveShowsChannelAndProgramme() = check(
         listOf(Channel("Rai Movie", "http://x/1", "Film", type = ContentType.LIVE), Channel("Rai 2", "http://x/2", "Rai", type = ContentType.LIVE)),
-        "Rai Movie", "Il Padrino",
+        "Il Padrino", "Rai Movie", guide = "Il Padrino",
     )
 
     @Test
     fun filmShowsItsName() = check(
-        listOf(Channel("Heat", "http://x/f.mp4", "Film", type = ContentType.MOVIE)), "Heat", null,
+        listOf(Channel("Heat", "http://x/f.mp4", "Film", type = ContentType.MOVIE)), "Heat", null, null,
     )
 }
